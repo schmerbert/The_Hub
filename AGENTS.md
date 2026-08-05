@@ -11,3 +11,7 @@ Inspect existing state before editing and preserve user changes. Run appropriate
 This delegation authorization does not expand permission for destructive actions, secrets handling, external publishing or deployment, purchases, messages, or changes outside this repository. Obtain user approval whenever it is otherwise required.
 
 If subagents are unavailable or fail, tell the user and agree on a fallback before shifting substantial coding to the primary agent. Keep user updates high-level unless technical detail is requested.
+
+## Git environment
+
+In this Windows workspace, if Git reports dubious ownership, use the per-command repository-scoped override `git -c safe.directory=D:/AI/The_Hub ...`; do not modify global Git configuration merely to bypass it.
