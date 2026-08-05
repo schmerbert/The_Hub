@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>The Hub — Corner</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/wave.js"></script>
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main id="app" data-mode="compact">
+      <button id="chip" class="chip" type="button" aria-label="Open Corner workbench" aria-controls="bench" aria-expanded="false">
+        <canvas id="wave-compact" width="160" height="160" aria-hidden="true"></canvas>
+        <span class="chip-ring" aria-hidden="true"></span>
+      </button>
+
+      <section id="bench" class="bench" aria-labelledby="identity-name" hidden>
+        <header class="titlebar">
+          <div class="identity">
+            <canvas id="wave-main" width="72" height="36" aria-hidden="true"></canvas>
+            <div class="identity-text">
+              <span id="identity-name" class="name">Resident</span>
+              <span id="mode-model" class="mode-model">Checking mode…</span>
+              <span id="status" class="status" role="status" aria-live="polite">idle</span>
+            </div>
+          </div>
+          <button id="btn-compact" type="button" class="ghost" aria-label="Collapse Corner workbench">Collapse</button>
+        </header>
+
+        <div class="workspace">
+          <aside id="tray" class="tray" aria-labelledby="tray-heading" hidden>
+            <div class="tray-heading">
+              <h2 id="tray-heading">Wake inspection</h2>
+              <button id="close-tray" class="ghost" type="button">Close</button>
+            </div>
+            <div id="tray-tabs" class="tray-tabs" role="tablist" aria-label="Wake inspection sections"></div>
+            <div id="panel-host" class="panel-host" tabindex="-1"></div>
+          </aside>
+
+          <section class="rail" aria-labelledby="conversation-heading">
+            <div class="rail-heading"><h2 id="conversation-heading">Conversation</h2><span id="thread-note">One local thread</span></div>
+            <div id="log" class="log" aria-live="polite"></div>
+            <form id="compose" class="compose">
+              <label class="sr-only" for="input">Message</label>
+              <textarea id="input" rows="2" maxlength="4000" placeholder="Write to Resident…" autocomplete="off" spellcheck="true"></textarea>
+              <button type="submit">Send</button>
+            </form>
+          </section>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
