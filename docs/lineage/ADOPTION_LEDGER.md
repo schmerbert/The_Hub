@@ -69,3 +69,16 @@ Each decision must include:
 - **Constraints and differences:** Structural permanence cannot prohibit correction or safety work. Any necessary closure requires consultation, migration, and ancestry. Builder correspondence conveys testimony but grants no implicit mutation authority.
 - **Active specification updated:** `PREBUILD.md` sections 3, 5.2–5.5, and 15.
 - **Verification/review:** Prove exact note custody, recipient and delivery state, attributable replies, honest failure, survival without optional capabilities, and post-use resident consultation about the fixture's fitted form.
+
+### HUB-004 — Spine, Utterance Atoms, Scrub, and Mycelial Separation
+
+- **Date:** 2026-08-05
+- **Source:** Direct user design decisions during the First Breath resident conversation, informed by The Forest v0.4 constitution and its scrub/Scroll mechanics.
+- **Concept in source terms:** The Forest previously stored one user/model pair as its conversation heartbeat and pointed each pair to an append-only session Scroll. All writes crossed a scrub that could remove transport scaffolding but could not silently reinterpret claims. Mycelium helpers centered optional questions and their nearby entries.
+- **Hub interpretation:** One signed utterance is the conversation atom. Pairing survives as `responds_to`, shared wake ancestry, and a recoverable view. The Spine preserves the exact serialized provider request body for every attempted dispatch, including repeated context. Scrub remains a mandatory mechanical crossing. Mycelium names the edge fabric itself; questions are optional fruit growing from that fabric.
+- **Similar existing Hub material:** `PREBUILD.md` already required separate user/model utterances, wake ancestry, resident legibility, and a Forest beneath the House. First Breath already preserves exact operational events and wake context receipts.
+- **Decision state:** Adapted.
+- **User decision:** “the message and response would still be linked” while preferring one utterance at a time; “the spine ... captures the full API send of the resident, append only”; and “mycelium has become conceptually the links and the questions, separate.”
+- **Constraints and differences:** This deliberately departs from The Forest v0.4 `pair` root and its turn-only Scroll implementation. Exact operational events remain the raw source for utterances. The Spine is the source of truth for what entered the resident's attempted perceptual field. Historical wakes without exact serialized dispatch bytes must never receive fabricated Spine records. Structural links are host-witnessed; semantic links remain attributed possibilities. Scrub cannot summarize or interpret.
+- **Active specification updated:** `PREBUILD.md` section 6 and `docs/specs/SPINE_FOREST_INGESTION.md`.
+- **Verification/review:** Require append-only and hash-chain checks, exact-byte dispatch equivalence, secret exclusion, single-utterance entries, idempotent backfill, explicit pre-Spine ancestry, scrub identity in v1, duplicate/conflict refusal, and inspection before the first live Forest write.

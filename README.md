@@ -25,6 +25,25 @@ npm start
 
 Optional settings include `DEEPSEEK_BASE_URL`, `DEEPSEEK_THINKING`, `HUB_PORT`, `HUB_DB_PATH`, `HUB_MESSAGE_CEILING`, `HUB_MAX_MESSAGE_LENGTH`, and `HUB_MAX_BODY_BYTES`. Keep credentials outside the repository. The API key and authorization header are never stored or returned.
 
+## Activate Forest custody and the Spine
+
+The historical Forest is built separately and verified before the resident host may write to it:
+
+```powershell
+npm run forest:plan
+npm run forest:apply -- --confirm-create
+npm run forest:verify
+```
+
+After verification, restart the live DeepSeek host with custody enabled:
+
+```powershell
+$env:HUB_FOREST_ACTIVE = "true"
+npm start
+```
+
+Activation refuses a missing Forest, an invalid Forest, or fake-provider mode. Historical entries are marked `pre_spine`; the append-only Spine begins with the first newly dispatched live request. Verify it with `npm run spine:verify` after that request. `HUB_FOREST_PATH` and `HUB_SPINE_PATH` may override their default locations.
+
 ## Inspectable local API
 
 - `GET /api/health`
@@ -42,4 +61,4 @@ npm test
 
 The suite exercises the real HTTP and SQLite path in temporary databases, including empty and oversized input, missing live credentials, empty provider output, provider HTTP failure, fake-mode labeling, context ceilings, and visible nonterminal wakes.
 
-This first breath deliberately does not implement rooms, tools, Forest retrieval, movement, chambers, companions, autonomy, streaming, authentication, or deployment.
+This first breath deliberately does not implement rooms, tools, Forest retrieval or synthesis, movement, chambers, companions, autonomy, streaming, authentication, or deployment.

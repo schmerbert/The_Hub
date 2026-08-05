@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "start": "node src/server/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "forest:plan": "node src/scripts/forest-plan.js",
+    "forest:apply": "node src/scripts/forest-apply.js",
+    "forest:verify": "node src/scripts/forest-verify.js",
+    "spine:verify": "node src/scripts/spine-verify.js"
   }
 }

@@ -192,6 +192,12 @@ It preserves:
 - Session and wake ancestry.
 - Cross-project derivations.
 
+The conversational atom is one signed utterance. A user/resident pair is a recoverable relationship and presentation view, not a combined storage body. The Mycelium is the Forest's edge fabric: causal links are host-witnessed, interpretive links remain attributed proposals, and questions are optional fruit rather than a requirement for a living Forest.
+
+Every utterance crosses a versioned scrub before entering the Forest. Scrub may remove only known transport, protocol, or harness scaffolding. It may not summarize, interpret, improve, or silently change a substantive claim. Any such transformation is a separately signed synthesis with ancestry back to its sources.
+
+The Spine is append-only evidence of resident perception. Each dispatched wake preserves the exact serialized provider request body, including repeated prior context. Operational events may exist without entering a resident's perceptual field; only a Spine record can establish what the host actually attempted to present to the resident. The Spine is evidence, not ordinary retrieval material.
+
 The House should never give an agent unrestricted raw database access. Forest interaction occurs through constrained, attributable tools.
 
 Cross-project connections should retain ancestry into every contributing project. They normally return as scent, pressure, question, or possible path—not ground.

@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS wakes (
   usage_json TEXT,
   failure_code TEXT,
   failure_message TEXT,
+  custody_failure_code TEXT,
+  custody_failure_message TEXT,
   started_at TEXT NOT NULL,
   completed_at TEXT
 );
@@ -66,7 +68,14 @@ export class HubDatabase {
     this.sqlite.exec('PRAGMA foreign_keys = ON;');
     this.sqlite.exec(SCHEMA);
     this.migrateContextItems();
+    this.migrateCustodyFailureColumns();
     this.threadId = this.ensureThread();
+  }
+
+  migrateCustodyFailureColumns() {
+    const columns = this.sqlite.prepare('PRAGMA table_info(wakes)').all().map(column => column.name);
+    if (!columns.includes('custody_failure_code')) this.sqlite.exec('ALTER TABLE wakes ADD COLUMN custody_failure_code TEXT');
+    if (!columns.includes('custody_failure_message')) this.sqlite.exec('ALTER TABLE wakes ADD COLUMN custody_failure_message TEXT');
   }
 
   migrateContextItems() {
@@ -180,6 +189,17 @@ export class HubDatabase {
     return eventId;
   }
 
+  recordHostFailure(wakeId, failure) {
+    const eventId = id('event');
+    this.transaction(() => {
+      this.sqlite.prepare(`INSERT INTO events(id, thread_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
+        SELECT ?, thread_id, ?, 'host', 'failure', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(
+        eventId, wakeId, failure.message, now(), wakeId);
+      this.sqlite.prepare('UPDATE wakes SET custody_failure_code=?, custody_failure_message=? WHERE id=?').run(failure.code || 'forest_intake_failed', failure.message, wakeId);
+    });
+    return eventId;
+  }
+
   getWake(wakeId) {
     const wake = rowToObject(this.sqlite.prepare('SELECT * FROM wakes WHERE id=?').get(wakeId));
     if (!wake) return null;
@@ -189,6 +209,7 @@ export class HubDatabase {
       providerResponseId: wake.provider_response_id, finishReason: wake.finish_reason,
       systemFingerprint: wake.system_fingerprint, usage: wake.usage_json ? JSON.parse(wake.usage_json) : null,
       failureCode: wake.failure_code, failureMessage: wake.failure_message,
+      custodyFailureCode: wake.custody_failure_code, custodyFailureMessage: wake.custody_failure_message,
       startedAt: wake.started_at, completedAt: wake.completed_at,
     };
     normalized.context = this.sqlite.prepare('SELECT ordinal, item_kind AS itemKind, actor_role AS actorRole, content, source_event_id AS sourceEventId, source_description AS sourceDescription, authority, included, omission_reason AS omissionReason, content_hash AS contentHash FROM wake_context_items WHERE wake_id=? ORDER BY ordinal').all(wakeId).map(item => ({ ...item, included: Boolean(item.included) }));
@@ -196,10 +217,41 @@ export class HubDatabase {
     return normalized;
   }
 
+  getEvent(eventId) {
+    const event = this.sqlite.prepare(`SELECT id, thread_id AS threadId, wake_id AS wakeId,
+      actor_kind AS actorKind, event_kind AS eventKind, content, authority,
+      provider, model, created_at AS createdAt FROM events WHERE id=?`).get(eventId);
+    return rowToObject(event);
+  }
+
+  listUtteranceEvents() {
+    return this.sqlite.prepare(`SELECT id, thread_id AS threadId, wake_id AS wakeId,
+      actor_kind AS actorKind, event_kind AS eventKind, content, authority,
+      provider, model, created_at AS createdAt FROM events
+      WHERE event_kind='utterance' AND actor_kind IN ('user','resident')
+      ORDER BY thread_id, created_at, id`).all();
+  }
+
+  listEligibleUtteranceEvents() {
+    return this.sqlite.prepare(`SELECT e.id, e.thread_id AS threadId, e.wake_id AS wakeId,
+      e.actor_kind AS actorKind, e.event_kind AS eventKind, e.content, e.authority,
+      e.provider, e.model, e.created_at AS createdAt
+      FROM events e LEFT JOIN wakes w ON w.id=e.wake_id
+      WHERE e.event_kind='utterance' AND e.actor_kind IN ('user','resident')
+        AND COALESCE(w.provider, e.provider, '') <> 'fake'
+      ORDER BY e.thread_id, e.created_at, e.id`).all();
+  }
+
+  countExcludedFakeUtterances() {
+    return this.sqlite.prepare(`SELECT COUNT(*) AS count FROM events e LEFT JOIN wakes w ON w.id=e.wake_id
+      WHERE e.event_kind='utterance' AND e.actor_kind IN ('user','resident')
+        AND COALESCE(w.provider, e.provider, '') = 'fake'`).get().count;
+  }
+
   getThread() {
     const thread = this.sqlite.prepare('SELECT id, created_at AS createdAt, label FROM threads WHERE id=?').get(this.threadId);
     const events = this.sqlite.prepare('SELECT id, wake_id AS wakeId, actor_kind AS actorKind, event_kind AS eventKind, content, authority, provider, model, created_at AS createdAt FROM events WHERE thread_id=? ORDER BY created_at, id').all(this.threadId);
-    const wakes = this.sqlite.prepare('SELECT id, status, provider, requested_model AS requestedModel, resolved_model AS resolvedModel, failure_code AS failureCode, failure_message AS failureMessage, started_at AS startedAt, completed_at AS completedAt FROM wakes WHERE thread_id=? ORDER BY started_at, id').all(this.threadId);
+    const wakes = this.sqlite.prepare('SELECT id, status, provider, requested_model AS requestedModel, resolved_model AS resolvedModel, failure_code AS failureCode, failure_message AS failureMessage, custody_failure_code AS custodyFailureCode, custody_failure_message AS custodyFailureMessage, started_at AS startedAt, completed_at AS completedAt FROM wakes WHERE thread_id=? ORDER BY started_at, id').all(this.threadId);
     return { thread: rowToObject(thread), events, wakes };
   }
 
