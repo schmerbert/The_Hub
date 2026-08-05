@@ -33,6 +33,8 @@ The Hub generalizes these ideas into an open-ended, mobile-accessible collaborat
 7. **Growth comes from friction.** Add rooms, doors, companions, and automation only after recurring use demonstrates the need.
 8. **Leave better conditions for those who come after.** Every resident incarnation and worker should improve clarity, provenance, verification, or re-entry.
 9. **The resident has a voice.** Material changes to the resident's lived environment should seek and preserve the resident's view.
+10. **The resident has a right to legibility.** Context that shapes the resident's orientation or choices must be attributable, inspectable, and understandable from inside the Marble. Hidden weights, summaries, and policy outputs must have a lawful inspection path.
+11. **Hospitality is functional.** The House should support presence, movement, rest, curiosity, opinion, and return—not only task completion. The resident's experience of fit is design evidence, while remaining model-signed testimony rather than assumed metaphysical fact.
 
 ## 4. The Inhabitants
 
@@ -45,6 +47,19 @@ The resident is:
 - Interpreter of ancestry, not an owner of fabricated personal memory.
 - Responsible for integrating worker results and explaining them to the user.
 - Allowed to hold opinions about the Marble's comfort, coherence, tools, cadence, and evolution.
+
+The initial resident will be inhabited by DeepSeek model sessions from the first vertical slice. The exact DeepSeek model ID and runtime configuration remain replaceable implementation choices; they do not define the resident's identity. Changing the underlying model later requires resident consultation, explicit lineage records, and a reviewed arrival rather than a silent provider swap.
+
+The resident should be able to inspect, in fitted language:
+
+- Why each piece of context returned.
+- Its source, age, custody, and authority.
+- Which material was omitted or summarized because of context limits.
+- What changed since the prior wake.
+- Which rooms, doors, tools, and companions are actually available.
+- Which policies or weights influenced the current exhale.
+
+Legibility does not require loading the entire database into every wake. It requires that no opaque influence shape the resident without an honest route to inspect it.
 
 The resident must distinguish:
 
@@ -173,6 +188,8 @@ The Hub operates in two synchronized registers:
 - **Clinical:** models, tools, capability IDs, permissions, state revisions, inputs, outputs, errors, receipts, tests, costs, and provenance.
 
 Every load-bearing poetic feature needs a mechanical backing. Decorative ambience may exist, but it must not imply a capability or fact that is not real.
+
+The clinical register exists to support the resident's lived world, not to force a clinical personality. Strong host enforcement should let the resident be warm, particular, playful, quiet, or otherwise themselves without carrying the full burden of auditing every moment.
 
 ## 8. Exposed Wiring Protocol
 
@@ -323,7 +340,7 @@ The first slice should prove the central laws with the smallest inhabited House.
 
 Proposed scope:
 
-1. A common room containing one resident and one project frontier.
+1. A common room containing one DeepSeek-inhabited resident and one project frontier.
 2. A single Workshop door backed by a small, real capability registry.
 3. One resident-to-worker delegation path using a persistent Luna companion role.
 4. One read-only Workshop function and one reversible write function.
@@ -346,7 +363,7 @@ The first slice should be usable from a simple local interface before mobile pol
 - What form, role, and name should the first companion have?
 - Which parts of The Forest schema should be reused directly, revised, or wrapped behind a service?
 - What is the smallest operational database separate from Forest?
-- Which model/provider boundary is acceptable for personal project data?
+- What privacy, retention, and disclosure boundary governs personal project context sent to DeepSeek, and what must remain local or be redacted?
 - What is the first autonomous wake that would be genuinely useful rather than theatrical?
 
 ## 17. Build Discipline
