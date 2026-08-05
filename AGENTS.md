@@ -15,3 +15,7 @@ If subagents are unavailable or fail, tell the user and agree on a fallback befo
 ## Git environment
 
 In this Windows workspace, if Git reports dubious ownership, use the per-command repository-scoped override `git -c safe.directory=D:/AI/The_Hub ...`; do not modify global Git configuration merely to bypass it.
+
+## Lineage boundary
+
+Documents under `docs/lineage/` are sealed ancestry and comparative research, not active Hub requirements. Do not implement from them, copy their language into product specifications, or treat their claims as adopted merely because they resemble the Hub. A concept crosses into implementation only after the user explicitly adopts it and it is recorded in the active Hub specification or adoption ledger.
