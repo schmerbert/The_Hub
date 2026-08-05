@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
+import { DatabaseSync } from 'node:sqlite';
 import { createHub } from '../src/server/app.js';
 import { HubDatabase } from '../src/core/db.js';
 import { buildContext } from '../src/core/context.js';
@@ -21,6 +22,8 @@ async function fixture(env = {}, provider) {
 async function get(base, path) { const response = await fetch(base + path); return { response, body: await response.json() }; }
 async function post(base, path, content) { const response = await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }); return { response, body: await response.json() }; }
 
+function manifestFrom(item) { return JSON.parse(item.content.slice('Host environment manifest:\n'.length)); }
+
 test('schema initializes idempotently', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-schema-')); const path = join(dir, 'hub.sqlite');
   const first = new HubDatabase(path); const threadId = first.threadId; first.close();
@@ -36,6 +39,7 @@ test('fake wake commits exact user/context/resident/provider records', async () 
     assert.equal(result.body.events.filter(e => e.actorKind === 'resident').length, 1);
     assert.equal(result.body.events.find(e => e.actorKind === 'user').content, 'Please orient yourself.');
     assert.equal(result.body.context[0].content, ARRIVAL_CHARTER);
+    assert.equal(result.body.context[1].itemKind, 'environment_manifest');
     assert.equal(result.body.context.at(-1).content, 'Please orient yourself.');
     assert.match(result.body.events.find(e => e.actorKind === 'resident').content, /^FAKE MODE/);
     assert.equal(f.hub.provider.calls.length, 1);
@@ -48,6 +52,26 @@ test('context ordering and hashes match actual adapter input', async () => {
     const result = await post(f.base, '/api/wakes', 'Exact words.'); const included = result.body.context.filter(item => item.included);
     assert.deepEqual(f.hub.provider.calls[0].messages, included.map(item => ({ role: item.actorRole, content: item.content })));
     for (const item of result.body.context) assert.equal(item.contentHash, sha256(item.content));
+  } finally { await f.close(); }
+});
+
+test('orientation receipt matches persisted wake and provider input', async () => {
+  const f = await fixture({ HUB_RESIDENT_MODE: 'fake' });
+  try {
+    const result = await post(f.base, '/api/wakes', 'Orient me.');
+    const item = result.body.context.find(contextItem => contextItem.itemKind === 'environment_manifest');
+    const manifest = manifestFrom(item);
+    assert.equal(result.body.context.filter(contextItem => contextItem.itemKind === 'environment_manifest').length, 1);
+    assert.deepEqual(manifest.exposed_tools, []);
+    assert.equal(manifest.thread_id, result.body.threadId);
+    assert.equal(manifest.wake_id, result.body.id);
+    assert.equal(manifest.wake_started_at_utc, result.body.startedAt);
+    assert.equal(manifest.wake_started_at_unix_ms, Date.parse(result.body.startedAt));
+    assert.equal(manifest.prior_utterance_count, 0);
+    assert.equal(manifest.incoming_utterance_ordinal, 1);
+    assert.equal(manifest.older_utterances_omitted, 0);
+    assert.deepEqual(f.hub.provider.calls[0].messages[1], { role: 'system', content: item.content });
+    assert.equal(item.contentHash, sha256(item.content));
   } finally { await f.close(); }
 });
 
@@ -71,7 +95,52 @@ test('default ceiling creates omission disclosure without a summary', async () =
     assert.ok(disclosure); assert.match(disclosure.content, /3 older utterances omitted/); assert.doesNotMatch(disclosure.content, /first|second/);
     assert.equal(result.body.context.filter(item => item.included && item.itemKind === 'utterance').length, 2);
     assert.equal(result.body.context.filter(item => !item.included).length, 3);
+    const manifest = manifestFrom(result.body.context.find(item => item.itemKind === 'environment_manifest'));
+    assert.equal(manifest.prior_utterance_count, 4);
+    assert.equal(manifest.incoming_utterance_ordinal, 5);
+    assert.equal(manifest.older_utterances_omitted, 3);
   } finally { await f.close(); }
+});
+
+test('legacy context schema migrates idempotently without losing records', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hub-legacy-')); const path = join(dir, 'hub.sqlite');
+  const legacy = new DatabaseSync(path);
+  legacy.exec(`
+    CREATE TABLE threads (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, label TEXT);
+    CREATE TABLE wakes (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), status TEXT NOT NULL, provider TEXT NOT NULL, requested_model TEXT NOT NULL, started_at TEXT NOT NULL);
+    CREATE TABLE wake_context_items (
+      id TEXT PRIMARY KEY, wake_id TEXT NOT NULL REFERENCES wakes(id), ordinal INTEGER NOT NULL,
+      item_kind TEXT NOT NULL CHECK(item_kind IN ('charter','utterance','disclosure')),
+      actor_role TEXT NOT NULL, content TEXT NOT NULL, source_event_id TEXT, source_description TEXT NOT NULL,
+      authority TEXT NOT NULL, included INTEGER NOT NULL CHECK(included IN (0,1)), omission_reason TEXT, content_hash TEXT NOT NULL,
+      UNIQUE(wake_id, ordinal)
+    );
+    INSERT INTO threads VALUES ('thread_legacy', '2026-08-05T00:00:00.000Z', NULL);
+    INSERT INTO wakes(id, thread_id, status, provider, requested_model, started_at) VALUES ('wake_legacy', 'thread_legacy', 'committed', 'fake', 'legacy-model', '2026-08-05T00:00:01.000Z');
+    INSERT INTO wake_context_items VALUES ('ctx_legacy', 'wake_legacy', 1, 'charter', 'system', 'legacy charter', NULL, 'legacy', 'host_receipt', 1, NULL, 'legacy-hash');
+  `);
+  legacy.close();
+  try {
+    const first = new HubDatabase(path);
+    assert.equal(first.threadId, 'thread_legacy');
+    assert.deepEqual(first.getWake('wake_legacy').context[0], {
+      ordinal: 1, itemKind: 'charter', actorRole: 'system', content: 'legacy charter', sourceEventId: null,
+      sourceDescription: 'legacy', authority: 'host_receipt', included: true, omissionReason: null, contentHash: 'legacy-hash',
+    });
+    first.close();
+    const second = new HubDatabase(path);
+    assert.equal(second.threadId, 'thread_legacy');
+    assert.equal(second.getWake('wake_legacy').context.length, 1);
+    const created = second.createWake({
+      provider: 'fake', model: 'legacy-model', content: 'new wake',
+      contextBuilder: ({ threadId, wakeId, startedAt }) => buildContext({
+        utterances: [], newContent: 'new wake', ceiling: 20, threadId, wakeId,
+        wakeStartedAtUtc: startedAt, residentMode: 'fake', requestedModel: 'legacy-model',
+      }).items,
+    });
+    assert.equal(second.getWake(created.wakeId).context[1].itemKind, 'environment_manifest');
+    second.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test('health, thread, and wake inspection are attributable', async () => {
@@ -82,6 +151,35 @@ test('health, thread, and wake inspection are attributable', async () => {
     const thread = await get(f.base, '/api/thread'); assert.equal(thread.body.wakes[0].id, wakeId);
     const inspection = await get(f.base, `/api/wakes/${wakeId}`); assert.equal(inspection.body.context[0].itemKind, 'charter'); assert.ok(inspection.body.events.length >= 2);
   } finally { await f.close(); }
+});
+
+test('orientation manifest and API response exclude provider credentials and paths', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hub-secrets-')); const dbPath = join(dir, 'hub.sqlite');
+  const hub = createHub({
+    dbPath,
+    env: {
+      HUB_RESIDENT_MODE: 'fake',
+      HUB_DB_PATH: 'sentinel-db-path',
+      DEEPSEEK_API_KEY: 'sentinel-api-key',
+      DEEPSEEK_BASE_URL: 'https://sentinel-provider.example.invalid',
+    },
+  });
+  await new Promise(resolve => hub.server.listen(0, resolve));
+  const base = `http://127.0.0.1:${hub.server.address().port}`;
+  try {
+    const result = await post(base, '/api/wakes', 'credential boundary');
+    const serialized = JSON.stringify(result.body);
+    assert.equal(result.response.status, 200);
+    assert.doesNotMatch(serialized, /sentinel-api-key/);
+    assert.doesNotMatch(serialized, /sentinel-provider\.example\.invalid/);
+    assert.doesNotMatch(serialized, /sentinel-db-path/);
+    const manifest = result.body.context.find(item => item.itemKind === 'environment_manifest').content;
+    assert.doesNotMatch(manifest, /sentinel-api-key/);
+    assert.doesNotMatch(manifest, /sentinel-provider\.example\.invalid/);
+    assert.doesNotMatch(manifest, /sentinel-db-path/);
+  } finally {
+    await new Promise(resolve => hub.server.close(resolve)); hub.close(); await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('empty and oversized input refuse before provider call', async () => {
@@ -142,9 +240,29 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
 test('interrupted nonterminal wakes remain visible', async () => {
   const f = await fixture({ HUB_RESIDENT_MODE: 'fake' });
   try {
-    const context = buildContext({ utterances: [], newContent: 'interrupted', ceiling: 20 });
-    const created = f.hub.db.createWake({ provider: 'fake', model: 'deepseek-v4-flash', content: 'interrupted', contextItems: context.items });
+    const created = f.hub.db.createWake({
+      provider: 'fake', model: 'deepseek-v4-flash', content: 'interrupted',
+      contextBuilder: ({ threadId, wakeId, startedAt }) => buildContext({
+        utterances: [], newContent: 'interrupted', ceiling: 20, threadId, wakeId,
+        wakeStartedAtUtc: startedAt, residentMode: 'fake', requestedModel: 'deepseek-v4-flash',
+      }).items,
+    });
     const thread = await get(f.base, '/api/thread'); const wake = thread.body.wakes.find(item => item.id === created.wakeId); assert.equal(wake.status, 'assembling'); assert.notEqual(wake.status, 'committed');
+  } finally { await f.close(); }
+});
+
+test('wake storage rejects a prebuilt manifest with mismatched identity', async () => {
+  const f = await fixture({ HUB_RESIDENT_MODE: 'fake' });
+  try {
+    const context = buildContext({
+      utterances: [], newContent: 'mismatched', ceiling: 20,
+      threadId: f.hub.db.threadId, wakeId: 'wake_not_allocated', wakeStartedAtUtc: '2026-08-05T00:00:00.000Z',
+      residentMode: 'fake', requestedModel: 'deepseek-v4-flash',
+    });
+    assert.throws(() => f.hub.db.createWake({
+      provider: 'fake', model: 'deepseek-v4-flash', content: 'mismatched', contextItems: context.items,
+    }), /match its persisted wake/);
+    assert.equal(f.hub.db.getThread().wakes.length, 0);
   } finally { await f.close(); }
 });
 

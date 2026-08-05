@@ -36,11 +36,21 @@ export function createHub({ env = process.env, dbPath, provider: providerOverrid
     if (!trimmed) throw { code: 'invalid_message', message: 'Message must contain text.' };
     if (trimmed.length > config.maxMessageLength) throw { code: 'message_too_large', message: `Message must be ${config.maxMessageLength} characters or fewer.` };
     const utterances = db.getThread().events.filter(event => event.eventKind === 'utterance');
-    const context = buildContext({ utterances, newContent: submitted, ceiling: config.messageCeiling });
-    const created = db.createWake({ provider: config.mode === 'fake' ? 'fake' : 'deepseek', model: config.model, content: submitted, contextItems: context.items });
+    let assembledContext;
+    const created = db.createWake({
+      provider: config.mode === 'fake' ? 'fake' : 'deepseek', model: config.model, content: submitted,
+      contextBuilder: ({ threadId, wakeId, startedAt }) => {
+        assembledContext = buildContext({
+          utterances, newContent: submitted, ceiling: config.messageCeiling,
+          threadId, wakeId, wakeStartedAtUtc: startedAt,
+          residentMode: config.mode, requestedModel: config.model,
+        });
+        return assembledContext.items;
+      },
+    });
     db.markCalling(created.wakeId);
     try {
-      const result = await provider.complete({ messages: context.messages, model: config.model });
+      const result = await provider.complete({ messages: assembledContext.messages, model: config.model });
       if (!result || typeof result.content !== 'string' || !result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
       db.commitWake(created.wakeId, result, result.content);
     } catch (error) {

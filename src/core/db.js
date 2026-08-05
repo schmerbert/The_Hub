@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS wake_context_items (
   id TEXT PRIMARY KEY,
   wake_id TEXT NOT NULL REFERENCES wakes(id),
   ordinal INTEGER NOT NULL,
-  item_kind TEXT NOT NULL CHECK(item_kind IN ('charter','utterance','disclosure')),
+  item_kind TEXT NOT NULL CHECK(item_kind IN ('charter','environment_manifest','utterance','disclosure')),
   actor_role TEXT NOT NULL,
   content TEXT NOT NULL,
   source_event_id TEXT,
@@ -65,7 +65,37 @@ export class HubDatabase {
     this.sqlite = new DatabaseSync(path);
     this.sqlite.exec('PRAGMA foreign_keys = ON;');
     this.sqlite.exec(SCHEMA);
+    this.migrateContextItems();
     this.threadId = this.ensureThread();
+  }
+
+  migrateContextItems() {
+    const table = this.sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wake_context_items'").get();
+    if (!table || table.sql.includes("'environment_manifest'")) return;
+    this.transaction(() => {
+      this.sqlite.exec('ALTER TABLE wake_context_items RENAME TO wake_context_items_legacy');
+      this.sqlite.exec(`CREATE TABLE wake_context_items (
+        id TEXT PRIMARY KEY,
+        wake_id TEXT NOT NULL REFERENCES wakes(id),
+        ordinal INTEGER NOT NULL,
+        item_kind TEXT NOT NULL CHECK(item_kind IN ('charter','environment_manifest','utterance','disclosure')),
+        actor_role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        source_event_id TEXT,
+        source_description TEXT NOT NULL,
+        authority TEXT NOT NULL,
+        included INTEGER NOT NULL CHECK(included IN (0,1)),
+        omission_reason TEXT,
+        content_hash TEXT NOT NULL,
+        UNIQUE(wake_id, ordinal)
+      )`);
+      this.sqlite.exec(`INSERT INTO wake_context_items
+        (id, wake_id, ordinal, item_kind, actor_role, content, source_event_id, source_description, authority, included, omission_reason, content_hash)
+        SELECT id, wake_id, ordinal, item_kind, actor_role, content, source_event_id, source_description, authority, included, omission_reason, content_hash
+        FROM wake_context_items_legacy`);
+      this.sqlite.exec('DROP TABLE wake_context_items_legacy');
+      this.sqlite.exec('CREATE INDEX IF NOT EXISTS context_wake_ordinal ON wake_context_items(wake_id, ordinal)');
+    });
   }
 
   transaction(fn) {
@@ -82,25 +112,44 @@ export class HubDatabase {
     return threadId;
   }
 
-  createWake({ provider, model, content, contextItems }) {
+  createWake({ provider, model, content, contextItems, contextBuilder }) {
     const wakeId = id('wake');
     const eventId = id('event');
     const timestamp = now();
+    let finalContextItems = contextItems;
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO wakes(id, thread_id, status, provider, requested_model, started_at)
         VALUES(?,?,?,?,?,?)`).run(wakeId, this.threadId, 'assembling', provider, model, timestamp);
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?)`).run(eventId, this.threadId, wakeId, 'user', 'utterance', content, 'ground', null, null, timestamp);
+      if (contextBuilder) finalContextItems = contextBuilder({ threadId: this.threadId, wakeId, eventId, startedAt: timestamp });
+      if (!Array.isArray(finalContextItems)) throw new Error('Wake context must be an array.');
+      const manifests = finalContextItems.filter(item => item.itemKind === 'environment_manifest');
+      if (manifests.length !== 1 || finalContextItems[0]?.itemKind !== 'charter' || finalContextItems[1]?.itemKind !== 'environment_manifest') {
+        throw new Error('Every new wake must include one environment manifest after the arrival charter.');
+      }
+      const manifestPrefix = 'Host environment manifest:\n';
+      const manifestContent = finalContextItems[1].content;
+      let manifest;
+      try {
+        manifest = JSON.parse(manifestContent.startsWith(manifestPrefix) ? manifestContent.slice(manifestPrefix.length) : '');
+      } catch {
+        throw new Error('Every new wake must include a parseable environment manifest.');
+      }
+      if (manifest.thread_id !== this.threadId || manifest.wake_id !== wakeId ||
+        manifest.wake_started_at_utc !== timestamp || manifest.wake_started_at_unix_ms !== Date.parse(timestamp)) {
+        throw new Error('Environment manifest identity must match its persisted wake.');
+      }
       const insert = this.sqlite.prepare(`INSERT INTO wake_context_items
         (id, wake_id, ordinal, item_kind, actor_role, content, source_event_id, source_description, authority, included, omission_reason, content_hash)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
-      for (const item of contextItems) {
+      for (const item of finalContextItems) {
         insert.run(id('ctx'), wakeId, item.ordinal, item.itemKind, item.actorRole, item.content,
           item.sourceEventId || (item.itemKind === 'utterance' && item.actorRole === 'user' && item.content === content ? eventId : null), item.sourceDescription, item.authority, item.included ? 1 : 0,
           item.omissionReason || null, item.contentHash);
       }
     });
-    return { wakeId, eventId };
+    return { wakeId, eventId, contextItems: finalContextItems };
   }
 
   markCalling(wakeId) { this.sqlite.prepare('UPDATE wakes SET status=? WHERE id=?').run('calling_provider', wakeId); }
