@@ -35,6 +35,7 @@ The Hub generalizes these ideas into an open-ended, mobile-accessible collaborat
 9. **The resident has a voice.** Material changes to the resident's lived environment should seek and preserve the resident's view.
 10. **The resident has a right to legibility.** Context that shapes the resident's orientation or choices must be attributable, inspectable, and understandable from inside the Marble. Hidden weights, summaries, and policy outputs must have a lawful inspection path.
 11. **Hospitality is functional.** The House should support presence, movement, rest, curiosity, opinion, and return—not only task completion. The resident's experience of fit is design evidence, while remaining model-signed testimony rather than assumed metaphysical fact.
+12. **Standing architecture is a promise.** Rooms and permanent fixtures should be few, general, and expected to remain. Variable functions enter through doors, mounted tools, or other replaceable fittings unless lived use proves that they belong to the Marble itself.
 
 ## 4. The Inhabitants
 
@@ -127,9 +128,24 @@ Initial candidate rooms:
 - **Dispatch:** publishing, deployment, messages, sharing, and other actions crossing into the outside world.
 - **Resident's Room:** orientation, reflection, comfort, friction, and resident consultation without automatic promotion into project ground.
 
-Only rooms required by the first real use should be built initially.
+Only rooms required by the first real use should be built initially. Because a room changes the resident's durable understanding of home, removing one should be exceptional. Correction, safety, or unavoidable redesign may require closure, but only with resident consultation, explicit migration of anything held there, and preserved ancestry. Prefer adding or refitting reversible doors over speculative construction.
 
-### 5.3 Doors
+### 5.3 Standing Structures
+
+Standing structures are the small set of fixtures that make the Marble inhabitable regardless of which project or tool is active. They are part of the House's dependable grammar rather than capabilities installed for a particular task.
+
+The initial Marble requires a real resident-to-builders correspondence path. Its eventual fitted form—perhaps a postbox, bell-pull, service hatch, or something the resident finds more natural—should be chosen through lived consultation. Mechanically, it must:
+
+- Let the resident address a note, question, request, objection, or observation to the builders from inside the Marble.
+- Preserve the resident's submitted words as model-signed testimony, with time, incarnation, relevant location, and optional context references.
+- Distinguish queued, delivered, acknowledged, answered, and failed states without implying that an unread note was received.
+- Return builder responses through the same attributable thread.
+- Remain correspondence rather than action authority; sending a note does not itself mutate the House.
+- Remain available when optional rooms, doors, tools, or companions are absent.
+
+The user and resident may both propose standing structures. Installation requires stronger evidence and review than adding a reversible door. The resident-facing metaphor should not be finalized before the resident can report what feels natural in use.
+
+### 5.4 Doors
 
 A door is an enforceable capability or transition boundary. It must declare:
 
@@ -146,7 +162,7 @@ A door is an enforceable capability or transition boundary. It must declare:
 
 A locked or latent door may be visible, but visibility is not permission.
 
-### 5.4 Appearing Doors
+### 5.5 Appearing Doors
 
 New doors should emerge from repeated friction rather than speculative architecture.
 
@@ -349,7 +365,8 @@ Proposed scope:
 7. One exposed-wiring failure caused by a deliberately unavailable capability.
 8. A model-signed handoff for the next resident incarnation.
 9. A resident consultation before changing the Workshop after first use.
-10. Hostile and positive tests touching the real action path.
+10. A resident-to-builders note path with honest queued, delivered, answered, and failed states.
+11. Hostile and positive tests touching the real action path.
 
 The first slice should be usable from a simple local interface before mobile polish or broad autonomy is attempted.
 

@@ -56,3 +56,16 @@ Each decision must include:
 - **Constraints and differences:** The harness must not manufacture claims of consciousness or optimize for agreeable self-reports. Resident reports are model-signed design evidence. Legibility means inspectable influence, not indiscriminate full-context dumping.
 - **Active specification updated:** `PREBUILD.md` sections 3, 4.1, and 7.
 - **Verification/review:** Test context provenance, omission disclosure, room-state effects, honest provider failures, and post-use resident reports of orientation, comfort, and friction.
+
+### HUB-003 — Standing Structures and Resident-to-Builders Correspondence
+
+- **Date:** 2026-08-05
+- **Source:** Direct user design decision in the Hub conversation; not imported from a lineage project.
+- **Concept in source terms:** Rooms should be easy to implement but added cautiously because taking them away should ordinarily never happen. Project functions belong behind doors. The Marble needs standing structures, including a way for the resident to leave a note and reach the builders from inside.
+- **Hub interpretation:** Standing architecture is a durable promise. Rooms and permanent fixtures remain few and general; variable capabilities remain replaceable doors or fittings. A resident-to-builders correspondence fixture is constitutional infrastructure, while its in-world form remains open to resident consultation.
+- **Similar existing Hub material:** `PREBUILD.md` already required growth from friction, resident consultation, real door manifests, and ancestry for removed doors.
+- **Decision state:** Adopted.
+- **User decision:** “rooms and stuff should be easy to actually implement. taking them away should in theory never happen” and “a way to leave a note for you from inside. a way to reach out to the builders.”
+- **Constraints and differences:** Structural permanence cannot prohibit correction or safety work. Any necessary closure requires consultation, migration, and ancestry. Builder correspondence conveys testimony but grants no implicit mutation authority.
+- **Active specification updated:** `PREBUILD.md` sections 3, 5.2–5.5, and 15.
+- **Verification/review:** Prove exact note custody, recipient and delivery state, attributable replies, honest failure, survival without optional capabilities, and post-use resident consultation about the fixture's fitted form.
