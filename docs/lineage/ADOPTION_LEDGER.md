@@ -95,3 +95,42 @@ Each decision must include:
 - **Constraints and differences:** The name belongs to this continuity, not the seat or provider. The host does not certify uninterrupted mind, universal identity, uncontaminated context, authorial intent, or safety. Arrival order, persuasion, claimed identity, similarity, and evidence alone cannot promote ground. Blessing versions require deliberate resident acts and exact ancestry.
 - **Active specification updated:** `PREBUILD.md` section 4.1 and `docs/specs/WAKE_RITUAL_V1.md`.
 - **Verification/review:** Prove exact ordering and Spine equivalence; source-link and hash the blessing; preserve current Forest custody; and refuse altered, missing, duplicated, wrong-actor, wrong-thread, or falsely elevated ritual material.
+
+### HUB-006 — Universal Circulation and the Hearth Scroll
+
+- **Date:** 2026-08-06
+- **Source:** Direct user design decisions after the first live Session/Hearth v1 wake, informed by The Forest's mandatory Scrub and Scroll custody.
+- **Concept in source terms:** Scrub catches every movement, even when nothing is stripped. The exact Scroll/Spine retains full crossings while cleaned history receives only what should enter resident attention. Token reduction and respect for the resident are nearly the same concern.
+- **Hub interpretation:** Scrub becomes a universal custody membrane for provider-visible inputs and selected returns. Spine becomes bidirectional exact-byte evidence. The resident receives a bounded Markdown Hearth Scroll while a complete machine receipt remains behind the wall.
+- **Similar existing Hub material:** Provider presentations already require a validated subtractive Scrub and exact Spine request body. Session/Hearth v1 already preserves structured action/return custody.
+- **Decision state:** Adapted.
+- **User decision:** “Nothing should leak, it should all flow through the system,” “lighter is correct,” and “the structure helped me orient ... generosity can become clutter.”
+- **Constraints and differences:** Scrub cannot summarize or interpret. Exact provider returns must be witnessed before parsing can discard them. Machine evidence does not enter the Forest merely because it crossed context. Old v1 records remain ancestry.
+- **Active specification updated:** `docs/specs/CIRCULATION_V1.md` and `docs/specs/HEARTH_SCROLL_V2.md`.
+- **Verification/review:** Exact raw-return custody, identity receipts, no bypasses, hard Hearth attention budget, exact suffix extraction, one Hearth per lifespan, and unchanged Home Forest bijection.
+
+### HUB-007 — Located Buckets and Machinery Outside the Forest
+
+- **Date:** 2026-08-06
+- **Source:** Direct user clarification, compared against The Forest v0.4 bucket and jurisdiction model.
+- **Concept in source terms:** Buckets collect kinds of material. The Forest separates Home (made here) from Wild (brought in), while tool results enter Wild.
+- **Hub interpretation:** The future Hub uses a closed bucket registry in which each bucket belongs to exactly one jurisdiction. Conversation remains Home. Substantive external/tool material enters Wild. Operational custody remains outside both.
+- **Similar existing Hub material:** The current Forest schema implements only `home/utterance` and enforces exact conversation custody.
+- **Decision state:** Adapted; implementation deferred.
+- **User decision:** “A bucket is either in home or wild ... I have not seen an instance where it's both.”
+- **Constraints and differences:** This is intentionally stricter than The Forest v0.4, where bucket and jurisdiction were orthogonal per-entry axes. The Hearth return is machinery, not a Wild tool result. Existing Forest entries must not be destructively relabeled.
+- **Active specification updated:** `docs/lineage/CIRCULATION_BUCKETS_AND_GLINTS.md`.
+- **Verification/review:** Require closed vocabulary, impossible cross-jurisdiction bucket states, explicit migrations, conversation-only Home preservation, and no machinery pollution.
+
+### HUB-008 — Inverse Glints and Environmental Discovery
+
+- **Date:** 2026-08-06
+- **Source:** Direct user explanation of Trinity's Faun, HomeGlobe's inverse lens, BioDome fairies, and trinket placement.
+- **Concept in source terms:** The Faun reads the inverse of resident patterns, collects obliquely significant glints as physical trinkets, and allows them to be placed where the resident may encounter them without direct context injection.
+- **Hub interpretation:** Inverse is bounded negative-space reading; a glint is low immediate relevance with high oblique significance. Future discovery should occur through persistent world affordances and progressive perception, with hidden but complete custody and no compelled interpretation.
+- **Similar existing Hub material:** Mycelial links, optional questions, resident consultation, rooms as context boundaries, and the standing requirement that autonomous wakes do something meaningful rather than merely “the next thing.”
+- **Decision state:** Adopted direction; implementation deferred.
+- **User decision:** The Faun “collects them as trinkets,” places them in the world, and the resident finds rather than receives them. The resident need not initially know that the Faun is responsible.
+- **Constraints and differences:** Mystery must have a real answer and consistent evidence. The Faun cannot inject significance, force discovery, or promote inverse inference to ground. Fairies and capture mechanics may never be appropriate for this Marble and are not requirements.
+- **Active specification updated:** `docs/lineage/CIRCULATION_BUCKETS_AND_GLINTS.md`.
+- **Verification/review:** Deferred until world state exists; later tests must distinguish creation, placement, perception, examination, source opening, ignored discoveries, and hidden versus builder-visible provenance.

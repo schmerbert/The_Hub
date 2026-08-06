@@ -13,7 +13,7 @@ import { ARRIVAL_CHARTER } from '../src/resident/charter.js';
 
 async function fixture(env = {}, provider) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-first-breath-'));
-  const hub = createHub({ env: { ...env, HUB_DB_PATH: join(dir, 'hub.sqlite') }, provider });
+  const hub = createHub({ env: { ...env, HUB_DB_PATH: join(dir, 'hub.sqlite'), HUB_SPINE_PATH: join(dir, 'spine.jsonl') }, provider });
   await new Promise(resolve => hub.server.listen(0, resolve));
   const address = hub.server.address();
   const base = `http://127.0.0.1:${address.port}`;
@@ -146,6 +146,7 @@ test('orientation manifest and API response exclude provider credentials and pat
   const dir = await mkdtemp(join(tmpdir(), 'hub-secrets-')); const dbPath = join(dir, 'hub.sqlite');
   const hub = createHub({
     dbPath,
+    spinePath: join(dir, 'spine.jsonl'),
     env: {
       HUB_RESIDENT_MODE: 'fake',
       HUB_DB_PATH: 'sentinel-db-path',

@@ -225,7 +225,7 @@ test('missing credentials create no request_prepared Spine frame', async () => {
 test('Forest activation refuses absent stores and fake-provider activation', async () => {
   const dir = await temp();
   try {
-    assert.throws(() => createHub({ env: { HUB_RESIDENT_MODE: 'live' }, dbPath: join(dir, 'hub.sqlite'), forestPath: join(dir, 'forest.sqlite'), activateForest: true }), error => error.code === 'forest_activation_refused');
+    assert.throws(() => createHub({ env: { HUB_RESIDENT_MODE: 'live' }, dbPath: join(dir, 'hub.sqlite'), forestPath: join(dir, 'forest.sqlite'), spinePath: join(dir, 'spine.jsonl'), activateForest: true }), error => error.code === 'forest_activation_refused');
     await assert.rejects(stat(join(dir, 'forest.sqlite')));
     const fakeStores = seedEmptyLiveStores(dir);
     assert.throws(() => createHub({ env: { HUB_RESIDENT_MODE: 'fake' }, ...fakeStores, activateForest: true }), error => error.code === 'forest_activation_refused');
@@ -298,7 +298,7 @@ test('Spine lifecycle refuses out-of-order and duplicate dispatch/outcome receip
 test('concurrent wakes refuse with wake_in_progress before creating a second event', async () => {
   const dir = await temp(); let release; let startedResolve; const started = new Promise(resolve => { startedResolve = resolve; });
   const provider = { prepareRequest({ messages, model, tools, toolChoice }) { const body = { model, messages, stream: false, thinking: { type: 'disabled' } }; if (tools) body.tools = tools; if (toolChoice) body.tool_choice = toolChoice; return { requestBodyString: JSON.stringify(body) }; }, async complete({ phase, onBeforeDispatch, onDispatch, onOutcome }) { if (phase === 'orientation') { startedResolve(); await new Promise(resolve => { release = resolve; }); } onBeforeDispatch?.(); onDispatch?.(); onOutcome?.({ kind: 'success', http_status: 200, response_id: 'concurrent-test' }); return phase === 'orientation' ? { content: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'concurrent-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] } } : { content: 'resident', message: { role: 'assistant', content: 'resident' }, resolvedModel: 'test-model' }; } };
-  const hub = createHub({ env: { HUB_RESIDENT_MODE: 'fake' }, dbPath: join(dir, 'hub.sqlite'), provider });
+  const hub = createHub({ env: { HUB_RESIDENT_MODE: 'fake' }, dbPath: join(dir, 'hub.sqlite'), spinePath: join(dir, 'spine.jsonl'), provider });
   await new Promise(resolve => hub.server.listen(0, resolve));
   try {
     const first = fetch(`http://127.0.0.1:${hub.server.address().port}/api/wakes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'first' }) });

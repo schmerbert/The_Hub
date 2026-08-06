@@ -12,6 +12,7 @@ import {
 import { validateBlessingSourceEvent } from '../context/assemble.js';
 import { id, sha256 } from '../core/hash.js';
 import { SESSION_ZERO_ID, SESSION_ZERO_LABEL, buildClinicalBootstrap } from '../session/lifespan.js';
+import { assertScrubbedProviderReturn } from '../scrub/provider-return.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS threads (
@@ -95,6 +96,9 @@ CREATE TABLE IF NOT EXISTS session_history (
   message_kind TEXT NOT NULL CHECK(message_kind IN ('user','assistant_tool_call','tool_result','resident')),
   source_event_id TEXT,
   content_hash TEXT NOT NULL,
+  scrub_receipt_id TEXT,
+  raw_return_record_id TEXT,
+  source_record_hash TEXT,
   created_at TEXT NOT NULL,
   UNIQUE(session_id, ordinal)
 );
@@ -108,6 +112,11 @@ CREATE TABLE IF NOT EXISTS provider_requests (
   request_body TEXT NOT NULL,
   message_sources_json TEXT NOT NULL,
   spine_record_id TEXT,
+  raw_return_record_id TEXT,
+  raw_return_byte_length INTEGER,
+  raw_return_sha256 TEXT,
+  return_scrub_receipt_id TEXT,
+  return_scrub_receipt_json TEXT,
   response_message_json TEXT,
   response_id TEXT,
   finish_reason TEXT,
@@ -117,6 +126,14 @@ CREATE TABLE IF NOT EXISTS provider_requests (
   UNIQUE(wake_id, ordinal)
 );
 CREATE INDEX IF NOT EXISTS provider_requests_wake_order ON provider_requests(wake_id, ordinal);
+CREATE TABLE IF NOT EXISTS return_scrub_receipts (
+  id TEXT PRIMARY KEY,
+  provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id),
+  spine_record_id TEXT NOT NULL,
+  receipt_json TEXT NOT NULL,
+  message_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS hearth_receipts (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -124,6 +141,8 @@ CREATE TABLE IF NOT EXISTS hearth_receipts (
   tool_call_id TEXT NOT NULL,
   return_json TEXT NOT NULL,
   return_hash TEXT NOT NULL,
+  scroll_markdown TEXT,
+  scroll_hash TEXT,
   action_event_id TEXT NOT NULL REFERENCES events(id),
   return_event_id TEXT NOT NULL REFERENCES events(id),
   created_at TEXT NOT NULL,
@@ -143,6 +162,7 @@ export class HubDatabase {
     this.migrateContextItems();
     this.migrateCustodyFailureColumns();
     this.migrateSessionColumns();
+    this.migrateCirculationColumns();
     this.threadId = this.ensureThread();
     this.session = this.openSession();
   }
@@ -155,6 +175,23 @@ export class HubDatabase {
     addColumn('wakes', 'session_id', 'TEXT REFERENCES sessions(id)');
     addColumn('wakes', 'turn_ordinal', 'INTEGER');
     addColumn('events', 'session_id', 'TEXT REFERENCES sessions(id)');
+    addColumn('session_history', 'scrub_receipt_id', 'TEXT');
+    addColumn('session_history', 'raw_return_record_id', 'TEXT');
+    addColumn('session_history', 'source_record_hash', 'TEXT');
+  }
+
+  migrateCirculationColumns() {
+    const addColumn = (table, column, definition) => {
+      const columns = this.sqlite.prepare(`PRAGMA table_info(${table})`).all().map(item => item.name);
+      if (!columns.includes(column)) this.sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    };
+    for (const [column, definition] of [['raw_return_record_id', 'TEXT'], ['raw_return_byte_length', 'INTEGER'], ['raw_return_sha256', 'TEXT'], ['return_scrub_receipt_id', 'TEXT'], ['return_scrub_receipt_json', 'TEXT']]) addColumn('provider_requests', column, definition);
+    addColumn('hearth_receipts', 'scroll_markdown', 'TEXT');
+    addColumn('hearth_receipts', 'scroll_hash', 'TEXT');
+    this.sqlite.exec(`CREATE TABLE IF NOT EXISTS return_scrub_receipts (
+      id TEXT PRIMARY KEY, provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id), spine_record_id TEXT NOT NULL,
+      receipt_json TEXT NOT NULL, message_json TEXT NOT NULL, created_at TEXT NOT NULL
+    )`);
   }
 
   openSession() {
@@ -397,17 +434,22 @@ export class HubDatabase {
 
   getSessionHistory(sessionId = this.session.id) {
     return this.sqlite.prepare(`SELECT id, session_id AS sessionId, wake_id AS wakeId, ordinal, message_json AS messageJson,
-      role, message_kind AS messageKind, source_event_id AS sourceEventId, content_hash AS contentHash, created_at AS createdAt
+      role, message_kind AS messageKind, source_event_id AS sourceEventId, content_hash AS contentHash, scrub_receipt_id AS scrubReceiptId,
+      raw_return_record_id AS rawReturnRecordId, source_record_hash AS sourceRecordHash, created_at AS createdAt
       FROM session_history WHERE session_id=? ORDER BY ordinal`).all(sessionId);
   }
 
-  appendSessionHistory({ sessionId = this.session.id, wakeId, message, messageKind, sourceEventId = null }) {
+  appendSessionHistory({ sessionId = this.session.id, wakeId, message, messageKind, sourceEventId = null, returnScrub = null }) {
     const history = this.getSessionHistory(sessionId);
     const ordinal = history.length + 1;
     const raw = JSON.stringify(message);
     const content = typeof message.content === 'string' ? message.content : raw;
-    this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?)`).run(id('history'), sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now());
+    if (['assistant_tool_call', 'resident'].includes(messageKind)) {
+      if (!returnScrub) throw new Error('Provider assistant history requires a validated return Scrub result.');
+      assertScrubbedProviderReturn(returnScrub);
+    }
+    this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at, scrub_receipt_id, raw_return_record_id, source_record_hash)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id('history'), sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now(), returnScrub?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
     return ordinal;
   }
 
@@ -419,31 +461,38 @@ export class HubDatabase {
     return requestId;
   }
 
-  completeProviderRequest(requestId, result, outcome = null) {
-    this.sqlite.prepare(`UPDATE provider_requests SET response_message_json=?, response_id=?, finish_reason=?, outcome_json=?, completed_at=? WHERE id=?`).run(
-      result?.message ? JSON.stringify(result.message) : null, result?.responseId || null, result?.finishReason || null, outcome ? JSON.stringify(outcome) : null, now(), requestId);
+  completeProviderRequest(requestId, result, outcome = null, returnScrub = null) {
+    if (returnScrub) assertScrubbedProviderReturn(returnScrub);
+    const receiptId = returnScrub?.receipt?.receiptId || null;
+    this.transaction(() => {
+      this.sqlite.prepare(`UPDATE provider_requests SET response_message_json=?, response_id=?, finish_reason=?, outcome_json=?, raw_return_record_id=?, raw_return_byte_length=?, raw_return_sha256=?, return_scrub_receipt_id=?, return_scrub_receipt_json=?, completed_at=? WHERE id=?`).run(
+        result?.message ? JSON.stringify(result.message) : null, result?.responseId || null, result?.finishReason || null, outcome ? JSON.stringify(outcome) : null,
+        returnScrub?.receipt?.source?.spineRecordId || result?.rawReturnFrame?.record_id || null, returnScrub?.receipt?.source?.byteLength || result?.rawReturnFrame?.body_byte_length || null,
+        returnScrub?.receipt?.source?.sha256 || result?.rawReturnFrame?.body_sha256 || null, receiptId, returnScrub ? JSON.stringify(returnScrub.receipt) : null, now(), requestId);
+      if (returnScrub) this.sqlite.prepare(`INSERT INTO return_scrub_receipts(id, provider_request_id, spine_record_id, receipt_json, message_json, created_at) VALUES(?,?,?,?,?,?)`).run(receiptId, requestId, returnScrub.receipt.source.spineRecordId, JSON.stringify(returnScrub.receipt), JSON.stringify(returnScrub.message), now());
+    });
   }
 
-  recordHearthAction({ wakeId, sessionId, message }) {
+  recordHearthAction({ wakeId, sessionId, message, returnScrub }) {
     const eventId = id('event');
     const raw = JSON.stringify(message);
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'resident', 'state', ?, 'model_signed', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, raw, now(), wakeId);
-      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'assistant_tool_call', sourceEventId: null });
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'assistant_tool_call', sourceEventId: null, returnScrub });
     });
     return eventId;
   }
 
-  recordHearthReturn({ wakeId, sessionId, toolCallId, returnValue, actionEventId, returnHash }) {
+  recordHearthReturn({ wakeId, sessionId, toolCallId, returnValue, scrollMarkdown, scrollHash, actionEventId, returnHash }) {
     const eventId = id('event');
-    const message = { role: 'tool', tool_call_id: toolCallId, content: JSON.stringify(returnValue) };
+    const message = { role: 'tool', tool_call_id: toolCallId, content: scrollMarkdown };
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
       this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result' });
-      this.sqlite.prepare(`INSERT INTO hearth_receipts(id, session_id, wake_id, tool_call_id, return_json, return_hash, action_event_id, return_event_id, created_at)
-        VALUES(?,?,?,?,?,?,?,?,?)`).run(id('hearth'), sessionId, wakeId, toolCallId, JSON.stringify(returnValue), returnHash, actionEventId, eventId, now());
+      this.sqlite.prepare(`INSERT INTO hearth_receipts(id, session_id, wake_id, tool_call_id, return_json, return_hash, scroll_markdown, scroll_hash, action_event_id, return_event_id, created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(id('hearth'), sessionId, wakeId, toolCallId, JSON.stringify(returnValue), returnHash, scrollMarkdown, scrollHash, actionEventId, eventId, now());
     });
     return { eventId, message };
   }
@@ -454,7 +503,7 @@ export class HubDatabase {
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(eventId, wake.threadId, wake.sessionId, wakeId, 'resident', 'utterance', response.content, 'model_signed', wake.provider, response.resolvedModel || wake.requestedModel, now());
-      this.appendSessionHistory({ sessionId: wake.sessionId, wakeId, message: response.message || { role: 'assistant', content: response.content }, messageKind: 'resident', sourceEventId: eventId });
+      this.appendSessionHistory({ sessionId: wake.sessionId, wakeId, message: response.message || { role: 'assistant', content: response.content }, messageKind: 'resident', sourceEventId: eventId, returnScrub: response.returnScrub });
       this.sqlite.prepare(`UPDATE wakes SET status='committed', resolved_model=?, provider_response_id=?, finish_reason=?, system_fingerprint=?, usage_json=?, completed_at=? WHERE id=?`).run(
         response.resolvedModel || null, response.responseId || null, response.finishReason || null, response.systemFingerprint || null,
         response.usage ? JSON.stringify(response.usage) : null, now(), wakeId);
@@ -534,14 +583,16 @@ export class HubDatabase {
     });
     normalized.events = this.sqlite.prepare('SELECT id, session_id AS sessionId, actor_kind AS actorKind, event_kind AS eventKind, content, authority, provider, model, created_at AS createdAt FROM events WHERE wake_id=? ORDER BY created_at, id').all(wakeId).map(event => ({ ...event, sessionId: event.sessionId || SESSION_ZERO_ID }));
     normalized.phases = this.sqlite.prepare(`SELECT id, phase, ordinal, request_body AS requestBody, message_sources_json AS messageSources,
-      spine_record_id AS spineRecordId, response_message_json AS responseMessage, response_id AS responseId, finish_reason AS finishReason,
+      spine_record_id AS spineRecordId, raw_return_record_id AS rawReturnRecordId, raw_return_byte_length AS rawReturnByteLength, raw_return_sha256 AS rawReturnSha256,
+      return_scrub_receipt_id AS returnScrubReceiptId, return_scrub_receipt_json AS returnScrubReceiptJson, response_message_json AS responseMessage, response_id AS responseId, finish_reason AS finishReason,
       outcome_json AS outcome, created_at AS createdAt, completed_at AS completedAt FROM provider_requests WHERE wake_id=? ORDER BY ordinal`).all(wakeId).map(phase => ({
       ...phase,
       messageSources: JSON.parse(phase.messageSources),
       responseMessage: phase.responseMessage ? JSON.parse(phase.responseMessage) : null,
       outcome: phase.outcome ? JSON.parse(phase.outcome) : null,
+      returnScrubReceipt: phase.returnScrubReceiptJson ? JSON.parse(phase.returnScrubReceiptJson) : null,
     }));
-    normalized.hearth = this.sqlite.prepare(`SELECT tool_call_id AS toolCallId, return_json AS returnJson, return_hash AS returnHash,
+    normalized.hearth = this.sqlite.prepare(`SELECT tool_call_id AS toolCallId, return_json AS returnJson, return_hash AS returnHash, scroll_markdown AS scrollMarkdown, scroll_hash AS scrollHash,
       action_event_id AS actionEventId, return_event_id AS returnEventId FROM hearth_receipts WHERE wake_id=?`).get(wakeId) || null;
     return normalized;
   }

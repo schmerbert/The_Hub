@@ -19,7 +19,7 @@ export function prepareProviderRequest(provider, { presentation, model, thinking
   return { requestBody };
 }
 
-export function completeProvider(provider, { presentation, model, phase = 'ordinary', requestBodyString, onBeforeDispatch, onDispatch, onOutcome }) {
+export function completeProvider(provider, { presentation, model, phase = 'ordinary', requestBodyString, onBeforeDispatch, onDispatch, onRawReturn, onOutcome }) {
   assertScrubbedPresentation(presentation);
-  return provider.complete({ presentation, messages: presentation.messages, model, phase, requestBodyString, onBeforeDispatch, onDispatch, onOutcome });
+  return provider.complete({ presentation, messages: presentation.messages, model, phase, requestBodyString, onBeforeDispatch, onDispatch, onRawReturn, onOutcome });
 }

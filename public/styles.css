@@ -56,6 +56,7 @@ h2 { margin: 0; font-size: .86rem; font-weight: 600; letter-spacing: .02em; }
 .inspection-label { color: var(--muted); font: .67rem var(--mono); text-transform: uppercase; letter-spacing: .04em; }
 .inspection-value { margin-top: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; line-height: 1.45; }
 .inspection-code { user-select: text; font: .68rem/1.5 var(--mono); }
+.hearth-scroll { white-space: pre-wrap; border: 1px solid rgba(126, 184, 160, .22); border-radius: 12px; padding: .7rem; background: rgba(126, 184, 160, .05); }
 .omitted { color: var(--amber); }
 .rail { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-height: 0; }
 .rail-heading { padding: .85rem 1rem .55rem; }

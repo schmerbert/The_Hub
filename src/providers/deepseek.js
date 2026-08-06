@@ -12,7 +12,7 @@ export class DeepSeekResidentProvider {
     return { requestBody, requestBodyString: JSON.stringify(requestBody) };
   }
 
-  async complete({ presentation, model, phase = 'ordinary', requestBodyString, onBeforeDispatch, onDispatch, onOutcome }) {
+  async complete({ presentation, model, phase = 'ordinary', requestBodyString, onBeforeDispatch, onDispatch, onRawReturn, onOutcome }) {
     assertScrubbedPresentation(presentation);
     const prepared = requestBodyString ? { requestBodyString } : this.prepareRequest({ presentation, model });
     const requestBody = prepared.requestBodyString;
@@ -30,17 +30,27 @@ export class DeepSeekResidentProvider {
       if (onOutcome) onOutcome({ kind: 'network_error', network_code: 'fetch_failed' });
       throw { code: 'provider_network_error', message: 'The DeepSeek provider could not be reached.' };
     }
+    const bodyBytes = Buffer.from(await response.arrayBuffer());
+    const rawReturnFrame = onRawReturn?.({ body: bodyBytes, httpStatus: response.status, contentType: response.headers.get('content-type') || null, phase });
     if (!response.ok) {
       if (onOutcome) onOutcome({ kind: 'http_error', http_status: response.status });
       throw { code: 'provider_http_error', message: `DeepSeek returned HTTP ${response.status}.` };
     }
+    if (!bodyBytes.length) {
+      if (onOutcome) onOutcome({ kind: 'empty_content', http_status: response.status });
+      throw { code: 'provider_empty_content', message: 'DeepSeek returned an empty response body.' };
+    }
     let payload;
-    try { payload = await response.json(); } catch {
+    try { payload = JSON.parse(bodyBytes.toString('utf8')); } catch {
       if (onOutcome) onOutcome({ kind: 'invalid_response', http_status: response.status });
       throw { code: 'provider_invalid_response', message: 'DeepSeek returned invalid JSON.' };
     }
     const choice = payload?.choices?.[0];
     const message = choice?.message && typeof choice.message === 'object' ? structuredClone(choice.message) : null;
+    if (!message || message.role !== 'assistant') {
+      if (onOutcome) onOutcome({ kind: 'invalid_response', http_status: response.status });
+      throw { code: 'provider_invalid_response', message: 'DeepSeek returned no assistant message.' };
+    }
     const content = typeof message?.content === 'string' ? message.content : null;
     if (phase !== 'orientation' && (!content || !content.trim())) {
       if (onOutcome) onOutcome({ kind: 'empty_content', http_status: response.status });
@@ -58,6 +68,7 @@ export class DeepSeekResidentProvider {
       message: message || { role: 'assistant', content },
       toolCalls: Array.isArray(message?.tool_calls) ? message.tool_calls : null,
       reasoningContent: Object.hasOwn(message || {}, 'reasoning_content') ? message.reasoning_content : undefined,
+      rawReturnFrame,
     };
   }
 }

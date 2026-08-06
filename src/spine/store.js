@@ -1,7 +1,7 @@
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
-import { byteLength, canonicalize, id, sha256 } from '../core/hash.js';
+import { byteLength, canonicalize, id, sha256, sha256Bytes } from '../core/hash.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -27,7 +27,7 @@ function validateOutcome(outcome) {
 function applyLifecycle(frame, lifecycle) {
   if (frame.frame_type === 'request_prepared') {
     if (lifecycle.has(frame.record_id)) throw new Error('Spine contains a duplicate request lifecycle.');
-    lifecycle.set(frame.record_id, { dispatched: false, outcome: false });
+    lifecycle.set(frame.record_id, { dispatched: false, raw_return: false, outcome: false, phase: frame.request_phase || null, requires_raw_return: frame.return_custody_version === 1 && Boolean(frame.request_phase) });
     return;
   }
   const request = lifecycle.get(frame.request_record_id);
@@ -35,9 +35,16 @@ function applyLifecycle(frame, lifecycle) {
   if (frame.frame_type === 'dispatch_attempted') {
     if (request.dispatched) throw new Error('Spine request has duplicate dispatch receipts.');
     request.dispatched = true;
+  } else if (frame.frame_type === 'raw_return') {
+    if (!request.dispatched) throw new Error('Spine raw return cannot precede dispatch.');
+    if (request.outcome) throw new Error('Spine raw return cannot follow provider outcome.');
+    if (frame.request_phase && frame.request_phase !== request.phase) throw new Error('Spine raw return phase does not match its request.');
+    if (request.raw_return) throw new Error('Spine request has duplicate raw returns.');
+    request.raw_return = true;
   } else if (frame.frame_type === 'provider_outcome') {
     if (!request.dispatched) throw new Error('Spine outcome cannot precede dispatch.');
     if (request.outcome) throw new Error('Spine request has duplicate outcome receipts.');
+    if (request.requires_raw_return && frame.outcome.kind !== 'network_error' && !request.raw_return) throw new Error('Spine provider outcome requires an earlier raw return.');
     validateOutcome(frame.outcome);
     request.outcome = true;
   }
@@ -64,8 +71,17 @@ function readFrames(path) {
         throw new Error('Spine request body length or hash mismatch.');
       }
       if (frame.request_phase !== undefined && !['orientation', 'response', 'ordinary'].includes(frame.request_phase)) throw new Error('Spine request phase is invalid.');
+      if (frame.return_custody_version !== undefined && frame.return_custody_version !== 1) throw new Error('Spine return custody generation is invalid.');
     } else if (frame.frame_type === 'dispatch_attempted' || frame.frame_type === 'provider_outcome') {
       if (typeof frame.request_record_id !== 'string') throw new Error('Spine receipt is missing its request identifier.');
+    } else if (frame.frame_type === 'raw_return') {
+      const body = typeof frame.raw_body_base64 === 'string' ? Buffer.from(frame.raw_body_base64, 'base64') : null;
+      if (typeof frame.request_record_id !== 'string' || !body || Buffer.from(frame.raw_body_base64, 'base64').toString('base64') !== frame.raw_body_base64 || frame.body_byte_length !== body.length || frame.body_sha256 !== sha256Bytes(body)) {
+        throw new Error('Spine raw return body length or hash mismatch.');
+      }
+      if (!Number.isInteger(frame.http_status) || frame.http_status < 100 || frame.http_status > 599) throw new Error('Spine raw return HTTP status is invalid.');
+      if (frame.content_type !== null && typeof frame.content_type !== 'string') throw new Error('Spine raw return content type is invalid.');
+      if (frame.request_phase !== undefined && !['orientation', 'response', 'ordinary'].includes(frame.request_phase)) throw new Error('Spine raw return phase is invalid.');
     } else {
       throw new Error('Spine contains an unknown frame type.');
     }
@@ -122,7 +138,7 @@ export class SpineStore {
   }
 
   append(frameType, fields = {}) {
-    if (!['request_prepared', 'dispatch_attempted', 'provider_outcome'].includes(frameType)) throw new Error('Spine contains an unknown frame type.');
+    if (!['request_prepared', 'dispatch_attempted', 'raw_return', 'provider_outcome'].includes(frameType)) throw new Error('Spine contains an unknown frame type.');
     const frame = {
       schema_version: SCHEMA_VERSION,
       frame_type: frameType,
@@ -151,6 +167,7 @@ export class SpineStore {
       prepared_at: new Date().toISOString(),
       authorization_present: Boolean(authorizationPresent),
       safe_header_names: ['authorization', 'content-type'],
+      return_custody_version: 1,
       ...(requestPhase ? { request_phase: requestPhase } : {}),
     });
   }
@@ -167,6 +184,20 @@ export class SpineStore {
       request_record_id: requestRecordId,
       observed_at: new Date().toISOString(),
       outcome,
+    });
+  }
+
+  providerRawReturn(requestRecordId, { body, httpStatus, contentType = null, phase = null } = {}) {
+    const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body instanceof Uint8Array ? body : String(body ?? ''), 'utf8');
+    return this.append('raw_return', {
+      request_record_id: requestRecordId,
+      raw_body_base64: bytes.toString('base64'),
+      body_byte_length: bytes.length,
+      body_sha256: sha256Bytes(bytes),
+      http_status: httpStatus,
+      content_type: contentType || null,
+      ...(phase ? { request_phase: phase } : {}),
+      observed_at: new Date().toISOString(),
     });
   }
 

@@ -64,7 +64,7 @@ function renderThread(data) {
   }
   for (const group of wakes.values()) {
     const wakeElement = node('article', 'wake');
-    for (const event of group.events) {
+    for (const event of group.events.filter(item => item.eventKind === 'utterance' && (item.actorKind === 'user' || item.actorKind === 'resident'))) {
       const eventElement = node('div', `event ${event.actorKind}`);
       eventElement.append(node('span', 'event-label', eventLabel(event)), node('span', null, event.content));
       wakeElement.append(eventElement);
@@ -100,6 +100,13 @@ function renderSummary(wake) {
   appendBlock(panel, 'Provider', `${wake.provider} · requested ${wake.requestedModel}${wake.resolvedModel ? ` · resolved ${wake.resolvedModel}` : ''}`);
   if (wake.failureCode) appendBlock(panel, 'Failure', `${wake.failureCode} — ${wake.failureMessage}`, 'omitted');
   appendBlock(panel, 'Context', `${wake.context.filter(item => item.included).length} included · ${wake.context.filter(item => !item.included).length} omitted`);
+  if (wake.hearth?.scrollMarkdown) {
+    appendBlock(panel, 'Hearth tended - custody held', wake.hearth.scrollMarkdown, 'hearth-scroll');
+    const expose = node('button', 'inspect-button', 'Expose wiring');
+    expose.type = 'button';
+    expose.addEventListener('click', () => { currentInspectionTab = 'wiring'; renderInspection(); });
+    panel.append(expose);
+  }
   return panel;
 }
 
@@ -122,15 +129,23 @@ function renderReceipt(wake) {
   return panel;
 }
 
+function renderWiring(wake) {
+  const panel = node('div', 'panel');
+  appendBlock(panel, 'Machine receipt', wake.hearth?.returnJson || 'none', 'inspection-code');
+  appendBlock(panel, 'Return Scrub / Spine pointers', wake.phases.map(phase => `${phase.phase}: ${phase.returnScrubReceiptId || 'none'} · raw ${phase.rawReturnRecordId || 'none'}`).join('\n'), 'inspection-code');
+  appendBlock(panel, 'Operational detail', JSON.stringify(wake.wiring || wake.phases, null, 2), 'inspection-code');
+  return panel;
+}
+
 function renderInspection() {
   trayTabs.replaceChildren();
-  for (const tabName of ['summary', 'context', 'receipt']) {
+  for (const tabName of ['summary', 'context', 'receipt', 'wiring']) {
     const tab = node('button', 'tray-tab', tabName);
     tab.type = 'button'; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-selected', String(currentInspectionTab === tabName));
     tab.addEventListener('click', () => { currentInspectionTab = tabName; renderInspection(); });
     trayTabs.append(tab);
   }
-  panelHost.replaceChildren(currentInspectionTab === 'summary' ? renderSummary(currentWake) : currentInspectionTab === 'context' ? renderContext(currentWake) : renderReceipt(currentWake));
+  panelHost.replaceChildren(currentInspectionTab === 'summary' ? renderSummary(currentWake) : currentInspectionTab === 'context' ? renderContext(currentWake) : currentInspectionTab === 'wiring' ? renderWiring(currentWake) : renderReceipt(currentWake));
 }
 
 async function inspectWake(wakeId) {

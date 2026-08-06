@@ -21,6 +21,9 @@ Spine (exact serialized request)
 Provider dispatch
         |
         v
+Raw provider return custody -> return Scrub
+        |
+        v
 Source Ledger (resident response)
         |
         v
@@ -37,9 +40,9 @@ The owned bay modules are:
 | --- | --- | --- |
 | Ledger | `src/ledger/source.js` | Operational/source event storage |
 | Session | `src/session/lifespan.js` | Process-lived session identity, complete active history, and Session Zero ancestry |
-| Hearth | `src/hearth/handshake.js` | Native first-call action validation and exact host tool return |
-| Scrub | `src/scrub/provider-presentation.js` | Provider-bound subtractive projection and receipt |
-| Spine | `src/spine/store.js` | Exact provider request ledger |
+| Hearth | `src/hearth/handshake.js`, `src/hearth/scroll.js` | Native first-call action validation, machine receipt, and resident Markdown Scroll |
+| Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Provider-bound subtractive projection and exact provider-return selection |
+| Spine | `src/spine/store.js` | Exact provider request and raw-return ledger |
 | Forest | `src/forest/` | Admission, custody, and verification |
 | Context | `src/context/assemble.js` | Compatibility context assembly for pre-session callers |
 
@@ -48,6 +51,8 @@ The older `src/core/*` paths are compatibility-only re-exports for existing publ
 ## Constitutional invariants
 
 - The Source Ledger is append-only operational truth. The Spine is the exact provider-visible request ledger.
+- Every received provider body is witnessed in the Spine before parsing; network failures create no raw-return frame.
+- Only a validated return-Scrub result may enter assistant/tool-call continuation history or resident commits.
 - A provider presentation is derived subtractively: preserved roles, order, and content remain exact; every removal requires an attributable Scrub Map entry.
 - Scrubbing removes scaffolding, never meaning. It does not paraphrase, merge, reorder, synthesize, or summarize.
 - Forest admission remains source-linked and atomic. Future planting may add exact extracts, vectors, landmarks, and mycelial links, but those projections may never replace or inherit the authority of their source.

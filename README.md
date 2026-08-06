@@ -23,7 +23,7 @@ $env:DEEPSEEK_MODEL = "deepseek-v4-flash"
 npm start
 ```
 
-Optional settings include `DEEPSEEK_BASE_URL`, `DEEPSEEK_THINKING`, `HUB_PORT`, `HUB_DB_PATH`, `HUB_MESSAGE_CEILING`, `HUB_MAX_MESSAGE_LENGTH`, and `HUB_MAX_BODY_BYTES`. Keep credentials outside the repository. The API key and authorization header are never stored or returned.
+Optional settings include `DEEPSEEK_BASE_URL`, `DEEPSEEK_THINKING`, `HUB_PORT`, `HUB_RUNTIME_ROOT`, `HUB_DB_PATH`, `HUB_FOREST_PATH`, `HUB_SPINE_PATH`, `HUB_MESSAGE_CEILING`, `HUB_HEARTH_SCROLL_BUDGET`, `HUB_HEARTH_EXCERPT_LIMIT`, `HUB_MAX_MESSAGE_LENGTH`, and `HUB_MAX_BODY_BYTES`. When a database path is overridden without an explicit Spine path, the host derives a sibling Spine path beside that database. Keep credentials outside the repository. The API key and authorization header are never stored or returned.
 
 Fake-mode orientation variants for failure testing are selected with `HUB_FAKE_ORIENTATION_VARIANT` (`valid`, `prose`, `malformed`, `duplicate`, `wrong_tool`, or `nonempty_args`).
 

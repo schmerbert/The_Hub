@@ -8,7 +8,7 @@ import { scrubProviderHistory } from '../src/scrub/provider-presentation.js';
 
 async function hubFixture(env = {}, provider) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-session-hearth-v1-'));
-  const hub = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: join(dir, 'hub.sqlite'), ...env }, provider });
+  const hub = createHub({ env: { HUB_RESIDENT_MODE: 'fake', ...env, HUB_DB_PATH: join(dir, 'hub.sqlite'), HUB_SPINE_PATH: join(dir, 'spine.jsonl') }, provider });
   return { dir, hub, close: () => { hub.close(); return rm(dir, { recursive: true, force: true }); } };
 }
 
@@ -28,7 +28,9 @@ test('v1 first turn stores one user, performs two phases, and later turns stay o
     assert.equal(response.messages[1].content, 'first exact user');
     assert.deepEqual(response.messages[2], JSON.parse(first.events.find(event => event.eventKind === 'state' && event.actorKind === 'resident').content));
     assert.equal(response.messages[3].role, 'tool');
-    assert.equal(JSON.parse(response.messages[3].content).environment.implemented, false);
+    assert.equal(response.messages[3].content, first.hearth.scrollMarkdown);
+    assert.match(response.messages[3].content, /^# Hearth Scroll/);
+    assert.doesNotMatch(response.messages[3].content, /schema_version|return_json|raw_return/i);
     const later = await f.hub.wake('second exact user');
     assert.deepEqual(later.phases.map(phase => phase.phase), ['ordinary']);
     assert.equal(f.hub.provider.calls.length, 3);
@@ -63,11 +65,12 @@ test('provider scrub preserves nullable structured tool messages and provider fi
 test('restart closes the prior lifespan, opens exactly one new lifespan, and carries exact prior tail', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-session-restart-v1-'));
   const dbPath = join(dir, 'hub.sqlite');
-  let first = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: dbPath } });
+  const spinePath = join(dir, 'spine.jsonl');
+  let first = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: dbPath, HUB_SPINE_PATH: spinePath } });
   const prior = await first.wake('prior exact text');
   const priorSessionId = prior.sessionId;
   first.close();
-  const second = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: dbPath } });
+  const second = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: dbPath, HUB_SPINE_PATH: spinePath } });
   try {
     const sessions = second.db.listSessions();
     assert.equal(sessions.filter(session => session.status === 'open').length, 1);

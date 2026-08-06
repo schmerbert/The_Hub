@@ -4,8 +4,12 @@ export function sha256(value) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
+export function sha256Bytes(value) {
+  return createHash('sha256').update(Buffer.isBuffer(value) ? value : Buffer.from(value)).digest('hex');
+}
+
 export function byteLength(value) {
-  return Buffer.byteLength(value, 'utf8');
+  return Buffer.isBuffer(value) ? value.length : Buffer.byteLength(value, 'utf8');
 }
 
 export function canonicalize(value) {
