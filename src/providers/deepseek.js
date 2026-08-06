@@ -1,14 +1,18 @@
+import { assertScrubbedPresentation } from '../scrub/provider-presentation.js';
+
 export class DeepSeekResidentProvider {
   constructor(config) { this.config = config; this.mode = 'live'; }
 
-  prepareRequest({ messages, model }) {
+  prepareRequest({ presentation, model }) {
     if (!this.config.apiKey) throw { code: 'provider_unavailable', message: 'Live DeepSeek resident wakes require DEEPSEEK_API_KEY.' };
-    const requestBody = { model, messages, stream: false, thinking: { type: this.config.thinking === 'enabled' ? 'enabled' : 'disabled' } };
+    assertScrubbedPresentation(presentation);
+    const requestBody = { model, messages: presentation.messages, stream: false, thinking: { type: this.config.thinking === 'enabled' ? 'enabled' : 'disabled' } };
     return { requestBody, requestBodyString: JSON.stringify(requestBody) };
   }
 
-  async complete({ messages, model, requestBodyString, onBeforeDispatch, onDispatch, onOutcome }) {
-    const prepared = requestBodyString ? { requestBodyString } : this.prepareRequest({ messages, model });
+  async complete({ presentation, model, requestBodyString, onBeforeDispatch, onDispatch, onOutcome }) {
+    assertScrubbedPresentation(presentation);
+    const prepared = requestBodyString ? { requestBodyString } : this.prepareRequest({ presentation, model });
     const requestBody = prepared.requestBodyString;
     let response;
     if (onBeforeDispatch) onBeforeDispatch();

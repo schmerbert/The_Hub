@@ -1,5 +1,5 @@
 import { readConfig } from '../core/config.js';
-import { buildBackfillPlan, openOptionalForest } from '../core/backfill.js';
+import { buildBackfillPlan, openOptionalForest } from '../forest/backfill.js';
 
 const config = readConfig();
 const forest = openOptionalForest(config.forestPath);

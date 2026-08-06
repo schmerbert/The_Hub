@@ -1,5 +1,5 @@
 import { readConfig } from '../core/config.js';
-import { applyBackfillAtomically } from '../core/backfill.js';
+import { applyBackfillAtomically } from '../forest/backfill.js';
 
 const config = readConfig();
 const confirmed = process.argv.includes('--confirm-create');

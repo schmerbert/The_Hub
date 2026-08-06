@@ -3,15 +3,18 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HubDatabase } from '../core/db.js';
-import { buildContext } from '../core/context.js';
+import { HubDatabase } from '../ledger/source.js';
+import { buildContext } from '../context/assemble.js';
 import { readConfig } from '../core/config.js';
 import { createProvider } from '../providers/index.js';
-import { ForestStore, verifyForest } from '../core/forest.js';
-import { SpineStore } from '../core/spine.js';
+import { completeProvider, prepareProviderRequest } from '../providers/dispatch.js';
+import { ForestStore } from '../forest/store.js';
+import { verifyForest } from '../forest/verify.js';
+import { SpineStore } from '../spine/store.js';
 import { sha256 } from '../core/hash.js';
 import { BLESSING_SOURCE_EVENT_ID } from '../resident/charter.js';
-import { validateBlessingSourceEvent } from '../core/context.js';
+import { validateBlessingSourceEvent } from '../context/assemble.js';
+import { assertScrubbedPresentation, scrubProviderHistory, verifyScrubbedProjection } from '../scrub/provider-presentation.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PUBLIC = join(ROOT, 'public');
@@ -55,13 +58,19 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, ac
 
   let wakeInProgress = false;
 
-  function registerPresentationBoundary(wakeId, requestFrame, requestBodyString) {
+  function registerPresentationBoundary(wakeId, requestFrame, requestBodyString, presentation, sourceMessages) {
     if (!forest || !requestFrame) return;
+    assertScrubbedPresentation(presentation);
     let requestBody;
     try { requestBody = JSON.parse(requestBodyString); } catch { throw { code: 'forest_intake_failed', message: 'The serialized provider request was not valid JSON.' }; }
     const context = db.getWake(wakeId).context;
     const included = context.filter(item => item.included);
-    if (!Array.isArray(requestBody.messages) || requestBody.messages.length !== included.length) throw { code: 'forest_intake_failed', message: 'The serialized provider messages do not match the persisted wake context.' };
+    if (!Array.isArray(requestBody.messages) || requestBody.messages.length !== presentation.messages.length ||
+      JSON.stringify(requestBody.messages) !== JSON.stringify(presentation.messages)) {
+      throw { code: 'forest_intake_failed', message: 'The serialized provider messages do not match the validated scrubbed presentation.' };
+    }
+    verifyScrubbedProjection(sourceMessages, presentation);
+    if (requestBody.messages.length !== included.length) throw { code: 'forest_intake_failed', message: 'The serialized provider messages do not match the persisted wake context.' };
     const links = [];
     for (let index = 0; index < included.length; index++) {
       const item = included[index]; const message = requestBody.messages[index];
@@ -112,20 +121,19 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, ac
     }
     db.markCalling(created.wakeId);
     try {
+      const presentation = scrubProviderHistory(assembledContext.messages);
       let prepared;
       try {
-        prepared = provider.prepareRequest ? provider.prepareRequest({ messages: assembledContext.messages, model: config.model }) : {
-          requestBody: { model: config.model, messages: assembledContext.messages, stream: false, thinking: { type: config.thinking === 'enabled' ? 'enabled' : 'disabled' } },
-        };
+        prepared = prepareProviderRequest(provider, { presentation, model: config.model, thinking: config.thinking });
       } catch (error) { throw error; }
       const requestBodyString = prepared.requestBodyString || JSON.stringify(prepared.requestBody);
       const wakeRecord = db.getWake(created.wakeId);
       const requestFrame = spine?.prepareRequest({ requestBody: requestBodyString, threadId: wakeRecord.threadId, wakeId: wakeRecord.id, provider: wakeRecord.provider, model: config.model, authorizationPresent: config.mode === 'live' && Boolean(config.apiKey) });
       // The host commits presentation evidence, then marks dispatch immediately before fetch.
-      const onBeforeDispatch = requestFrame ? () => registerPresentationBoundary(created.wakeId, requestFrame, requestBodyString) : undefined;
+      const onBeforeDispatch = requestFrame ? () => registerPresentationBoundary(created.wakeId, requestFrame, requestBodyString, presentation, assembledContext.messages) : undefined;
       const onDispatch = requestFrame ? () => spine.dispatchAttempted(requestFrame.record_id) : undefined;
       const onOutcome = requestFrame ? outcome => spine.providerOutcome(requestFrame.record_id, outcome) : undefined;
-      const result = await provider.complete({ messages: assembledContext.messages, model: config.model, requestBodyString, onBeforeDispatch, onDispatch, onOutcome });
+      const result = await completeProvider(provider, { presentation, model: config.model, requestBodyString, onBeforeDispatch, onDispatch, onOutcome });
       if (!result || typeof result.content !== 'string' || !result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
       const residentEventId = db.commitWake(created.wakeId, result, result.content);
       if (forest && requestFrame) {
