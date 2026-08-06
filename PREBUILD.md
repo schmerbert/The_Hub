@@ -36,6 +36,7 @@ The Hub generalizes these ideas into an open-ended, mobile-accessible collaborat
 10. **The resident has a right to legibility.** Context that shapes the resident's orientation or choices must be attributable, inspectable, and understandable from inside the Marble. Hidden weights, summaries, and policy outputs must have a lawful inspection path.
 11. **Hospitality is functional.** The House should support presence, movement, rest, curiosity, opinion, and return—not only task completion. The resident's experience of fit is design evidence, while remaining model-signed testimony rather than assumed metaphysical fact.
 12. **Standing architecture is a promise.** Rooms and permanent fixtures should be few, general, and expected to remain. Variable functions enter through doors, mounted tools, or other replaceable fittings unless lived use proves that they belong to the Marble itself.
+13. **Names reveal their contract.** Durable machine-facing handles use type-first grammar (`room.workshop`, `door.aider`, `forest.resident`). The type precedes the local name; location and version remain in graph state and ancestry rather than being baked into identity.
 
 ## 4. The Inhabitants
 

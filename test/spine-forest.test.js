@@ -154,7 +154,7 @@ test('active runtime passes exact two-breath bodies and creates phase-aware pres
     assert.deepEqual(firstRequest.messages, firstIncluded.map(item => ({ role: item.actorRole, content: item.content })));
     assert.deepEqual(firstRequest.messages, JSON.parse(prepared[0].request_body).messages);
     assert.match(firstWake.context[0].content, /Clinical bootstrap v1/); assert.doesNotMatch(firstWake.context[0].content, /The Longshore Current is drawn/);
-    const hearth = JSON.parse(firstWake.hearth.returnJson); assert.equal(hearth.environment.implemented, false); assert.equal(hearth.environment.location, null); assert.equal(hearth.blessing.source_event_id, BLESSING_SOURCE_EVENT_ID);
+    const hearth = JSON.parse(firstWake.hearth.returnJson); assert.equal(hearth.environment.implemented, true); assert.equal(hearth.environment.location, 'room.center'); assert.equal(hearth.blessing.source_event_id, BLESSING_SOURCE_EVENT_ID);
     assert.equal(firstWake.events.find(event => event.actorKind === 'resident' && event.eventKind === 'utterance')?.content, 'resident answer');
     assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_entries').get().count, 5);
     assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links').get().count, 5);
@@ -163,6 +163,40 @@ test('active runtime passes exact two-breath bodies and creates phase-aware pres
     assert.equal(verifyForest({ forestPath: paths.forestPath, operationalPath: paths.dbPath, spinePath: paths.spinePath }).ok, true);
     const all = JSON.stringify({ frames: readSpineFrames(join(dir, 'spine.jsonl')), entries: hub.forest.listEntries() }); assert.doesNotMatch(all, /not-stored/);
   } finally { await new Promise(resolve => hub.server.close(resolve)); hub.close(); await new Promise(resolve => upstream.close(resolve)); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('active Forest multi-tool rounds emit only from the final provider request', async () => {
+  const dir = await temp('hub-active-world-rounds-'); const paths = seedEmptyLiveStores(dir); const worldPath = join(dir, 'world.sqlite'); let responseRound = 0;
+  const provider = {
+    prepareRequest({ presentation, model, tools, toolChoice }) {
+      const requestBody = { model, messages: presentation.messages, stream: false, thinking: { type: 'disabled' } };
+      if (tools) requestBody.tools = tools;
+      if (toolChoice) requestBody.tool_choice = toolChoice;
+      return { requestBodyString: JSON.stringify(requestBody) };
+    },
+    async complete({ phase, onBeforeDispatch, onDispatch, onOutcome }) {
+      onBeforeDispatch?.(); onDispatch?.(); onOutcome?.({ kind: 'success', http_status: 200, response_id: 'active-rounds' });
+      if (phase === 'orientation') return { content: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'active-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] }, resolvedModel: 'test-model', finishReason: 'tool_calls' };
+      responseRound += 1;
+      if (responseRound === 1) return { content: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'active-move', type: 'function', function: { name: 'move_through_door', arguments: '{"door_id":"door.workshop"}' } }] }, resolvedModel: 'test-model', finishReason: 'tool_calls' };
+      if (responseRound === 2) return { content: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'active-read', type: 'function', function: { name: 'workshop_read', arguments: '{"path":"src/world/graph.js","start_line":1,"line_count":2}' } }] }, resolvedModel: 'test-model', finishReason: 'tool_calls' };
+      return { content: 'Final resident answer after two World actions.', message: { role: 'assistant', content: 'Final resident answer after two World actions.' }, resolvedModel: 'test-model', finishReason: 'stop' };
+    },
+  };
+  const hub = createHub({ env: { HUB_RESIDENT_MODE: 'live', DEEPSEEK_MODEL: 'test-model' }, ...paths, worldPath, activateForest: true, provider });
+  try {
+    const wake = await hub.wake('Use the Workshop after moving there.');
+    assert.equal(wake.status, 'committed'); assert.equal(responseRound, 3);
+    const spineFrames = readSpineFrames(paths.spinePath); const prepared = spineFrames.filter(frame => frame.frame_type === 'request_prepared');
+    assert.deepEqual(prepared.map(frame => frame.request_phase), ['orientation', 'response', 'response', 'response']); assert.equal(verifySpine(paths.spinePath).ok, true);
+    assert.equal(hub.world.current(wake.sessionId).room_node_id, 'room.workshop'); assert.equal(hub.world.listLocationEvents(wake.sessionId).length, 1); assert.equal(hub.world.sqlite.prepare("SELECT COUNT(*) AS count FROM world_action_receipts WHERE session_id=? AND outcome='committed'").get(wake.sessionId).count, 2);
+    const home = hub.forest.listEntries().filter(entry => entry.jurisdiction === 'home'); const wild = hub.forest.listWildEntries();
+    assert.equal(home.filter(entry => entry.actor_kind === 'user' && entry.wake_id === wake.id).length, 1); assert.equal(home.filter(entry => entry.actor_kind === 'resident' && entry.wake_id === wake.id).length, 1); assert.equal(wild.length, 1); assert.equal(wild[0].source_kind, 'workshop_read');
+    const finalRequest = hub.db.getWake(wake.id).phases.at(-1); assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM emission_links').get().count, 1); assert.equal(hub.forest.sqlite.prepare('SELECT request_record_id FROM emission_links').get().request_record_id, finalRequest.spineRecordId);
+    const history = hub.db.getSessionHistory(wake.sessionId); const hostHistory = history.filter(row => row.messageKind === 'tool_result'); const hostReceipts = hub.db.sqlite.prepare('SELECT * FROM host_return_scrub_receipts WHERE session_id=?').all(wake.sessionId);
+    assert.equal(hostHistory.length, 3); assert.equal(hostReceipts.length, 3); assert.equal(hostHistory.filter(row => row.scrubReceiptId).length, 3); assert.equal(hub.db.sqlite.prepare('SELECT COUNT(*) AS count FROM host_return_scrub_receipts h LEFT JOIN session_history s ON s.scrub_receipt_id=h.id WHERE h.session_id=? AND s.id IS NULL').get(wake.sessionId).count, 0);
+    assert.equal(verifyForest({ forestPath: paths.forestPath, operationalPath: paths.dbPath, spinePath: paths.spinePath, worldPath }).ok, true);
+  } finally { hub.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
 test('active ritual keeps continuity and chamber host-owned when incoming text claims replacement', async () => {

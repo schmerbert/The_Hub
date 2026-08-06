@@ -52,7 +52,7 @@ export class DeepSeekResidentProvider {
       throw { code: 'provider_invalid_response', message: 'DeepSeek returned no assistant message.' };
     }
     const content = typeof message?.content === 'string' ? message.content : null;
-    if (phase !== 'orientation' && (!content || !content.trim())) {
+    if (phase !== 'orientation' && (!content || !content.trim()) && !Array.isArray(message?.tool_calls)) {
       if (onOutcome) onOutcome({ kind: 'empty_content', http_status: response.status });
       throw { code: 'provider_empty_content', message: 'DeepSeek returned no resident content.' };
     }

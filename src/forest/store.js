@@ -5,6 +5,7 @@ import { byteLength, id, sha256 } from '../core/hash.js';
 import { identityScrubV1, metadataForEvent, normalizeAdmissionEvent, verifyAdmissionScrub } from './admission.js';
 
 export const APPEND_ONLY_TABLES = ['forest_metadata', 'scrub_receipts', 'forest_entries', 'forest_edges', 'presentation_links', 'emission_links'];
+export const WILD_TABLES = ['wild_entries'];
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS forest_metadata (
@@ -77,9 +78,39 @@ ${APPEND_ONLY_TABLES.map(table => `
 CREATE TRIGGER IF NOT EXISTS ${table}_append_only_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS ${table}_append_only_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`).join('\n')}`;
 
+const WILD_SCHEMA = `
+CREATE TABLE IF NOT EXISTS wild_metadata (
+  metadata_id INTEGER PRIMARY KEY CHECK(metadata_id=1),
+  schema_name TEXT NOT NULL CHECK(schema_name='forest_wild'),
+  schema_version INTEGER NOT NULL CHECK(schema_version=1),
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wild_entries (
+  entry_id TEXT PRIMARY KEY CHECK(length(entry_id)>0),
+  jurisdiction TEXT NOT NULL CHECK(jurisdiction='wild'),
+  bucket TEXT NOT NULL CHECK(bucket='workshop_source'),
+  source_kind TEXT NOT NULL CHECK(source_kind IN ('workshop_read','workshop_search')),
+  repository_path TEXT NOT NULL,
+  start_line INTEGER NOT NULL CHECK(start_line>0),
+  end_line INTEGER NOT NULL CHECK(end_line>=start_line),
+  body TEXT NOT NULL,
+  body_hash TEXT NOT NULL CHECK(length(body_hash)=64),
+  action_receipt_id TEXT NOT NULL,
+  spine_record_id TEXT,
+  request_record_id TEXT,
+  metadata_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS wild_entries_source_order ON wild_entries(repository_path,start_line,entry_id);
+CREATE TRIGGER IF NOT EXISTS wild_metadata_append_only_update BEFORE UPDATE ON wild_metadata BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS wild_metadata_append_only_delete BEFORE DELETE ON wild_metadata BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS wild_entries_append_only_update BEFORE UPDATE ON wild_entries BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS wild_entries_append_only_delete BEFORE DELETE ON wild_entries BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`;
+
 function custodyConflict(message) { return Object.assign(new Error(message), { code: 'forest_custody_conflict' }); }
 function predecessorConflict(message) { return Object.assign(new Error(message), { code: 'forest_predecessor_conflict' }); }
 function now() { return new Date().toISOString(); }
+function ensureWildMetadata(sqlite) { sqlite.prepare("INSERT OR IGNORE INTO wild_metadata(metadata_id, schema_name, schema_version, created_at) VALUES(1, 'forest_wild', 1, ?)").run(now()); }
 
 function eventMatches(row, event, sourceHash, bodyHash) {
   return row.source_event_hash === sourceHash && row.body_hash === bodyHash && row.source_timestamp === event.createdAt && row.actor_kind === event.actorKind && row.signature === `actor:${event.actorKind}` && row.thread_id === event.threadId && (row.wake_id || null) === (event.wakeId || null) && row.source_authority === event.authority && row.scrub_policy === 'utterance_identity' && row.scrub_version === 'v1' && row.metadata_json === metadataForEvent(event);
@@ -112,11 +143,15 @@ export class ForestStore {
       this.sqlite = new DatabaseSync(path);
       this.sqlite.exec('PRAGMA foreign_keys = ON;');
       this.sqlite.exec(SCHEMA);
+      this.sqlite.exec(WILD_SCHEMA);
+      ensureWildMetadata(this.sqlite);
       this.sqlite.prepare('INSERT INTO forest_metadata(metadata_id, schema_name, schema_version, created_at) VALUES(1,?,?,?)').run('forest', 1, now());
     } else if (mode === 'requireExisting') {
       if (!existsSync(path)) throw new Error('Forest requireExisting refuses a missing database.');
       this.sqlite = new DatabaseSync(path);
       this.sqlite.exec('PRAGMA foreign_keys = ON;');
+      this.sqlite.exec(WILD_SCHEMA);
+      ensureWildMetadata(this.sqlite);
       this.verifySchema();
     } else {
       if (!existsSync(path)) throw new Error('Forest readOnly refuses a missing database.');
@@ -196,6 +231,20 @@ export class ForestStore {
     });
   }
 
+  ingestWorkshopSource({ source, sourceKind, actionReceiptId, spineRecordId = null, requestRecordId = null }) {
+    if (!source || !['workshop_read', 'workshop_search'].includes(sourceKind) || typeof actionReceiptId !== 'string') throw new Error('Workshop Wild admission requires exact source custody.');
+    const rows = sourceKind === 'workshop_read' ? [source] : (source.matches || []).map(match => ({ path: match.path, startLine: match.line, endLine: match.line, text: match.text, hash: match.hash, byteLength: Buffer.byteLength(match.text, 'utf8') }));
+    if (!rows.length) return [];
+    return this.transaction(() => rows.map(item => {
+      if (!item.path || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine) || typeof item.text !== 'string' || item.hash !== sha256(item.text)) throw new Error('Workshop Wild source is not an exact span.');
+      const entryId = id('wild');
+      this.sqlite.prepare(`INSERT INTO wild_entries(entry_id,jurisdiction,bucket,source_kind,repository_path,start_line,end_line,body,body_hash,action_receipt_id,spine_record_id,request_record_id,metadata_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(entryId,'wild','workshop_source',sourceKind,item.path,item.startLine,item.endLine,item.text,item.hash,actionReceiptId,spineRecordId,requestRecordId,JSON.stringify({ exact: true, sourceHash: item.hash, byteLength: item.byteLength }),now());
+      return { entryId, path: item.path, startLine: item.startLine, endLine: item.endLine, bodyHash: item.hash };
+    }));
+  }
+
+  listWildEntries() { return this.sqlite.prepare('SELECT * FROM wild_entries ORDER BY created_at,entry_id').all(); }
+
   listEntries() { return this.sqlite.prepare('SELECT * FROM forest_entries ORDER BY thread_id, source_timestamp, source_event_id').all(); }
   count() { return this.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_entries').get().count; }
   verifySchema() {
@@ -204,6 +253,11 @@ export class ForestStore {
     for (const table of tables) for (const action of ['update', 'delete']) if (!this.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name=?").get(`${table}_append_only_${action}`)) throw new Error(`Forest append-only trigger is missing for ${table}.`);
     const metadata = this.sqlite.prepare('SELECT schema_name, schema_version FROM forest_metadata WHERE metadata_id=1').get();
     if (!metadata || metadata.schema_name !== 'forest' || metadata.schema_version !== 1) throw new Error('Forest schema version is not v1.');
+    const wildTable = this.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wild_entries'").get();
+    if (wildTable) {
+      const wildMetadata = this.sqlite.prepare('SELECT schema_name, schema_version FROM wild_metadata WHERE metadata_id=1').get();
+      if (!wildMetadata || wildMetadata.schema_name !== 'forest_wild' || wildMetadata.schema_version !== 1) throw new Error('Forest Wild schema version is not forest_wild v1.');
+    }
     return true;
   }
   close() { this.sqlite.close(); }

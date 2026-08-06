@@ -7,6 +7,8 @@ const input = document.querySelector('#input');
 const sendButton = form.querySelector('button');
 const statusEl = document.querySelector('#status');
 const modeModel = document.querySelector('#mode-model');
+const roomState = document.querySelector('#room-state');
+const inspectWorldButton = document.querySelector('#inspect-world');
 const tray = document.querySelector('#tray');
 const trayTabs = document.querySelector('#tray-tabs');
 const panelHost = document.querySelector('#panel-host');
@@ -137,6 +139,21 @@ function renderWiring(wake) {
   return panel;
 }
 
+function renderWorld(world) {
+  const panel = node('div', 'panel');
+  appendBlock(panel, 'Current room', `${world.projection.roomId}\n${world.projection.text}`);
+  appendBlock(panel, 'Fixtures', world.projection.fixtures.map(item => `${item.id} · ${item.text}`).join('\n') || 'none', 'inspection-code');
+  appendBlock(panel, 'Declared exits', world.projection.exits.map(exit => `${exit.edgeId} · ${exit.doorId} → ${exit.to}`).join('\n') || 'none', 'inspection-code');
+  appendBlock(panel, 'Effective actions', world.tools.map(tool => tool.function.name).join('\n') || 'none', 'inspection-code');
+  appendBlock(panel, 'Graph wiring', JSON.stringify(world.graph, null, 2), 'inspection-code');
+  return panel;
+}
+
+async function inspectWorld() {
+  try { const world = await request('/api/world'); tray.hidden = false; trayTabs.replaceChildren(); panelHost.replaceChildren(renderWorld(world)); panelHost.focus(); }
+  catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+}
+
 function renderInspection() {
   trayTabs.replaceChildren();
   for (const tabName of ['summary', 'context', 'receipt', 'wiring']) {
@@ -158,6 +175,7 @@ async function inspectWake(wakeId) {
 async function refresh() {
   const [health, thread] = await Promise.all([request('/api/health'), request('/api/thread')]);
   modeModel.textContent = modeLabel(health);
+  roomState.textContent = health.currentRoom?.roomId || 'unknown room';
   renderThread(thread);
   const latest = thread.wakes.at(-1);
   if (!busy && latest?.status === 'failed') setState('failed');
@@ -187,6 +205,7 @@ async function submitWake(event) {
 
 chip.addEventListener('click', () => setMode('expanded'));
 document.querySelector('#btn-compact').addEventListener('click', () => setMode('compact'));
+inspectWorldButton.addEventListener('click', inspectWorld);
 document.querySelector('#close-tray').addEventListener('click', () => { tray.hidden = true; currentWake = null; });
 form.addEventListener('submit', submitWake);
 

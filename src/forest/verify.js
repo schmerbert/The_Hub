@@ -5,10 +5,11 @@ import { readSpineFrames } from '../spine/store.js';
 import { metadataForEvent } from './admission.js';
 import { APPEND_ONLY_TABLES } from './store.js';
 
-export function verifyForest({ forestPath, operationalPath, spinePath, strictBijection = true } = {}) {
+export function verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection = true } = {}) {
   if (!forestPath || !existsSync(forestPath)) throw new Error('Forest database is missing.');
   const forest = new DatabaseSync(forestPath, { readOnly: true });
   const op = new DatabaseSync(operationalPath, { readOnly: true });
+  let world = null;
   try {
     const required = APPEND_ONLY_TABLES;
     for (const table of required) if (!forest.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) throw new Error(`Forest schema is missing ${table}.`);
@@ -124,17 +125,38 @@ export function verifyForest({ forestPath, operationalPath, spinePath, strictBij
       if (links.some(link => !expected.some(({ item }) => entryBySource.get(item.sourceEventId)?.entry_id === link.entry_id))) throw new Error(`Presentation link set has extras for request ${frame.record_id}.`);
     }
 
+    const responseToolRoundByRequest = new Map();
+    for (const frame of preparedFrames) {
+      const requestRow = op.prepare('SELECT response_message_json AS responseMessage FROM provider_requests WHERE spine_record_id=?').get(frame.record_id);
+      let responseMessage = null; try { responseMessage = requestRow?.responseMessage ? JSON.parse(requestRow.responseMessage) : null; } catch { throw new Error(`Provider response message is not valid JSON for request ${frame.record_id}.`); }
+      responseToolRoundByRequest.set(frame.record_id, Array.isArray(responseMessage?.tool_calls) && responseMessage.tool_calls.length > 0);
+    }
     const residentsByWake = new Map();
     for (const event of eligible.filter(event => event.actorKind === 'resident')) { if (!residentsByWake.has(event.wakeId)) residentsByWake.set(event.wakeId, []); residentsByWake.get(event.wakeId).push(event); }
+    const requestFramesByWake = new Map();
+    for (const frame of preparedFrames) {
+      if (frame.request_phase === 'orientation') continue;
+      if (!requestFramesByWake.has(frame.wake_id)) requestFramesByWake.set(frame.wake_id, []);
+      requestFramesByWake.get(frame.wake_id).push(frame);
+    }
+    const emissionOwnerByWake = new Map();
+    for (const [wakeId, frames] of requestFramesByWake) {
+      const finalFrame = frames.at(-1);
+      const lifecycle = finalFrame && lifecycleByRequest.get(finalFrame.record_id);
+      if (finalFrame && !responseToolRoundByRequest.get(finalFrame.record_id) && lifecycle?.dispatched && lifecycle.outcome?.kind === 'success') emissionOwnerByWake.set(wakeId, finalFrame.record_id);
+    }
     const emissionsByEntry = new Map();
     const emissionsByRequest = new Set();
+    const emissionLinksByRequest = new Map();
     for (const link of emissionRows) {
       if (!entryIds.has(link.entry_id) || !preparedById.has(link.request_record_id)) throw new Error('Emission link reference is invalid.');
       const entry = entries.find(candidate => candidate.entry_id === link.entry_id); const event = entry && events.get(entry.source_event_id); const request = preparedById.get(link.request_record_id);
       const lifecycle = lifecycleByRequest.get(link.request_record_id);
-      if (!event || event.actorKind !== 'resident' || event.wakeId !== request.wake_id || request.request_phase === 'orientation' || !lifecycle.dispatched || lifecycle.outcome?.kind !== 'success') throw new Error('Emission link wake custody is invalid.');
+      if (!event || event.actorKind !== 'resident' || event.wakeId !== request.wake_id || request.request_phase === 'orientation' || emissionOwnerByWake.get(request.wake_id) !== link.request_record_id || !lifecycle.dispatched || lifecycle.outcome?.kind !== 'success') throw new Error('Emission link wake custody is invalid.');
       emissionsByEntry.set(link.entry_id, (emissionsByEntry.get(link.entry_id) || 0) + 1);
       emissionsByRequest.add(link.request_record_id);
+      if (!emissionLinksByRequest.has(link.request_record_id)) emissionLinksByRequest.set(link.request_record_id, []);
+      emissionLinksByRequest.get(link.request_record_id).push(link);
     }
     for (const frame of preparedFrames) {
       const residents = residentsByWake.get(frame.wake_id) || [];
@@ -143,12 +165,54 @@ export function verifyForest({ forestPath, operationalPath, spinePath, strictBij
         if (emissionsByRequest.has(frame.record_id)) throw new Error(`Orientation request ${frame.record_id} has a Forest resident emission.`);
         continue;
       }
+      const ownsEmission = emissionOwnerByWake.get(frame.wake_id) === frame.record_id;
+      if (!ownsEmission) { if (emissionsByRequest.has(frame.record_id)) throw new Error(`Non-final provider request ${frame.record_id} has a resident emission.`); continue; }
       if (residents.length > 1) throw new Error(`Wake ${frame.wake_id} has multiple resident emissions.`);
       if (lifecycle.outcome?.kind === 'success' && residents.length !== 1) throw new Error(`Successful provider outcome lacks exactly one resident emission for wake ${frame.wake_id}.`);
       if (residents.length && lifecycle.outcome?.kind !== 'success') throw new Error(`Resident emission lacks a successful provider outcome for wake ${frame.wake_id}.`);
-      if (residents.length === 1 && emissionsByEntry.get(entryBySource.get(residents[0].id)?.entry_id) !== 1) throw new Error(`Resident emission link is missing for wake ${frame.wake_id}.`);
+      if (residents.length === 1 && (emissionsByEntry.get(entryBySource.get(residents[0].id)?.entry_id) !== 1 || emissionLinksByRequest.get(frame.record_id)?.length !== 1)) throw new Error(`Resident emission link is missing for wake ${frame.wake_id}.`);
       if (lifecycle.outcome && lifecycle.outcome.kind !== 'success' && residents.length) throw new Error(`Failed provider outcome has a resident emission for wake ${frame.wake_id}.`);
     }
-    return { ok: true, entryCount: entries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length };
-  } finally { forest.close(); op.close(); }
+    const wildTable = forest.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wild_entries'").get();
+    let wildCount = 0;
+    if (wildTable) {
+      const wild = forest.prepare('SELECT * FROM wild_entries ORDER BY created_at,entry_id').all();
+      if (wild.length) {
+        if (!worldPath || !existsSync(worldPath)) throw new Error('Wild workshop custody exists but its World Graph path was not provided.');
+        world = new DatabaseSync(worldPath, { readOnly: true });
+        const worldMetadata = world.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='world_action_receipts'").get();
+        if (!worldMetadata) throw new Error('Wild workshop custody cannot be checked because World action receipts are missing.');
+      }
+      const wildByAction = new Map();
+      for (const entry of wild) {
+        if (entry.jurisdiction !== 'wild' || entry.bucket !== 'workshop_source' || !['workshop_read','workshop_search'].includes(entry.source_kind) || entry.body_hash !== sha256(entry.body) || !entry.action_receipt_id || !entry.request_record_id || !entry.spine_record_id) throw new Error(`Wild workshop source custody mismatch for ${entry.entry_id}.`);
+        if (!wildByAction.has(entry.action_receipt_id)) wildByAction.set(entry.action_receipt_id, []);
+        wildByAction.get(entry.action_receipt_id).push(entry);
+      }
+      for (const [actionReceiptId, entriesForAction] of wildByAction) {
+        const action = world.prepare('SELECT * FROM world_action_receipts WHERE receipt_id=?').get(actionReceiptId);
+        if (!action || action.outcome !== 'committed' || action.tool_name !== entriesForAction[0].source_kind || action.request_record_id !== entriesForAction[0].request_record_id || action.spine_record_id !== entriesForAction[0].spine_record_id || !action.request_record_id || !action.spine_record_id) throw new Error(`Wild workshop action custody mismatch for ${actionReceiptId}.`);
+        const providerRequest = op.prepare('SELECT id, session_id AS sessionId, wake_id AS wakeId, spine_record_id AS spineRecordId FROM provider_requests WHERE id=?').get(action.request_record_id);
+        if (!providerRequest || providerRequest.sessionId !== action.session_id || providerRequest.wakeId !== action.wake_id || providerRequest.spineRecordId !== action.spine_record_id) throw new Error(`Wild workshop request ancestry mismatch for ${actionReceiptId}.`);
+        const requestFrame = preparedById.get(action.spine_record_id);
+        const lifecycle = lifecycleByRequest.get(action.spine_record_id);
+        if (!requestFrame || requestFrame.wake_id !== action.wake_id || !lifecycle?.dispatched || lifecycle.outcome?.kind !== 'success') throw new Error(`Wild workshop Spine ancestry mismatch for ${actionReceiptId}.`);
+        let result;
+        try { result = JSON.parse(action.result_json); } catch { throw new Error(`World action result is not valid JSON for ${actionReceiptId}.`); }
+        const expected = action.tool_name === 'workshop_read'
+          ? [{ path: result.source?.path, startLine: result.source?.startLine, endLine: result.source?.endLine, text: result.source?.text, hash: result.source?.hash }]
+          : (Array.isArray(result.matches) ? result.matches.map(match => ({ path: match.path, startLine: match.line, endLine: match.line, text: match.text, hash: match.hash })) : null);
+        if (!expected || result.kind !== action.tool_name || expected.some(item => !item.path || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine) || typeof item.text !== 'string' || item.hash !== sha256(item.text))) throw new Error(`World action source result is not exact for ${actionReceiptId}.`);
+        if (expected.length !== entriesForAction.length) throw new Error(`Wild workshop source count mismatch for ${actionReceiptId}.`);
+        const unmatched = expected.slice();
+        for (const entry of entriesForAction) {
+          const index = unmatched.findIndex(item => item.path === entry.repository_path && item.startLine === entry.start_line && item.endLine === entry.end_line && item.text === entry.body && item.hash === entry.body_hash);
+          if (index < 0) throw new Error(`Wild workshop source span mismatch for ${entry.entry_id}.`);
+          unmatched.splice(index, 1);
+        }
+      }
+      wildCount = wild.length;
+    }
+    return { ok: true, entryCount: entries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length, wildCount };
+  } finally { world?.close(); forest.close(); op.close(); }
 }

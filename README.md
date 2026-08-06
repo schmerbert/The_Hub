@@ -23,7 +23,7 @@ $env:DEEPSEEK_MODEL = "deepseek-v4-flash"
 npm start
 ```
 
-Optional settings include `DEEPSEEK_BASE_URL`, `DEEPSEEK_THINKING`, `HUB_PORT`, `HUB_RUNTIME_ROOT`, `HUB_DB_PATH`, `HUB_FOREST_PATH`, `HUB_SPINE_PATH`, `HUB_MESSAGE_CEILING`, `HUB_HEARTH_SCROLL_BUDGET`, `HUB_HEARTH_EXCERPT_LIMIT`, `HUB_MAX_MESSAGE_LENGTH`, and `HUB_MAX_BODY_BYTES`. When a database path is overridden without an explicit Spine path, the host derives a sibling Spine path beside that database. Keep credentials outside the repository. The API key and authorization header are never stored or returned.
+Optional settings include `DEEPSEEK_BASE_URL`, `DEEPSEEK_THINKING`, `HUB_PORT`, `HUB_RUNTIME_ROOT`, `HUB_DB_PATH`, `HUB_FOREST_PATH`, `HUB_SPINE_PATH`, `HUB_WORLD_PATH`, `HUB_WORKSHOP_ROOT`, `HUB_MESSAGE_CEILING`, `HUB_HEARTH_SCROLL_BUDGET`, `HUB_HEARTH_EXCERPT_LIMIT`, `HUB_MAX_MESSAGE_LENGTH`, `HUB_MAX_BODY_BYTES`, and the bounded Workshop/tool-round limits. When a database path is overridden without explicit Spine or World paths, the host derives sibling paths beside that database. Keep credentials outside the repository. The API key and authorization header are never stored or returned.
 
 Fake-mode orientation variants for failure testing are selected with `HUB_FAKE_ORIENTATION_VARIANT` (`valid`, `prose`, `malformed`, `duplicate`, `wrong_tool`, or `nonempty_args`).
 
@@ -51,6 +51,7 @@ Activation refuses a missing Forest, an invalid Forest, or fake-provider mode. H
 - `GET /api/health`
 - `GET /api/thread` (includes active session and Session Zero ancestry)
 - `GET /api/session`
+- `GET /api/world` (builder inspection of the separate graph, current location, and effective room tools)
 - `POST /api/wakes` with `{ "content": "..." }`
 - `GET /api/wakes/:id`
 
@@ -64,4 +65,4 @@ npm test
 
 The suite exercises the real HTTP and SQLite path in temporary databases, including empty and oversized input, missing live credentials, empty provider output, provider HTTP failure, fake-mode labeling, context ceilings, and visible nonterminal wakes.
 
-This slice deliberately does not implement rooms, spatial state, reset UI, context-limit closure, summaries, embeddings, Forest retrieval or synthesis, movement machinery, autonomous work, streaming, authentication, or deployment. The only native tool is the forced first-turn `tend_hearth({})` action.
+The first World Graph slice implements only Center and Workshop: packed sand, stone bench, an unspecified tin cup, one bidirectional Workshop door, lifespan location, and bounded read-only list/read/search. It deliberately does not implement writes, shell execution, Aider/container harnesses, delegation, skills, reset UI, context-limit closure, summaries, embeddings, Forest retrieval or synthesis, autonomous work, streaming, authentication, or deployment.

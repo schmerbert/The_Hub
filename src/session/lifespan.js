@@ -17,9 +17,10 @@ export function providerMessage(role, content, fields = {}) {
   return { role, content, ...fields };
 }
 
-export function messageSourceRefs(historyRows, bootstrap) {
+export function messageSourceRefs(historyRows, bootstrap, extraMessages = []) {
   return [
     { sourceEventId: null, message: providerMessage('system', bootstrap) },
     ...historyRows.map(row => ({ sourceEventId: row.sourceEventId || null, message: JSON.parse(row.messageJson) })),
+    ...extraMessages.map(message => ({ sourceEventId: null, message: providerMessage(message.role || 'system', message.content, message.fields || {}) })),
   ];
 }

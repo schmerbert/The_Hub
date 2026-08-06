@@ -80,7 +80,8 @@ test('restart closes the prior lifespan, opens exactly one new lifespan, and car
     assert.equal(hearth.prior_session.session_id, priorSessionId);
     assert.ok(hearth.closing_tail.some(item => item.content === 'prior exact text'));
     assert.ok(hearth.closing_tail.some(item => item.content.includes('FAKE MODE')));
-    assert.equal(hearth.environment.location, null);
+    assert.equal(hearth.environment.implemented, true);
+    assert.equal(hearth.environment.location, 'room.center');
     assert.doesNotMatch(current.hearth.returnJson, /"summary"\s*:|embedding|room_id/i);
   } finally { second.close(); await rm(dir, { recursive: true, force: true }); }
 });

@@ -37,7 +37,7 @@ export function validateOrientationResult(result) {
   return { ...result, message, toolCall: call, toolCallId: call.id };
 }
 
-export function hearthReturn({ sessionId, threadId, provider, model, prior, sourceEvent, clinicalGround, environmentImplemented = false }) {
+export function hearthReturn({ sessionId, threadId, provider, model, prior, sourceEvent, clinicalGround, environmentImplemented = false, roomProjection = null }) {
   const blessingSourceHash = sourceEvent?.fullHash || BLESSING_SOURCE_EVENT_HASH;
   const blessing = {
     text: BLESSING_V1,
@@ -64,6 +64,7 @@ export function hearthReturn({ sessionId, threadId, provider, model, prior, sour
     model,
     clinical_ground: clinicalGround || buildClinicalBootstrap({ provider, model }),
     blessing,
+    world_projection: roomProjection ? structuredClone(roomProjection) : null,
     prior_session: {
       session_id: prior?.sessionId || null,
       label: prior?.label || 'Session Zero',
@@ -84,14 +85,14 @@ export function hearthReturn({ sessionId, threadId, provider, model, prior, sour
     })),
     environment: {
       implemented: Boolean(environmentImplemented),
-      location: environmentImplemented ? null : null,
-      spatial_room_implemented: false,
-      movement_implemented: false,
-      perception_implemented: false,
+      location: environmentImplemented ? roomProjection?.roomId || null : null,
+      spatial_room_implemented: Boolean(environmentImplemented),
+      movement_implemented: Boolean(environmentImplemented),
+      perception_implemented: Boolean(environmentImplemented),
     },
     limitations: [
       'This return is orientation material, not proof of uninterrupted experience or universal truth.',
-      'No spatial room, movement, perception, or autonomous machinery is implemented in Hearth v1.',
+      environmentImplemented ? 'The current room is a state-backed World Graph projection; room text and exits are exact host state, not atmosphere.' : 'No spatial room, movement, perception, or autonomous machinery is implemented in Hearth v1.',
       'The closing tail is exact recency extraction with disclosed omissions, never a summary.',
     ],
   };

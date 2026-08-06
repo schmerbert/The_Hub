@@ -13,6 +13,7 @@ import { validateBlessingSourceEvent } from '../context/assemble.js';
 import { id, sha256 } from '../core/hash.js';
 import { SESSION_ZERO_ID, SESSION_ZERO_LABEL, buildClinicalBootstrap } from '../session/lifespan.js';
 import { assertScrubbedProviderReturn } from '../scrub/provider-return.js';
+import { assertScrubbedHostReturn } from '../scrub/host-return.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS threads (
@@ -147,6 +148,15 @@ CREATE TABLE IF NOT EXISTS hearth_receipts (
   return_event_id TEXT NOT NULL REFERENCES events(id),
   created_at TEXT NOT NULL,
   UNIQUE(wake_id)
+);
+  CREATE TABLE IF NOT EXISTS host_return_scrub_receipts (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  wake_id TEXT NOT NULL REFERENCES wakes(id),
+  tool_name TEXT NOT NULL,
+  receipt_json TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 `;
 
@@ -439,7 +449,7 @@ export class HubDatabase {
       FROM session_history WHERE session_id=? ORDER BY ordinal`).all(sessionId);
   }
 
-  appendSessionHistory({ sessionId = this.session.id, wakeId, message, messageKind, sourceEventId = null, returnScrub = null }) {
+  appendSessionHistory({ sessionId = this.session.id, wakeId, message, messageKind, sourceEventId = null, returnScrub = null, hostReturnScrub = null }) {
     const history = this.getSessionHistory(sessionId);
     const ordinal = history.length + 1;
     const raw = JSON.stringify(message);
@@ -448,9 +458,30 @@ export class HubDatabase {
       if (!returnScrub) throw new Error('Provider assistant history requires a validated return Scrub result.');
       assertScrubbedProviderReturn(returnScrub);
     }
+    if (messageKind === 'tool_result') {
+      if (!hostReturnScrub) throw new Error('Host tool history requires a validated host-return Scrub result.');
+      assertScrubbedHostReturn(hostReturnScrub);
+    }
+    const scrubReceipt = messageKind === 'tool_result' ? hostReturnScrub : returnScrub;
     this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at, scrub_receipt_id, raw_return_record_id, source_record_hash)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id('history'), sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now(), returnScrub?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id('history'), sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now(), scrubReceipt?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
     return ordinal;
+  }
+
+  persistHostReturnScrub({ sessionId, wakeId, toolName, hostReturnScrub }) {
+    assertScrubbedHostReturn(hostReturnScrub);
+    if (hostReturnScrub.receipt.toolName !== toolName) throw new Error('Host return Scrub tool identity does not match its persistence boundary.');
+    const receiptId = hostReturnScrub.receipt.receiptId;
+    const receiptJson = JSON.stringify(hostReturnScrub.receipt);
+    const resultJson = JSON.stringify(hostReturnScrub.result);
+    const existing = this.sqlite.prepare('SELECT * FROM host_return_scrub_receipts WHERE id=?').get(receiptId);
+    if (existing) {
+      if (existing.session_id !== sessionId || existing.wake_id !== wakeId || existing.tool_name !== toolName || existing.receipt_json !== receiptJson || existing.result_json !== resultJson) throw new Error('Host return Scrub receipt identity conflicts with existing custody.');
+      return existing;
+    }
+    this.sqlite.prepare(`INSERT INTO host_return_scrub_receipts(id, session_id, wake_id, tool_name, receipt_json, result_json, created_at)
+      VALUES(?,?,?,?,?,?,?)`).run(receiptId, sessionId, wakeId, toolName, receiptJson, resultJson, now());
+    return this.sqlite.prepare('SELECT * FROM host_return_scrub_receipts WHERE id=?').get(receiptId);
   }
 
   recordProviderRequest({ sessionId, wakeId, phase, requestBody, messageSources, spineRecordId }) {
@@ -484,17 +515,42 @@ export class HubDatabase {
     return eventId;
   }
 
-  recordHearthReturn({ wakeId, sessionId, toolCallId, returnValue, scrollMarkdown, scrollHash, actionEventId, returnHash }) {
+  recordHearthReturn({ wakeId, sessionId, toolCallId, returnValue, scrollMarkdown, scrollHash, actionEventId, returnHash, hostReturnScrub = null }) {
     const eventId = id('event');
     const message = { role: 'tool', tool_call_id: toolCallId, content: scrollMarkdown };
+    if (!hostReturnScrub) throw new Error('Hearth return requires a validated host-return Scrub result.');
+    if (JSON.stringify(hostReturnScrub.message) !== JSON.stringify(message)) throw new Error('Hearth host-return Scrub does not match the exact resident-facing tool result.');
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
-      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result' });
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', hostReturnScrub });
+      this.persistHostReturnScrub({ sessionId, wakeId, toolName: 'tend_hearth', hostReturnScrub });
       this.sqlite.prepare(`INSERT INTO hearth_receipts(id, session_id, wake_id, tool_call_id, return_json, return_hash, scroll_markdown, scroll_hash, action_event_id, return_event_id, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(id('hearth'), sessionId, wakeId, toolCallId, JSON.stringify(returnValue), returnHash, scrollMarkdown, scrollHash, actionEventId, eventId, now());
     });
     return { eventId, message };
+  }
+
+  recordToolCall({ wakeId, sessionId, message, returnScrub }) {
+    const eventId = id('event');
+    this.transaction(() => {
+      this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
+        SELECT ?, thread_id, ?, ?, 'resident', 'state', ?, 'model_signed', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, JSON.stringify(message), now(), wakeId);
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'assistant_tool_call', returnScrub });
+    });
+    return eventId;
+  }
+
+  recordToolResult({ wakeId, sessionId, toolName, result, hostReturnScrub }) {
+    assertScrubbedHostReturn(hostReturnScrub);
+    const eventId = id('event'); const message = hostReturnScrub.message;
+    this.transaction(() => {
+      this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
+        SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', hostReturnScrub });
+      this.persistHostReturnScrub({ sessionId, wakeId, toolName, hostReturnScrub });
+    });
+    return eventId;
   }
 
   commitSessionWake(wakeId, response) {

@@ -58,14 +58,14 @@ export function buildBackfillPlan({ operationalPath, forest } = {}) {
   return { ...summary, planHash: sha256(canonicalize(summary)), proposed };
 }
 
-export function applyBackfill({ operationalPath, forest, spinePath, confirmCreate = false } = {}) {
+export function applyBackfill({ operationalPath, forest, spinePath, worldPath, confirmCreate = false } = {}) {
   if (!confirmCreate) throw Object.assign(new Error('Historical Forest creation requires --confirm-create.'), { code: 'confirmation_required' });
   const plan = buildBackfillPlan({ operationalPath, forest });
   if (plan.conflicts.length) throw Object.assign(new Error('Historical Forest apply refused custody conflicts.'), { code: 'forest_custody_conflict', conflicts: plan.conflicts });
   if (forest.count() > 0) {
     forest.verifySchema();
     // A non-empty store is allowed only after its existing append-only custody validates.
-    verifyForest({ forestPath: forest.path, operationalPath, spinePath, strictBijection: false });
+    verifyForest({ forestPath: forest.path, operationalPath, spinePath, worldPath, strictBijection: false });
   }
   const operational = readOperational(operationalPath);
   const existingCount = forest.count();
@@ -78,15 +78,15 @@ export function applyBackfill({ operationalPath, forest, spinePath, confirmCreat
   return { ...plan, appliedEntryCount: forest.count() - existingCount, finalEntryCount: forest.count() };
 }
 
-export function applyBackfillAtomically({ operationalPath, forestPath, spinePath, confirmCreate = false } = {}) {
+export function applyBackfillAtomically({ operationalPath, forestPath, spinePath, worldPath, confirmCreate = false } = {}) {
   if (!confirmCreate) throw Object.assign(new Error('Historical Forest creation requires --confirm-create.'), { code: 'confirmation_required' });
   if (existsSync(forestPath)) {
     const forest = new ForestStore(forestPath, { mode: 'requireExisting' });
     try {
-      verifyForest({ forestPath, operationalPath, spinePath, strictBijection: false });
-      const result = applyBackfill({ operationalPath, forest, spinePath, confirmCreate: true });
+      verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection: false });
+      const result = applyBackfill({ operationalPath, forest, spinePath, worldPath, confirmCreate: true });
       forest.close();
-      verifyForest({ forestPath, operationalPath, spinePath });
+      verifyForest({ forestPath, operationalPath, spinePath, worldPath });
       return result;
     } catch (error) { try { forest.close(); } catch {} throw error; }
   }
@@ -95,9 +95,9 @@ export function applyBackfillAtomically({ operationalPath, forestPath, spinePath
   let forest;
   try {
     forest = new ForestStore(temporaryPath);
-    const result = applyBackfill({ operationalPath, forest, spinePath, confirmCreate: true });
+    const result = applyBackfill({ operationalPath, forest, spinePath, worldPath, confirmCreate: true });
     forest.close(); forest = null;
-    verifyForest({ forestPath: temporaryPath, operationalPath, spinePath });
+    verifyForest({ forestPath: temporaryPath, operationalPath, spinePath, worldPath });
     if (existsSync(forestPath)) throw new Error('Forest target appeared during atomic activation.');
     renameSync(temporaryPath, forestPath);
     return result;

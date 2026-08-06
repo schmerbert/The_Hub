@@ -9,7 +9,7 @@ if (!confirmed) {
   process.exit();
 }
 try {
-  const result = applyBackfillAtomically({ operationalPath: config.dbPath, forestPath: config.forestPath, spinePath: config.spinePath, confirmCreate: confirmed });
+  const result = applyBackfillAtomically({ operationalPath: config.dbPath, forestPath: config.forestPath, spinePath: config.spinePath, worldPath: config.worldPath, confirmCreate: confirmed });
   console.log(JSON.stringify({ planHash: result.planHash, appliedEntryCount: result.appliedEntryCount, finalEntryCount: result.finalEntryCount }));
 } catch (error) {
   console.error(error.message);

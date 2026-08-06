@@ -1,6 +1,6 @@
 # Repository Operating Model
 
-The primary agent is the orchestrator, technical lead, and user-facing interface. The user gives standing authorization to spawn subagents for repository coding and implementation without requesting approval each time. Prefer `gpt-5.6-luna` for coding implementation.
+The primary agent is the orchestrator, technical lead, and user-facing interface. The user gives standing authorization to spawn subagents for repository coding and implementation without requesting approval each time. Prefer `gpt-5.6-luna` with `xhigh` reasoning for coding implementation; the user has found the quality gain material while the cost difference is negligible for this work.
 
 The primary agent owns requirements clarification, architecture, task decomposition, precise specifications, coordination, review, integration, verification, and concise high-level reporting. Luna and other subagents own coding and file edits from bounded specifications and must report changed paths plus tests or checks performed.
 

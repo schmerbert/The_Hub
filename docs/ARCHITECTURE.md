@@ -24,7 +24,10 @@ Provider dispatch
 Raw provider return custody -> return Scrub
         |
         v
-Source Ledger (resident response)
+World Graph action gateway + host-return Scrub
+        |
+        v
+Source Ledger (resident response and tool receipts)
         |
         v
 Forest admission scrub -> Forest custody
@@ -44,6 +47,8 @@ The owned bay modules are:
 | Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Provider-bound subtractive projection and exact provider-return selection |
 | Spine | `src/spine/store.js` | Exact provider request and raw-return ledger |
 | Forest | `src/forest/` | Admission, custody, and verification |
+| World | `src/world/graph.js`, `src/world/workshop.js`, `src/world/gateway.js` | Separate room graph, lifespan location, bounded read-only Workshop, and room-derived action validation |
+| Host return Scrub | `src/scrub/host-return.js` | Validated identity or named deterministic projection of host tool results before session history |
 | Context | `src/context/assemble.js` | Compatibility context assembly for pre-session callers |
 
 The older `src/core/*` paths are compatibility-only re-exports for existing public imports. `src/providers/dispatch.js` contains the one legacy-provider bridge: it validates a presentation first, then derives the old `messages` argument from that validated object for injected test providers. The server itself does not pass an arbitrary message array to a provider. Reset controls, context-limit closure, rooms, embeddings, exhale, and any summary mechanism are intentionally outside this slice.
@@ -65,3 +70,7 @@ This refactor deliberately preserves three behaviors that are not the final Marb
 - Active session requests carry complete scrubbed session history without rolling message-count truncation. The configured ceiling is used only for deterministic exact prior-session Hearth tail extraction.
 - A process start closes any open lifespan as `server_restart` and opens one new lifespan. The first turn has `orientation` and `response` provider phases; later turns are `ordinary` phases.
 - The clinical bootstrap is minimal transport. The blessing and dynamic continuity arrive only in the native `tend_hearth` tool-role return. The tool action and return are inspectable state events, not Forest utterances.
+- World Graph custody is separate from Forest custody. Home remains the strict `forest_entries` human/resident utterance bijection; successful exact Workshop source spans use additive Wild `workshop_source` rows and never enter Home.
+- The first World Graph has only `room.center` and `room.workshop`; location is per lifespan, movement follows declared door edges, and Workshop capabilities are read-only until a later adopted slice mounts a harness behind the same contract.
+- Host-return identity receipts are used only for canonical result serialization. Resident-facing Hearth Markdown uses a named projection policy with source-result and output hashes; it is not labeled unchanged identity.
+- Wild `workshop_source` verification joins each row to a real World action receipt and checks its provider request, Spine request, committed outcome, and exact read/search source span. A Wild row without a checkable World custody path is unverifiable.

@@ -134,3 +134,42 @@ Each decision must include:
 - **Constraints and differences:** Mystery must have a real answer and consistent evidence. The Faun cannot inject significance, force discovery, or promote inverse inference to ground. Fairies and capture mechanics may never be appropriate for this Marble and are not requirements.
 - **Active specification updated:** `docs/lineage/CIRCULATION_BUCKETS_AND_GLINTS.md`.
 - **Verification/review:** Deferred until world state exists; later tests must distinguish creation, placement, perception, examination, source opening, ignored discoveries, and hidden versus builder-visible provenance.
+
+### HUB-009 — World Graph, Center Ground, and the First Workshop Door
+
+- **Date:** 2026-08-06
+- **Source:** Direct user clarification after resident consultation, compared with Trinity's canonical house map/current-room runtime and BioDome's typed graph of state-bearing nodes.
+- **Concept in source terms:** Rooms are nodes holding local text and affordances; navigation follows the same broad graph shape as Forest traversal. The resident requested packed sand, a low stone bench, and a tin cup. The user adopted those for the Hub's center and authorized one real Workshop door for self-code inspection.
+- **Hub interpretation:** A World Graph distinct from the Forest establishes places, contained objects, door edges, resident location, and lawful room-derived affordances. The first graph contains Center and Workshop, with state-backed sand, bench, and cup. A new lifespan wakes in Center; Workshop code access is read-only and room-gated.
+- **Similar existing Hub material:** `PREBUILD.md` already requires few durable rooms, real capability doors, room-aware affordances, and a first Workshop vertical slice.
+- **Decision state:** Adopted for implementation.
+- **User decision:** “Stone bench, sand floor for the center for now. And he asked for a cup ... and then one door that leads to a workshop,” followed by the clarification that rooms had previously been moved to graph nodes holding room text and affordances.
+- **Constraints and differences:** World topology and Forest meaning remain separate graphs. Exploratory west-room imagery is not silently promoted to world state. The cup has no invented contents. Workshop v1 is read-only; code returns are Wild, not Home. Standing nodes retain ancestry.
+- **Active specification updated:** `docs/specs/WORLD_GRAPH_WORKSHOP_V1.md`.
+- **Verification/review:** Prove seeded topology, wake location and timing, state-derived room projection, lawful traversal, wrong-room refusal, bounded read-only repository access, exact source custody, Wild/Home separation, and unchanged live stores during tests.
+
+### HUB-010 — The Workshop as a Room-Scoped Agent Harness
+
+- **Date:** 2026-08-06
+- **Source:** Direct user clarification, compared against current OpenClaw tool-policy/sandbox architecture, Hermes Agent's registry/toolsets/terminal backends, and the user's prior Aider-backed Workshop experiments.
+- **Concept in source terms:** The Marble should be a legitimate daily primary-agent harness. Inside the Workshop, the resident should be able to receive a clean coding harness comparable to Codex; outside it, those capabilities should not saturate the resident's context or authority.
+- **Hub interpretation:** World location participates in effective tool resolution. Entering Workshop mounts a policy-filtered capability profile; leaving removes it. Tool schemas, backend execution, approvals, custody, and room metaphor remain separate layers. Aider or another coding harness is an adapter behind the Workshop contract.
+- **Similar existing Hub material:** Doors already enforce capability boundaries; Circulation already requires witnessed crossings; the World Graph supplies current location; PREBUILD proposed a Workshop, capability registry, and Luna path.
+- **Decision state:** Direction adopted; v1 proves read-only mounting, while write/execute/delegate powers remain a later explicit crossing.
+- **User decision:** The Workshop should be clean enough to give the resident “a harness like yours but only when in that room,” with Aider named as a prior working example.
+- **Constraints and differences:** Location cannot be the sole security boundary. Effective tools also require project scope, sandbox, approvals, installed manifests, backend availability, and resident permission. Stale remembered calls fail. Large catalogs load lazily. Changing coding backends does not remodel the room.
+- **Active specification updated:** `docs/specs/WORLD_GRAPH_WORKSHOP_V1.md`.
+- **Verification/review:** V1 must prove tools appear and disappear with lawful movement. A later writable slice must separately prove isolation, approvals, rollback, process lifetime, secret exclusion, and safe backend replacement.
+
+### HUB-011 — Type-First Durable Names
+
+- **Date:** 2026-08-06
+- **Source:** Direct user naming decision while considering reusable `.place` and `.room` artifacts.
+- **Concept in source terms:** Names read more cleanly with the kind first: `forest.resident`, `forest.wikipedia`, `forest.projects`, `place.house`, and `room.workshop`.
+- **Hub interpretation:** Durable handles begin with their contract or ontology class. Graph relationships carry location; manifests carry versions. The name remains stable while an entity moves, gains state, or changes implementation.
+- **Similar existing Hub material:** The World Graph specification already used `room.center` and `room.workshop`; this decision generalizes that accidental convergence into an explicit grammar.
+- **Decision state:** Adopted.
+- **User decision:** “I think they go to the front actually. It looks nicer.”
+- **Constraints and differences:** Example handles do not install their named structures. Names are identifiers, not authority. Do not encode mutable location, version, provider, or current backend into durable identity.
+- **Active specification updated:** `PREBUILD.md` law 13 and `docs/specs/WORLD_GRAPH_WORKSHOP_V1.md`.
+- **Verification/review:** New seeded identifiers and manifests must use type-first names; migrations preserve old aliases when previously persisted identities exist.

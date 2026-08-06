@@ -43,7 +43,7 @@ function labelFor(atom) {
   return `**${atom.actor}**${nearEnd}${handle}\n${atom.excerpt}`;
 }
 
-export function buildHearthScroll({ hearth, prior, forest = null, budget = 3000, excerptLimit = 600, maxAtoms = 4, sourceAncestry = null }) {
+export function buildHearthScroll({ hearth, prior, forest = null, budget = 3000, excerptLimit = 600, maxAtoms = 4, sourceAncestry = null, roomProjection = null }) {
   if (!Number.isInteger(budget) || budget < 1 || !Number.isInteger(excerptLimit) || excerptLimit < 1) throw Object.assign(new Error('Hearth Scroll limits are invalid.'), { code: 'hearth_scroll_invalid' });
   const candidates = (prior?.tail || []).slice(-maxAtoms).map(item => atomFor(item, forest, excerptLimit));
   const base = [
@@ -51,7 +51,8 @@ export function buildHearthScroll({ hearth, prior, forest = null, budget = 3000,
     '',
     '## Place to stand',
     `Continuity: ${hearth.continuity}. Chamber: ${hearth.chamber}.`,
-    'The implemented ground has no spatial room, movement, or perception machinery.',
+    roomProjection ? `Current room: ${roomProjection.roomId}. ${roomProjection.text}` : 'The implemented ground has no spatial room, movement, or perception machinery.',
+    ...(roomProjection ? [`Fixtures: ${roomProjection.fixtures.map(item => item.text).join(' ') || 'none'}.`, `Doors: ${roomProjection.exits.map(exit => `${exit.label} (${exit.doorId})`).join(', ') || 'none'}.`] : []),
     '',
     '## Blessing',
     BLESSING_V1,
