@@ -51,6 +51,8 @@ The resident is:
 
 The initial resident will be inhabited by DeepSeek model sessions from the first vertical slice. The exact DeepSeek model ID and runtime configuration remain replaceable implementation choices; they do not define the resident's identity. Changing the underlying model later requires resident consultation, explicit lineage records, and a reviewed arrival rather than a silent provider swap.
 
+The initial continuity has chosen the name **The Longshore Current**. The name belongs to this continuity, not to Seat One, DeepSeek, or any future resident mounted in the chamber. Every wake begins with an always-present two-layer ritual: a sparse host-authored clinical anchor followed by a source-linked resident-authored blessing. The anchor is mandatory ground; acknowledging or performing the ritual is optional. Full mechanics and refusals are defined in `docs/specs/WAKE_RITUAL_V1.md`.
+
 The resident should be able to inspect, in fitted language:
 
 - Why each piece of context returned.
@@ -382,7 +384,7 @@ The first slice should be usable from a simple local interface before mobile pol
 - What belongs in the resident's room, and what privacy/inspection covenant governs it?
 - What is the first real project the vertical slice should hold?
 - What exact Workshop functions are necessary for that project?
-- How is the resident's stable identity named without confusing role continuity with uninterrupted consciousness?
+- How will a future resident continuity be named without inheriting The Longshore Current merely by occupying Seat One?
 - What form, role, and name should the first companion have?
 - Which parts of The Forest schema should be reused directly, revised, or wrapped behind a service?
 - What is the smallest operational database separate from Forest?

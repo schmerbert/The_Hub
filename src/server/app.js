@@ -10,6 +10,8 @@ import { createProvider } from '../providers/index.js';
 import { ForestStore, verifyForest } from '../core/forest.js';
 import { SpineStore } from '../core/spine.js';
 import { sha256 } from '../core/hash.js';
+import { BLESSING_SOURCE_EVENT_ID } from '../resident/charter.js';
+import { validateBlessingSourceEvent } from '../core/context.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PUBLIC = join(ROOT, 'public');
@@ -21,7 +23,7 @@ function json(response, status, value) {
   response.end(body);
 }
 function typedError(response, status, code, message) { json(response, status, { error: { code, message } }); }
-function statusFor(code) { return ['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json'].includes(code) ? 400 : code === 'wake_in_progress' ? 409 : ['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused'].includes(code) ? 503 : code.startsWith('provider_') ? 502 : 500; }
+function statusFor(code) { return ['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json'].includes(code) ? 400 : code === 'wake_in_progress' ? 409 : ['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'wake_ritual_invalid'].includes(code) ? 503 : code.startsWith('provider_') ? 502 : 500; }
 async function body(request, maxBytes) {
   let total = 0; const chunks = [];
   for await (const chunk of request) { total += chunk.length; if (total > maxBytes) throw { code: 'request_too_large', message: 'Request body is too large.' }; chunks.push(chunk); }
@@ -41,12 +43,14 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, ac
   let forest = null; let spine = null;
   try {
     if (config.forestActive && !forestOverride) {
+      if (config.mode === 'live') validateBlessingSourceEvent(db.getEvent(BLESSING_SOURCE_EVENT_ID), db.threadId);
       verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined });
       forest = new ForestStore(config.forestPath, { mode: 'requireExisting' });
     } else forest = forestOverride || null;
     spine = spineOverride || (config.forestActive ? new SpineStore(config.spinePath) : null);
+    if (config.mode === 'live' && forest && spine) validateBlessingSourceEvent(db.getEvent(BLESSING_SOURCE_EVENT_ID), db.threadId);
   } catch (error) {
-    forest?.close(); db.close(); throw { code: 'forest_activation_refused', message: error?.code === 'forest_activation_refused' ? error.message : 'Existing Forest validation failed.' };
+    forest?.close(); db.close(); throw { code: error?.code === 'wake_ritual_invalid' ? 'wake_ritual_invalid' : 'forest_activation_refused', message: error?.code === 'wake_ritual_invalid' ? error.message : error?.code === 'forest_activation_refused' ? error.message : 'Existing Forest validation failed.' };
   }
 
   let wakeInProgress = false;
@@ -82,14 +86,18 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, ac
     if (!trimmed) throw { code: 'invalid_message', message: 'Message must contain text.' };
     if (trimmed.length > config.maxMessageLength) throw { code: 'message_too_large', message: `Message must be ${config.maxMessageLength} characters or fewer.` };
     const utterances = db.getThread().events.filter(event => event.eventKind === 'utterance');
+    const ritualMode = config.mode === 'live' && Boolean(forest && spine);
+    const blessingSourceEvent = ritualMode ? db.getEvent(BLESSING_SOURCE_EVENT_ID) : null;
     let assembledContext;
     const created = db.createWake({
       provider: config.mode === 'fake' ? 'fake' : 'deepseek', model: config.model, content: submitted,
+      ritualMode,
       contextBuilder: ({ threadId, wakeId, startedAt }) => {
         assembledContext = buildContext({
           utterances, newContent: submitted, ceiling: config.messageCeiling,
           threadId, wakeId, wakeStartedAtUtc: startedAt,
           residentMode: config.mode, requestedModel: config.model,
+          ritualMode, blessingSourceEvent, provider: 'deepseek',
         });
         return assembledContext.items;
       },
