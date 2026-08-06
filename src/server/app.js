@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HubDatabase } from '../ledger/source.js';
-import { buildContext } from '../context/assemble.js';
 import { readConfig } from '../core/config.js';
 import { createProvider } from '../providers/index.js';
 import { completeProvider, prepareProviderRequest } from '../providers/dispatch.js';
@@ -15,6 +14,8 @@ import { sha256 } from '../core/hash.js';
 import { BLESSING_SOURCE_EVENT_ID } from '../resident/charter.js';
 import { validateBlessingSourceEvent } from '../context/assemble.js';
 import { assertScrubbedPresentation, scrubProviderHistory, verifyScrubbedProjection } from '../scrub/provider-presentation.js';
+import { buildClinicalBootstrap, messageSourceRefs } from '../session/lifespan.js';
+import { HEARTH_TOOL, HEARTH_TOOL_CHOICE, hearthReturn, hearthReturnHash, validateOrientationResult } from '../hearth/handshake.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PUBLIC = join(ROOT, 'public');
@@ -26,7 +27,7 @@ function json(response, status, value) {
   response.end(body);
 }
 function typedError(response, status, code, message) { json(response, status, { error: { code, message } }); }
-function statusFor(code) { return ['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json'].includes(code) ? 400 : code === 'wake_in_progress' ? 409 : ['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'wake_ritual_invalid'].includes(code) ? 503 : code.startsWith('provider_') ? 502 : 500; }
+function statusFor(code) { return ['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json'].includes(code) ? 400 : code === 'wake_in_progress' ? 409 : ['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'wake_ritual_invalid'].includes(code) ? 503 : ['hearth_orientation_invalid'].includes(code) || code.startsWith('provider_') ? 502 : 500; }
 async function body(request, maxBytes) {
   let total = 0; const chunks = [];
   for await (const chunk of request) { total += chunk.length; if (total > maxBytes) throw { code: 'request_too_large', message: 'Request body is too large.' }; chunks.push(chunk); }
@@ -58,25 +59,22 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, ac
 
   let wakeInProgress = false;
 
-  function registerPresentationBoundary(wakeId, requestFrame, requestBodyString, presentation, sourceMessages) {
+  function registerPresentationBoundary(wakeId, requestFrame, requestBodyString, presentation, sourceMessages, sourceRefs = []) {
     if (!forest || !requestFrame) return;
     assertScrubbedPresentation(presentation);
     let requestBody;
     try { requestBody = JSON.parse(requestBodyString); } catch { throw { code: 'forest_intake_failed', message: 'The serialized provider request was not valid JSON.' }; }
-    const context = db.getWake(wakeId).context;
-    const included = context.filter(item => item.included);
     if (!Array.isArray(requestBody.messages) || requestBody.messages.length !== presentation.messages.length ||
       JSON.stringify(requestBody.messages) !== JSON.stringify(presentation.messages)) {
       throw { code: 'forest_intake_failed', message: 'The serialized provider messages do not match the validated scrubbed presentation.' };
     }
     verifyScrubbedProjection(sourceMessages, presentation);
-    if (requestBody.messages.length !== included.length) throw { code: 'forest_intake_failed', message: 'The serialized provider messages do not match the persisted wake context.' };
     const links = [];
-    for (let index = 0; index < included.length; index++) {
-      const item = included[index]; const message = requestBody.messages[index];
-      if (message?.role !== item.actorRole || message?.content !== item.content) throw { code: 'forest_intake_failed', message: 'The serialized provider messages do not match the persisted wake context.' };
-      if (item.itemKind !== 'utterance' || !item.sourceEventId) continue;
-      const entry = forest.listEntries().find(candidate => candidate.source_event_id === item.sourceEventId);
+    for (let index = 0; index < sourceRefs.length; index++) {
+      const source = sourceRefs[index]; const message = requestBody.messages[index];
+      if (!source || JSON.stringify(message) !== JSON.stringify(source.message)) throw { code: 'forest_intake_failed', message: 'The serialized provider messages do not match the persisted provider presentation.' };
+      if (!source.sourceEventId) continue;
+      const entry = forest.listEntries().find(candidate => candidate.source_event_id === source.sourceEventId);
       if (!entry) throw { code: 'forest_intake_failed', message: 'A presented utterance is missing from the Forest.' };
       links.push({ entryId: entry.entry_id, requestRecordId: requestFrame.record_id, messageOrdinal: index + 1, providerRole: message.role, contentHash: sha256(message.content) });
     }
@@ -94,59 +92,77 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, ac
     const trimmed = submitted.trim();
     if (!trimmed) throw { code: 'invalid_message', message: 'Message must contain text.' };
     if (trimmed.length > config.maxMessageLength) throw { code: 'message_too_large', message: `Message must be ${config.maxMessageLength} characters or fewer.` };
-    const utterances = db.getThread().events.filter(event => event.eventKind === 'utterance');
-    const ritualMode = config.mode === 'live' && Boolean(forest && spine);
-    const blessingSourceEvent = ritualMode ? db.getEvent(BLESSING_SOURCE_EVENT_ID) : null;
-    let assembledContext;
-    const created = db.createWake({
-      provider: config.mode === 'fake' ? 'fake' : 'deepseek', model: config.model, content: submitted,
-      ritualMode,
-      contextBuilder: ({ threadId, wakeId, startedAt }) => {
-        assembledContext = buildContext({
-          utterances, newContent: submitted, ceiling: config.messageCeiling,
-          threadId, wakeId, wakeStartedAtUtc: startedAt,
-          residentMode: config.mode, requestedModel: config.model,
-          ritualMode, blessingSourceEvent, provider: 'deepseek',
-        });
-        return assembledContext.items;
-      },
-    });
+    const providerName = config.mode === 'fake' ? 'fake' : 'deepseek';
+    const firstTurn = !db.sessionHasOrientation();
+    const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;
+    const created = db.createSessionWake({ provider: providerName, model: config.model, content: submitted });
     if (forest) {
-      try { forest.ingestEvent(db.getEvent(created.eventId), { spineStatus: 'live', predecessorSourceEventId: utterances.at(-1)?.id || null }); }
+      try { forest.ingestEvent(db.getEvent(created.eventId), { spineStatus: 'live', predecessorSourceEventId: priorEligible }); }
       catch (error) {
         const failure = { code: 'forest_intake_failed', message: error?.message || 'The Forest could not accept the source event.' };
-        db.failWake(created.wakeId, failure);
+        db.failSessionWake(created.wakeId, failure);
         return db.getWake(created.wakeId);
       }
     }
     db.markCalling(created.wakeId);
-    try {
-      const presentation = scrubProviderHistory(assembledContext.messages);
-      let prepared;
-      try {
-        prepared = prepareProviderRequest(provider, { presentation, model: config.model, thinking: config.thinking });
-      } catch (error) { throw error; }
+    const bootstrap = buildClinicalBootstrap({ provider: providerName, model: config.model });
+    const callPhase = async (phase, historyRows, options = {}) => {
+      const refs = messageSourceRefs(historyRows, bootstrap);
+      const sourceMessages = refs.map(ref => ref.message);
+      const presentation = scrubProviderHistory(sourceMessages);
+      const prepared = prepareProviderRequest(provider, {
+        presentation, model: config.model, thinking: config.thinking, phase,
+        tools: options.orientation ? [HEARTH_TOOL] : undefined,
+        toolChoice: options.orientation ? HEARTH_TOOL_CHOICE : undefined,
+      });
       const requestBodyString = prepared.requestBodyString || JSON.stringify(prepared.requestBody);
       const wakeRecord = db.getWake(created.wakeId);
-      const requestFrame = spine?.prepareRequest({ requestBody: requestBodyString, threadId: wakeRecord.threadId, wakeId: wakeRecord.id, provider: wakeRecord.provider, model: config.model, authorizationPresent: config.mode === 'live' && Boolean(config.apiKey) });
-      // The host commits presentation evidence, then marks dispatch immediately before fetch.
-      const onBeforeDispatch = requestFrame ? () => registerPresentationBoundary(created.wakeId, requestFrame, requestBodyString, presentation, assembledContext.messages) : undefined;
+      const requestFrame = spine?.prepareRequest({ requestBody: requestBodyString, threadId: wakeRecord.threadId, wakeId: wakeRecord.id, provider: wakeRecord.provider, model: config.model, authorizationPresent: config.mode === 'live' && Boolean(config.apiKey), requestPhase: phase });
+      const requestId = db.recordProviderRequest({ sessionId: created.sessionId, wakeId: created.wakeId, phase, requestBody: requestBodyString, messageSources: refs, spineRecordId: requestFrame?.record_id });
+      let observedOutcome = null;
+      const onBeforeDispatch = requestFrame ? () => registerPresentationBoundary(created.wakeId, requestFrame, requestBodyString, presentation, sourceMessages, refs) : undefined;
       const onDispatch = requestFrame ? () => spine.dispatchAttempted(requestFrame.record_id) : undefined;
-      const onOutcome = requestFrame ? outcome => spine.providerOutcome(requestFrame.record_id, outcome) : undefined;
-      const result = await completeProvider(provider, { presentation, model: config.model, requestBodyString, onBeforeDispatch, onDispatch, onOutcome });
-      if (!result || typeof result.content !== 'string' || !result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
-      const residentEventId = db.commitWake(created.wakeId, result, result.content);
-      if (forest && requestFrame) {
+      const onOutcome = requestFrame ? outcome => { observedOutcome = outcome; spine.providerOutcome(requestFrame.record_id, outcome); } : undefined;
+      try {
+        const result = await completeProvider(provider, { presentation, model: config.model, phase, requestBodyString, onBeforeDispatch, onDispatch, onOutcome });
+        db.completeProviderRequest(requestId, result, observedOutcome);
+        return { result, requestFrame, requestId, refs };
+      } catch (error) {
+        db.completeProviderRequest(requestId, {}, observedOutcome);
+        throw error;
+      }
+    };
+    try {
+      if (firstTurn) {
+        const orientation = await callPhase('orientation', db.getSessionHistory(created.sessionId), { orientation: true });
+        const action = validateOrientationResult(orientation.result);
+        const actionEventId = db.recordHearthAction({ wakeId: created.wakeId, sessionId: created.sessionId, message: action.message });
+        const prior = db.priorSessionTail({ sessionId: created.sessionId, ceiling: config.messageCeiling });
+        const returnValue = hearthReturn({ sessionId: created.sessionId, threadId: db.threadId, provider: providerName, model: config.model, prior, sourceEvent: db.getEvent(BLESSING_SOURCE_EVENT_ID), clinicalGround: bootstrap });
+        db.recordHearthReturn({ wakeId: created.wakeId, sessionId: created.sessionId, toolCallId: action.toolCallId, returnValue, actionEventId, returnHash: hearthReturnHash(returnValue) });
+        const response = await callPhase('response', db.getSessionHistory(created.sessionId));
+        if (!response.result || typeof response.result.content !== 'string' || !response.result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
+        const residentEventId = db.commitSessionWake(created.wakeId, response.result);
+        if (forest && response.requestFrame) {
+          try {
+            const entry = forest.ingestEvent(db.getEvent(residentEventId), { spineStatus: 'live', predecessorSourceEventId: created.eventId });
+            forest.linkEmission({ entryId: entry.entryId || entry.entry_id, requestRecordId: response.requestFrame.record_id });
+          } catch (error) { db.recordHostFailure(created.wakeId, { code: 'forest_intake_failed', message: error?.message || 'The Forest could not accept the resident utterance.' }); }
+        }
+      } else {
+        const ordinary = await callPhase('ordinary', db.getSessionHistory(created.sessionId));
+        if (!ordinary.result || typeof ordinary.result.content !== 'string' || !ordinary.result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
+        const residentEventId = db.commitSessionWake(created.wakeId, ordinary.result);
+        if (forest && ordinary.requestFrame) {
         try {
           const entry = forest.ingestEvent(db.getEvent(residentEventId), { spineStatus: 'live', predecessorSourceEventId: created.eventId });
-          forest.linkEmission({ entryId: entry.entryId || entry.entry_id, requestRecordId: requestFrame.record_id });
-        } catch (error) {
-          db.recordHostFailure(created.wakeId, { code: 'forest_intake_failed', message: error?.message || 'The Forest could not accept the resident utterance.' });
+          forest.linkEmission({ entryId: entry.entryId || entry.entry_id, requestRecordId: ordinary.requestFrame.record_id });
+        } catch (error) { db.recordHostFailure(created.wakeId, { code: 'forest_intake_failed', message: error?.message || 'The Forest could not accept the resident utterance.' }); }
         }
       }
     } catch (error) {
       const failure = { code: error?.code || 'provider_error', message: error?.message || 'The resident provider failed.' };
-      db.failWake(created.wakeId, failure);
+      db.failSessionWake(created.wakeId, failure);
     }
     return db.getWake(created.wakeId);
   }
@@ -173,6 +189,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, ac
         });
       }
       if (request.method === 'GET' && url.pathname === '/api/thread') return json(response, 200, { ...db.getThread(), residentMode: config.mode, model: config.model });
+      if (request.method === 'GET' && url.pathname === '/api/session') return json(response, 200, { session: db.getActiveSession(), sessions: db.listSessions(), history: db.getSessionHistory(), residentMode: config.mode, model: config.model });
       if (request.method === 'GET' && /^\/api\/wakes\/[^/]+$/.test(url.pathname)) {
         const wakeRecord = db.getWake(url.pathname.split('/').at(-1));
         return wakeRecord ? json(response, 200, { ...wakeRecord, residentMode: config.mode }) : typedError(response, 404, 'wake_not_found', 'Wake not found.');

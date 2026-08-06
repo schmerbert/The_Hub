@@ -6,7 +6,7 @@ The current runtime keeps the existing behavior while making the custody path vi
 Source Ledger (operational events)
         |
         v
-Current context assembly
+Session lifespan + Hearth assembly
         |
         v
 Subtractive provider scrub
@@ -36,12 +36,14 @@ The owned bay modules are:
 | Bay | Entry point | Current responsibility |
 | --- | --- | --- |
 | Ledger | `src/ledger/source.js` | Operational/source event storage |
+| Session | `src/session/lifespan.js` | Process-lived session identity, complete active history, and Session Zero ancestry |
+| Hearth | `src/hearth/handshake.js` | Native first-call action validation and exact host tool return |
 | Scrub | `src/scrub/provider-presentation.js` | Provider-bound subtractive projection and receipt |
 | Spine | `src/spine/store.js` | Exact provider request ledger |
 | Forest | `src/forest/` | Admission, custody, and verification |
-| Context | `src/context/assemble.js` | Existing context assembly |
+| Context | `src/context/assemble.js` | Compatibility context assembly for pre-session callers |
 
-The older `src/core/*` paths are compatibility-only re-exports for existing public imports. `src/providers/dispatch.js` contains the one legacy-provider bridge: it validates a presentation first, then derives the old `messages` argument from that validated object for injected test providers. The server itself does not pass an arbitrary message array to a provider. Lifespans, two-breath Hearth behavior, embeddings, exhale, and any summary mechanism are intentionally outside this slice.
+The older `src/core/*` paths are compatibility-only re-exports for existing public imports. `src/providers/dispatch.js` contains the one legacy-provider bridge: it validates a presentation first, then derives the old `messages` argument from that validated object for injected test providers. The server itself does not pass an arbitrary message array to a provider. Reset controls, context-limit closure, rooms, embeddings, exhale, and any summary mechanism are intentionally outside this slice.
 
 ## Constitutional invariants
 
@@ -55,8 +57,6 @@ The older `src/core/*` paths are compatibility-only re-exports for existing publ
 
 This refactor deliberately preserves three behaviors that are not the final Marble design:
 
-- Context currently uses a rolling message-count ceiling. The intended model is a complete scrubbed lifespan followed by an explicit context boundary and new wake, never gradual invisible amnesia.
-- The runtime currently names every provider request a wake. The intended model distinguishes ordinary turns within one lifespan from a wake that begins a new context lineage.
-- The current clinical anchor and blessing are injected before conversation. The intended Hearth is a two-breath handshake: a minimal injected bootstrap, a resident-initiated Hearth action, an attributable return, and only then the response to the waiting human message.
-
-These seams must be replaced deliberately after the refactor; they must not be normalized as permanent architecture.
+- Active session requests carry complete scrubbed session history without rolling message-count truncation. The configured ceiling is used only for deterministic exact prior-session Hearth tail extraction.
+- A process start closes any open lifespan as `server_restart` and opens one new lifespan. The first turn has `orientation` and `response` provider phases; later turns are `ordinary` phases.
+- The clinical bootstrap is minimal transport. The blessing and dynamic continuity arrive only in the native `tend_hearth` tool-role return. The tool action and return are inspectable state events, not Forest utterances.

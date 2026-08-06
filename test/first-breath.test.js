@@ -36,13 +36,14 @@ test('fake wake commits exact user/context/resident/provider records', async () 
   try {
     const result = await post(f.base, '/api/wakes', 'Please orient yourself.');
     assert.equal(result.response.status, 200); assert.equal(result.body.status, 'committed'); assert.equal(result.body.provider, 'fake');
-    assert.equal(result.body.events.filter(e => e.actorKind === 'resident').length, 1);
+    assert.equal(result.body.events.filter(e => e.actorKind === 'resident' && e.eventKind === 'utterance').length, 1);
+    assert.equal(result.body.events.filter(e => e.eventKind === 'state').length, 2);
     assert.equal(result.body.events.find(e => e.actorKind === 'user').content, 'Please orient yourself.');
-    assert.equal(result.body.context[0].content, ARRIVAL_CHARTER);
-    assert.equal(result.body.context[1].itemKind, 'environment_manifest');
+    assert.equal(result.body.context[0].itemKind, 'clinical_anchor');
     assert.equal(result.body.context.at(-1).content, 'Please orient yourself.');
-    assert.match(result.body.events.find(e => e.actorKind === 'resident').content, /^FAKE MODE/);
-    assert.equal(f.hub.provider.calls.length, 1);
+    assert.match(result.body.events.find(e => e.actorKind === 'resident' && e.eventKind === 'utterance').content, /^FAKE MODE/);
+    assert.deepEqual(result.body.phases.map(phase => phase.phase), ['orientation', 'response']);
+    assert.equal(f.hub.provider.calls.length, 2);
   } finally { await f.close(); }
 });
 
@@ -59,19 +60,12 @@ test('orientation receipt matches persisted wake and provider input', async () =
   const f = await fixture({ HUB_RESIDENT_MODE: 'fake' });
   try {
     const result = await post(f.base, '/api/wakes', 'Orient me.');
-    const item = result.body.context.find(contextItem => contextItem.itemKind === 'environment_manifest');
-    const manifest = manifestFrom(item);
-    assert.equal(result.body.context.filter(contextItem => contextItem.itemKind === 'environment_manifest').length, 1);
-    assert.deepEqual(manifest.exposed_tools, []);
-    assert.equal(manifest.thread_id, result.body.threadId);
-    assert.equal(manifest.wake_id, result.body.id);
-    assert.equal(manifest.wake_started_at_utc, result.body.startedAt);
-    assert.equal(manifest.wake_started_at_unix_ms, Date.parse(result.body.startedAt));
-    assert.equal(manifest.prior_utterance_count, 0);
-    assert.equal(manifest.incoming_utterance_ordinal, 1);
-    assert.equal(manifest.older_utterances_omitted, 0);
-    assert.deepEqual(f.hub.provider.calls[0].messages[1], { role: 'system', content: item.content });
-    assert.equal(item.contentHash, sha256(item.content));
+    const orientation = JSON.parse(result.body.phases[0].requestBody);
+    assert.equal(orientation.messages.at(-1).content, 'Orient me.');
+    assert.equal(orientation.tools[0].function.name, 'tend_hearth');
+    assert.deepEqual(orientation.tool_choice, { type: 'function', function: { name: 'tend_hearth' } });
+    assert.equal(result.body.phases[1].phase, 'response');
+    assert.equal(result.body.hearth.toolCallId, 'call_fake_hearth');
   } finally { await f.close(); }
 });
 
@@ -91,14 +85,9 @@ test('default ceiling creates omission disclosure without a summary', async () =
   try {
     await post(f.base, '/api/wakes', 'first'); await post(f.base, '/api/wakes', 'second');
     const result = await post(f.base, '/api/wakes', 'third');
-    const disclosure = result.body.context.find(item => item.itemKind === 'disclosure');
-    assert.ok(disclosure); assert.match(disclosure.content, /3 older utterances omitted/); assert.doesNotMatch(disclosure.content, /first|second/);
-    assert.equal(result.body.context.filter(item => item.included && item.itemKind === 'utterance').length, 2);
-    assert.equal(result.body.context.filter(item => !item.included).length, 3);
-    const manifest = manifestFrom(result.body.context.find(item => item.itemKind === 'environment_manifest'));
-    assert.equal(manifest.prior_utterance_count, 4);
-    assert.equal(manifest.incoming_utterance_ordinal, 5);
-    assert.equal(manifest.older_utterances_omitted, 3);
+    assert.equal(result.body.context.filter(item => !item.included).length, 0);
+    assert.equal(result.body.phases.at(-1).messageSources.filter(item => item.sourceEventId).length, 5);
+    assert.doesNotMatch(JSON.stringify(result.body), /"summary"\s*:/i);
   } finally { await f.close(); }
 });
 
@@ -149,7 +138,7 @@ test('health, thread, and wake inspection are attributable', async () => {
     const health = await get(f.base, '/api/health'); assert.equal(health.body.residentMode, 'fake'); assert.equal(health.body.liveCredentialsAvailable, false); assert.ok(!JSON.stringify(health.body).includes('authorization'));
     const created = await post(f.base, '/api/wakes', 'inspect me'); const wakeId = created.body.id;
     const thread = await get(f.base, '/api/thread'); assert.equal(thread.body.wakes[0].id, wakeId);
-    const inspection = await get(f.base, `/api/wakes/${wakeId}`); assert.equal(inspection.body.context[0].itemKind, 'charter'); assert.ok(inspection.body.events.length >= 2);
+    const inspection = await get(f.base, `/api/wakes/${wakeId}`); assert.equal(inspection.body.context[0].itemKind, 'clinical_anchor'); assert.deepEqual(inspection.body.phases.map(phase => phase.phase), ['orientation', 'response']); assert.ok(inspection.body.events.length >= 4);
   } finally { await f.close(); }
 });
 
@@ -173,10 +162,10 @@ test('orientation manifest and API response exclude provider credentials and pat
     assert.doesNotMatch(serialized, /sentinel-api-key/);
     assert.doesNotMatch(serialized, /sentinel-provider\.example\.invalid/);
     assert.doesNotMatch(serialized, /sentinel-db-path/);
-    const manifest = result.body.context.find(item => item.itemKind === 'environment_manifest').content;
-    assert.doesNotMatch(manifest, /sentinel-api-key/);
-    assert.doesNotMatch(manifest, /sentinel-provider\.example\.invalid/);
-    assert.doesNotMatch(manifest, /sentinel-db-path/);
+    const bootstrap = result.body.context.find(item => item.itemKind === 'clinical_anchor').content;
+    assert.doesNotMatch(bootstrap, /sentinel-api-key/);
+    assert.doesNotMatch(bootstrap, /sentinel-provider\.example\.invalid/);
+    assert.doesNotMatch(bootstrap, /sentinel-db-path/);
   } finally {
     await new Promise(resolve => hub.server.close(resolve)); hub.close(); await rm(dir, { recursive: true, force: true });
   }
@@ -202,7 +191,7 @@ test('live mode without key fails honestly and creates no resident utterance', a
 test('empty provider content fails honestly', async () => {
   const provider = { async complete() { return { content: '   ', resolvedModel: 'test' }; } };
   const f = await fixture({ HUB_RESIDENT_MODE: 'fake' }, provider);
-  try { const result = await post(f.base, '/api/wakes', 'empty response'); assert.equal(result.response.status, 502); assert.equal(result.body.failureCode, 'provider_empty_content'); assert.equal(result.body.events.filter(e => e.actorKind === 'resident').length, 0); }
+  try { const result = await post(f.base, '/api/wakes', 'empty response'); assert.equal(result.response.status, 502); assert.equal(result.body.failureCode, 'hearth_orientation_invalid'); assert.equal(result.body.events.filter(e => e.actorKind === 'resident').length, 0); }
   finally { await f.close(); }
 });
 
@@ -223,7 +212,10 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
     for await (const chunk of request) chunks.push(chunk);
     requestBodies.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ id: 'response-test', model: 'deepseek-v4-flash', choices: [{ message: { content: rawProviderContent }, finish_reason: 'stop' }] }));
+    const orientation = requestBodies.at(-1).tool_choice;
+    response.end(JSON.stringify(orientation
+      ? { id: 'orientation-test', model: 'deepseek-v4-flash', choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'deepseek-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }], reasoning_content: 'reasoning-preserved' }, finish_reason: 'tool_calls' }] }
+      : { id: 'response-test', model: 'deepseek-v4-flash', choices: [{ message: { role: 'assistant', content: rawProviderContent }, finish_reason: 'stop' }] }));
   });
   await new Promise(resolve => upstream.listen(0, resolve)); const port = upstream.address().port;
   const first = await fixture({ HUB_RESIDENT_MODE: 'live', DEEPSEEK_API_KEY: 'test-key', DEEPSEEK_BASE_URL: `http://127.0.0.1:${port}`, DEEPSEEK_THINKING: 'disabled' });
@@ -231,9 +223,9 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
   try {
     const firstResult = await post(first.base, '/api/wakes', 'disabled thinking');
     assert.equal(firstResult.response.status, 200);
-    assert.equal(firstResult.body.events.find(event => event.actorKind === 'resident').content, rawProviderContent);
+    assert.equal(firstResult.body.events.find(event => event.actorKind === 'resident' && event.eventKind === 'utterance').content, rawProviderContent);
     assert.equal((await post(second.base, '/api/wakes', 'enabled thinking')).response.status, 200);
-    assert.deepEqual(requestBodies.map(body => body.thinking), [{ type: 'disabled' }, { type: 'enabled' }]);
+    assert.deepEqual(requestBodies.map(body => body.thinking), [{ type: 'disabled' }, { type: 'disabled' }, { type: 'enabled' }, { type: 'enabled' }]);
   } finally { await first.close(); await second.close(); await new Promise(resolve => upstream.close(resolve)); }
 });
 

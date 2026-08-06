@@ -10,6 +10,7 @@ export function readConfig(env = process.env) {
     baseUrl: (env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, ''),
     model: env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
     thinking: env.DEEPSEEK_THINKING || 'disabled',
+    fakeOrientationVariant: env.HUB_FAKE_ORIENTATION_VARIANT || 'valid',
     apiKey: env.DEEPSEEK_API_KEY || '',
     dbPath: env.HUB_DB_PATH || join(process.cwd(), '.runtime', 'hub.sqlite'),
     forestPath: env.HUB_FOREST_PATH || join(process.cwd(), '.runtime', 'forest.sqlite'),

@@ -1,6 +1,6 @@
 # The Hub — First Breath
 
-This repository contains the smallest honest resident interaction: one local thread, one user message at a time, one completed or visibly failed wake. It uses Node.js built-ins, SQLite, a replaceable provider boundary, and the Corner-derived static mobile-first page. Wide browsers open as a compact chip that expands into the bench; narrow browsers open directly into the bench.
+This repository contains one process-lived resident session. Each server start supersedes any prior open session and opens a new one; its first human message takes a native two-breath Hearth handshake, and later messages remain ordinary turns in the same complete active history. It uses Node.js built-ins, SQLite, a replaceable provider boundary, and the Corner-derived static mobile-first page.
 
 ## Run an explicit fake-mode demonstration
 
@@ -25,6 +25,8 @@ npm start
 
 Optional settings include `DEEPSEEK_BASE_URL`, `DEEPSEEK_THINKING`, `HUB_PORT`, `HUB_DB_PATH`, `HUB_MESSAGE_CEILING`, `HUB_MAX_MESSAGE_LENGTH`, and `HUB_MAX_BODY_BYTES`. Keep credentials outside the repository. The API key and authorization header are never stored or returned.
 
+Fake-mode orientation variants for failure testing are selected with `HUB_FAKE_ORIENTATION_VARIANT` (`valid`, `prose`, `malformed`, `duplicate`, `wrong_tool`, or `nonempty_args`).
+
 ## Activate Forest custody and the Spine
 
 The historical Forest is built separately and verified before the resident host may write to it:
@@ -47,11 +49,12 @@ Activation refuses a missing Forest, an invalid Forest, or fake-provider mode. H
 ## Inspectable local API
 
 - `GET /api/health`
-- `GET /api/thread`
+- `GET /api/thread` (includes active session and Session Zero ancestry)
+- `GET /api/session`
 - `POST /api/wakes` with `{ "content": "..." }`
 - `GET /api/wakes/:id`
 
-Every wake inspection exposes the ordered charter/context manifest, provenance, authority, inclusion or omission reason, SHA-256 content hashes, provider receipt metadata, linked events, and typed failures.
+Every wake inspection exposes session identity, provider phases, exact structured messages, Hearth custody, provenance, SHA-256 content hashes, linked events, and typed failures. The tool call and tool-role return are not rendered as chat utterances.
 
 ## Verify
 
@@ -61,4 +64,4 @@ npm test
 
 The suite exercises the real HTTP and SQLite path in temporary databases, including empty and oversized input, missing live credentials, empty provider output, provider HTTP failure, fake-mode labeling, context ceilings, and visible nonterminal wakes.
 
-This first breath deliberately does not implement rooms, tools, Forest retrieval or synthesis, movement, chambers, companions, autonomy, streaming, authentication, or deployment.
+This slice deliberately does not implement rooms, spatial state, reset UI, context-limit closure, summaries, embeddings, Forest retrieval or synthesis, movement machinery, autonomous work, streaming, authentication, or deployment. The only native tool is the forced first-turn `tend_hearth({})` action.

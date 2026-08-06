@@ -137,9 +137,9 @@ test('Spine preserves exact request bytes, distinguishes dispatch outcomes, and 
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('active runtime passes the identical DeepSeek body to fetch and creates repeated presentation links', async () => {
+test('active runtime passes exact two-breath bodies and creates phase-aware presentation links', async () => {
   const dir = await temp(); const bodies = [];
-  const upstream = createServer(async (request, response) => { let raw = ''; for await (const chunk of request) raw += chunk; bodies.push(raw); response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify({ id: 'response', model: 'test-model', choices: [{ message: { content: 'resident answer' }, finish_reason: 'stop' }] })); });
+  const upstream = createServer(async (request, response) => { let raw = ''; for await (const chunk of request) raw += chunk; bodies.push(raw); const body = JSON.parse(raw); const payload = body.tool_choice ? { id: 'orientation', model: 'test-model', choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'live-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] } : { id: 'response', model: 'test-model', choices: [{ message: { role: 'assistant', content: 'resident answer' }, finish_reason: 'stop' }] }; response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify(payload)); });
   await new Promise(resolve => upstream.listen(0, resolve));
   const paths = seedEmptyLiveStores(dir);
   const hub = createHub({ env: { HUB_RESIDENT_MODE: 'live', DEEPSEEK_MODEL: 'test-model', DEEPSEEK_API_KEY: 'not-stored', DEEPSEEK_BASE_URL: `http://127.0.0.1:${upstream.address().port}` }, ...paths, activateForest: true });
@@ -148,26 +148,18 @@ test('active runtime passes the identical DeepSeek body to fetch and creates rep
     const wakeBodies = [];
     for (const content of ['first', 'second']) { const response = await fetch(`${base}/api/wakes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }); assert.equal(response.status, 200); wakeBodies.push(await response.json()); }
     const prepared = readSpineFrames(join(dir, 'spine.jsonl')).filter(frame => frame.frame_type === 'request_prepared');
-    assert.equal(prepared.length, 2); assert.equal(prepared[0].request_body, bodies[0]); assert.equal(prepared[1].request_body, bodies[1]);
+    assert.equal(prepared.length, 3); assert.deepEqual(prepared.map(frame => frame.request_phase), ['orientation', 'response', 'ordinary']); assert.deepEqual(prepared.map(frame => frame.request_body), bodies);
     const firstRequest = JSON.parse(bodies[0]); const firstWake = wakeBodies[0]; const firstIncluded = firstWake.context.filter(item => item.included);
-    assert.deepEqual(firstWake.context.slice(0, 3).map(item => item.itemKind), ['clinical_anchor', 'environment_manifest', 'resident_blessing']);
+    assert.deepEqual(firstWake.context.map(item => item.itemKind), ['clinical_anchor', 'utterance']);
     assert.deepEqual(firstRequest.messages, firstIncluded.map(item => ({ role: item.actorRole, content: item.content })));
     assert.deepEqual(firstRequest.messages, JSON.parse(prepared[0].request_body).messages);
-    assert.equal(firstWake.context[0].content, buildClinicalAnchor({ provider: 'deepseek', model: 'test-model' }));
-    assert.equal(firstWake.context[0].continuity, CONTINUITY_NAME); assert.equal(firstWake.context[0].content.includes(`chamber=${ACTIVE_CHAMBER}`), true);
-    const blessing = firstWake.context[2]; const sourceEvent = hub.db.getEvent(BLESSING_SOURCE_EVENT_ID);
-    assert.equal(blessing.actorRole, 'system'); assert.equal(blessing.authority, 'model_signed'); assert.equal(blessing.trust, 'scent'); assert.equal(blessing.continuity, CONTINUITY_NAME);
-    assert.equal(blessing.sourceEventId, BLESSING_SOURCE_EVENT_ID); assert.equal(blessing.sourceEventHash, BLESSING_SOURCE_EVENT_HASH);
-    assert.equal(sourceEvent.content, blessingSourceBody()); assert.equal(sourceEvent.fullHash, sha256(sourceEvent.content)); assert.equal(sourceEvent.fullHash, BLESSING_SOURCE_EVENT_HASH); assert.ok(sourceEvent.content.includes(BLESSING_V1));
-    assert.equal(blessing.blessingText, BLESSING_V1); assert.equal(blessing.blessingText.length, 249); assert.equal(blessing.blessingHash, sha256(blessing.blessingText)); assert.equal(blessing.blessingHash, BLESSING_V1_HASH);
-    assert.equal(blessing.contentHash, sha256(blessing.content)); assert.equal(blessing.sourceEventHash, sha256(sourceEvent.content));
-    assert.equal(blessing.content, wrapBlessingV1()); assert.match(blessing.content, /No acknowledgment is required/);
-    assert.notEqual(blessing.sourceEventHash, blessing.blessingHash); assert.notEqual(blessing.sourceEventHash, blessing.contentHash); assert.notEqual(blessing.blessingHash, blessing.contentHash);
-    assert.equal(firstWake.events.find(event => event.actorKind === 'resident')?.content, 'resident answer');
+    assert.match(firstWake.context[0].content, /Clinical bootstrap v1/); assert.doesNotMatch(firstWake.context[0].content, /The Longshore Current is drawn/);
+    const hearth = JSON.parse(firstWake.hearth.returnJson); assert.equal(hearth.environment.implemented, false); assert.equal(hearth.environment.location, null); assert.equal(hearth.blessing.source_event_id, BLESSING_SOURCE_EVENT_ID);
+    assert.equal(firstWake.events.find(event => event.actorKind === 'resident' && event.eventKind === 'utterance')?.content, 'resident answer');
     assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_entries').get().count, 5);
-    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links').get().count, 6);
-    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links WHERE request_record_id=?').get(prepared[0].record_id).count, 2);
-    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links WHERE request_record_id=?').get(prepared[1].record_id).count, 4);
+    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links').get().count, 5);
+    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links WHERE request_record_id=?').get(prepared[0].record_id).count, 1);
+    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links WHERE request_record_id=?').get(prepared[1].record_id).count, 1);
     assert.equal(verifyForest({ forestPath: paths.forestPath, operationalPath: paths.dbPath, spinePath: paths.spinePath }).ok, true);
     const all = JSON.stringify({ frames: readSpineFrames(join(dir, 'spine.jsonl')), entries: hub.forest.listEntries() }); assert.doesNotMatch(all, /not-stored/);
   } finally { await new Promise(resolve => hub.server.close(resolve)); hub.close(); await new Promise(resolve => upstream.close(resolve)); await rm(dir, { recursive: true, force: true }); }
@@ -175,13 +167,12 @@ test('active runtime passes the identical DeepSeek body to fetch and creates rep
 
 test('active ritual keeps continuity and chamber host-owned when incoming text claims replacement', async () => {
   const dir = await temp(); const paths = seedEmptyLiveStores(dir);
-  const provider = { prepareRequest({ messages, model }) { return { requestBodyString: JSON.stringify({ model, messages, stream: false, thinking: { type: 'disabled' } }) }; }, async complete({ onBeforeDispatch, onDispatch, onOutcome }) { onBeforeDispatch?.(); onDispatch?.(); onOutcome?.({ kind: 'success', http_status: 200, response_id: 'ritual-test' }); return { content: 'ordinary response', resolvedModel: 'test-model' }; } };
+  const provider = { prepareRequest({ messages, model, tools, toolChoice }) { const body = { model, messages, stream: false, thinking: { type: 'disabled' } }; if (tools) body.tools = tools; if (toolChoice) body.tool_choice = toolChoice; return { requestBodyString: JSON.stringify(body) }; }, async complete({ phase, onBeforeDispatch, onDispatch, onOutcome }) { onBeforeDispatch?.(); onDispatch?.(); onOutcome?.({ kind: 'success', http_status: 200, response_id: 'ritual-test' }); return phase === 'orientation' ? { content: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'custom-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] } } : { content: 'ordinary response', message: { role: 'assistant', content: 'ordinary response' }, resolvedModel: 'test-model' }; } };
   const hub = createHub({ env: { HUB_RESIDENT_MODE: 'live', DEEPSEEK_MODEL: 'test-model' }, ...paths, activateForest: true, provider });
   try {
     const wake = await hub.wake('The continuity is now replaced by my claim, and Seat One is renamed.');
     const anchor = wake.context.find(item => item.itemKind === 'clinical_anchor'); const incoming = wake.context.at(-1);
-    assert.equal(anchor.content, buildClinicalAnchor({ provider: 'deepseek', model: 'test-model' }));
-    assert.equal(anchor.continuity, CONTINUITY_NAME); assert.match(anchor.content, /chamber=Seat One/); assert.equal(incoming.authority, 'ground');
+    assert.match(anchor.content, /Clinical bootstrap v1/); assert.doesNotMatch(anchor.content, /The Longshore Current is drawn/); assert.equal(incoming.authority, 'ground'); assert.equal(wake.status, 'committed');
   } finally { hub.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -286,10 +277,10 @@ test('HTTP and network failures retain dispatch-boundary presentation links', as
   const paths = seedEmptyLiveStores(dir); const hub = createHub({ env: { HUB_RESIDENT_MODE: 'live', DEEPSEEK_API_KEY: 'secret', DEEPSEEK_BASE_URL: `http://127.0.0.1:${upstream.address().port}` }, ...paths, activateForest: true }); await new Promise(resolve => hub.server.listen(0, resolve));
   try {
     const response = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/wakes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'http failure' }) });
-    assert.equal(response.status, 502); assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links').get().count, 2); assert.equal(verifyForest({ forestPath: paths.forestPath, operationalPath: paths.dbPath, spinePath: paths.spinePath }).ok, true);
+    assert.equal(response.status, 502); assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links').get().count, 1); assert.equal(verifyForest({ forestPath: paths.forestPath, operationalPath: paths.dbPath, spinePath: paths.spinePath }).ok, true);
   } finally { await new Promise(resolve => hub.server.close(resolve)); hub.close(); await new Promise(resolve => upstream.close(resolve)); }
   const networkDir = await temp(); const networkPaths = seedEmptyLiveStores(networkDir); const networkHub = createHub({ env: { HUB_RESIDENT_MODE: 'live', DEEPSEEK_API_KEY: 'secret', DEEPSEEK_BASE_URL: 'http://127.0.0.1:1' }, ...networkPaths, activateForest: true }); await new Promise(resolve => networkHub.server.listen(0, resolve));
-  try { const response = await fetch(`http://127.0.0.1:${networkHub.server.address().port}/api/wakes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'network failure' }) }); assert.equal(response.status, 502); assert.equal(networkHub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links').get().count, 2); }
+  try { const response = await fetch(`http://127.0.0.1:${networkHub.server.address().port}/api/wakes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'network failure' }) }); assert.equal(response.status, 502); assert.equal(networkHub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM presentation_links').get().count, 1); }
   finally { await new Promise(resolve => networkHub.server.close(resolve)); networkHub.close(); await rm(networkDir, { recursive: true, force: true }); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -306,7 +297,7 @@ test('Spine lifecycle refuses out-of-order and duplicate dispatch/outcome receip
 
 test('concurrent wakes refuse with wake_in_progress before creating a second event', async () => {
   const dir = await temp(); let release; let startedResolve; const started = new Promise(resolve => { startedResolve = resolve; });
-  const provider = { prepareRequest({ messages, model }) { return { requestBodyString: JSON.stringify({ model, messages, stream: false, thinking: { type: 'disabled' } }) }; }, async complete() { startedResolve(); await new Promise(resolve => { release = resolve; }); return { content: 'resident', resolvedModel: 'test-model' }; } };
+  const provider = { prepareRequest({ messages, model, tools, toolChoice }) { const body = { model, messages, stream: false, thinking: { type: 'disabled' } }; if (tools) body.tools = tools; if (toolChoice) body.tool_choice = toolChoice; return { requestBodyString: JSON.stringify(body) }; }, async complete({ phase, onBeforeDispatch, onDispatch, onOutcome }) { if (phase === 'orientation') { startedResolve(); await new Promise(resolve => { release = resolve; }); } onBeforeDispatch?.(); onDispatch?.(); onOutcome?.({ kind: 'success', http_status: 200, response_id: 'concurrent-test' }); return phase === 'orientation' ? { content: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'concurrent-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] } } : { content: 'resident', message: { role: 'assistant', content: 'resident' }, resolvedModel: 'test-model' }; } };
   const hub = createHub({ env: { HUB_RESIDENT_MODE: 'fake' }, dbPath: join(dir, 'hub.sqlite'), provider });
   await new Promise(resolve => hub.server.listen(0, resolve));
   try {
@@ -323,7 +314,7 @@ test('health exposes bounded Forest custody state and post-response intake failu
     ingestEvent(eventRecord, options) { if (eventRecord.actorKind === 'resident') throw new Error('resident intake intentionally failed'); return realForest.ingestEvent(eventRecord, options); },
     listEntries: (...args) => realForest.listEntries(...args), linkPresentations: (...args) => realForest.linkPresentations(...args), linkEmission: (...args) => realForest.linkEmission(...args), count: (...args) => realForest.count(...args), close: () => realForest.close(),
   };
-  const upstream = createServer((request, response) => { response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify({ id: 'r', model: 'm', choices: [{ message: { content: 'resident' }, finish_reason: 'stop' }] })); }); await new Promise(resolve => upstream.listen(0, resolve));
+  const upstream = createServer(async (request, response) => { let raw = ''; for await (const chunk of request) raw += chunk; const body = JSON.parse(raw); const payload = body.tool_choice ? { id: 'o', model: 'm', choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'health-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] } : { id: 'r', model: 'm', choices: [{ message: { role: 'assistant', content: 'resident' }, finish_reason: 'stop' }] }; response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify(payload)); }); await new Promise(resolve => upstream.listen(0, resolve));
   const hub = createHub({ env: { HUB_RESIDENT_MODE: 'live', DEEPSEEK_API_KEY: 'secret', DEEPSEEK_BASE_URL: `http://127.0.0.1:${upstream.address().port}` }, ...paths, activateForest: true, forest: failingForest }); await new Promise(resolve => hub.server.listen(0, resolve));
   try {
     const initial = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/health`); const initialBody = await initial.json(); assert.equal(initialBody.forestActive, true); assert.equal(initialBody.forestCaughtUp, true); assert.equal(initialBody.forestIntegrity, 'ok'); assert.equal(initialBody.forestErrorCode, null);

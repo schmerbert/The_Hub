@@ -9,10 +9,13 @@ function scrubError(message) {
 }
 
 function cloneMessage(message) {
-  if (!message || typeof message !== 'object' || typeof message.role !== 'string' || typeof message.content !== 'string') {
-    throw scrubError('Provider history messages must contain string roles and content.');
+  if (!message || typeof message !== 'object' || typeof message.role !== 'string' ||
+    (message.content !== null && message.content !== undefined && typeof message.content !== 'string')) {
+    throw scrubError('Provider history messages must contain a role and nullable content.');
   }
-  return { role: message.role, content: message.content };
+  const copy = structuredClone(message);
+  if (!Object.hasOwn(copy, 'content')) copy.content = null;
+  return copy;
 }
 
 function freeze(value) {
@@ -27,7 +30,7 @@ function messageHash(message) { return sha256(canonicalize(message)); }
 
 function sourceLengths(sourceOrLengths) {
   if (!Array.isArray(sourceOrLengths)) throw scrubError('Provider scrub source history must be an array.');
-  const lengths = sourceOrLengths.map(item => typeof item === 'number' ? item : item?.content?.length);
+  const lengths = sourceOrLengths.map(item => typeof item === 'number' ? item : typeof item?.content === 'string' ? item.content.length : 0);
   if (lengths.some(length => !Number.isInteger(length) || length < 0)) throw scrubError('Provider scrub source content lengths are invalid.');
   return lengths;
 }
@@ -64,7 +67,7 @@ function projectionFor(sourceMessages, omissions) {
     for (const range of ranges) { content += message.content.slice(cursor, range.start); cursor = range.end; }
     content += message.content.slice(cursor);
     if (!content.length && ranges[0].start === 0 && ranges.at(-1).end === message.content.length) return [];
-    return [{ role: message.role, content }];
+    return [{ ...message, content }];
   });
 }
 
@@ -90,7 +93,7 @@ function receiptFor(sourceMessages, messages, omissions) {
     sourceCount: sourceMessages.length,
     outputCount: messages.length,
     sourceMessageHashes: sourceMessages.map(messageHash),
-    sourceMessageContentLengths: sourceMessages.map(message => message.content.length),
+    sourceMessageContentLengths: sourceMessages.map(message => typeof message.content === 'string' ? message.content.length : 0),
     outputMessageHashes: messages.map(messageHash),
     omissions,
   };

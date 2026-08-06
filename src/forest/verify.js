@@ -82,6 +82,28 @@ export function verifyForest({ forestPath, operationalPath, spinePath, strictBij
       let request;
       try { request = JSON.parse(frame.request_body); } catch { throw new Error('Spine request body is not valid JSON.'); }
       if (request.model !== wake.requestedModel) throw new Error(`Spine request JSON model does not match wake ${frame.wake_id}.`);
+      if (frame.request_phase) {
+        const providerRequest = op.prepare('SELECT phase, message_sources_json AS messageSources FROM provider_requests WHERE spine_record_id=?').get(frame.record_id);
+        if (!providerRequest || providerRequest.phase !== frame.request_phase) throw new Error(`Spine phase custody is missing for request ${frame.record_id}.`);
+        const refs = JSON.parse(providerRequest.messageSources);
+        if (!Array.isArray(request.messages) || request.messages.length !== refs.length) throw new Error(`Spine request messages do not match provider phase ${frame.request_phase}.`);
+        for (let index = 0; index < refs.length; index++) if (JSON.stringify(request.messages[index]) !== JSON.stringify(refs[index].message)) throw new Error(`Spine structured message mismatch for request ${frame.record_id}.`);
+        if (frame.request_phase === 'orientation') {
+          if (!Array.isArray(request.tools) || request.tools.length !== 1 || request.tools[0]?.function?.name !== 'tend_hearth' || JSON.stringify(request.tool_choice) !== JSON.stringify({ type: 'function', function: { name: 'tend_hearth' } })) throw new Error(`Orientation tool contract is invalid for request ${frame.record_id}.`);
+        } else if (request.tool_choice) throw new Error(`Non-orientation request has a forced tool choice ${frame.record_id}.`);
+        const expected = refs.map((ref, index) => ref.sourceEventId ? { sourceEventId: ref.sourceEventId, ordinal: index + 1 } : null).filter(Boolean);
+        const links = presentationsByRequest.get(frame.record_id) || [];
+        const lifecycle = lifecycleByRequest.get(frame.record_id);
+        if (!lifecycle.dispatched) { if (links.length) throw new Error(`Prepared-only request ${frame.record_id} cannot have presentation links.`); continue; }
+        if (links.length !== expected.length) throw new Error(`Presentation link set is incomplete for request ${frame.record_id}.`);
+        const linkByEntry = new Map(links.map(link => [link.entry_id, link]));
+        for (const item of expected) {
+          const entry = entryBySource.get(item.sourceEventId); const link = entry && linkByEntry.get(entry.entry_id);
+          if (!entry || !link || link.message_ordinal !== item.ordinal || link.provider_role !== request.messages[item.ordinal - 1].role || link.content_hash !== sha256(request.messages[item.ordinal - 1].content) || link.content_hash !== entry.body_hash) throw new Error(`Presentation truth failed for request ${frame.record_id}.`);
+        }
+        if (links.some(link => !expected.some(item => entryBySource.get(item.sourceEventId)?.entry_id === link.entry_id))) throw new Error(`Presentation link set has extras for request ${frame.record_id}.`);
+        continue;
+      }
       const context = op.prepare(`SELECT ordinal, item_kind AS itemKind, actor_role AS actorRole, content, source_event_id AS sourceEventId, included, content_hash AS contentHash FROM wake_context_items WHERE wake_id=? ORDER BY ordinal`).all(frame.wake_id).map(item => ({ ...item, included: Boolean(item.included) }));
       const included = context.filter(item => item.included);
       if (!Array.isArray(request.messages) || request.messages.length !== included.length) throw new Error(`Spine request messages do not match wake ${frame.wake_id}.`);
@@ -105,17 +127,23 @@ export function verifyForest({ forestPath, operationalPath, spinePath, strictBij
     const residentsByWake = new Map();
     for (const event of eligible.filter(event => event.actorKind === 'resident')) { if (!residentsByWake.has(event.wakeId)) residentsByWake.set(event.wakeId, []); residentsByWake.get(event.wakeId).push(event); }
     const emissionsByEntry = new Map();
+    const emissionsByRequest = new Set();
     for (const link of emissionRows) {
       if (!entryIds.has(link.entry_id) || !preparedById.has(link.request_record_id)) throw new Error('Emission link reference is invalid.');
       const entry = entries.find(candidate => candidate.entry_id === link.entry_id); const event = entry && events.get(entry.source_event_id); const request = preparedById.get(link.request_record_id);
       const lifecycle = lifecycleByRequest.get(link.request_record_id);
-      if (!event || event.actorKind !== 'resident' || event.wakeId !== request.wake_id || !lifecycle.dispatched || lifecycle.outcome?.kind !== 'success') throw new Error('Emission link wake custody is invalid.');
+      if (!event || event.actorKind !== 'resident' || event.wakeId !== request.wake_id || request.request_phase === 'orientation' || !lifecycle.dispatched || lifecycle.outcome?.kind !== 'success') throw new Error('Emission link wake custody is invalid.');
       emissionsByEntry.set(link.entry_id, (emissionsByEntry.get(link.entry_id) || 0) + 1);
+      emissionsByRequest.add(link.request_record_id);
     }
     for (const frame of preparedFrames) {
       const residents = residentsByWake.get(frame.wake_id) || [];
-      if (residents.length > 1) throw new Error(`Wake ${frame.wake_id} has multiple resident emissions.`);
       const lifecycle = lifecycleByRequest.get(frame.record_id);
+      if (frame.request_phase === 'orientation') {
+        if (emissionsByRequest.has(frame.record_id)) throw new Error(`Orientation request ${frame.record_id} has a Forest resident emission.`);
+        continue;
+      }
+      if (residents.length > 1) throw new Error(`Wake ${frame.wake_id} has multiple resident emissions.`);
       if (lifecycle.outcome?.kind === 'success' && residents.length !== 1) throw new Error(`Successful provider outcome lacks exactly one resident emission for wake ${frame.wake_id}.`);
       if (residents.length && lifecycle.outcome?.kind !== 'success') throw new Error(`Resident emission lacks a successful provider outcome for wake ${frame.wake_id}.`);
       if (residents.length === 1 && emissionsByEntry.get(entryBySource.get(residents[0].id)?.entry_id) !== 1) throw new Error(`Resident emission link is missing for wake ${frame.wake_id}.`);

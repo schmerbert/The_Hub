@@ -3,14 +3,16 @@ import { assertScrubbedPresentation } from '../scrub/provider-presentation.js';
 export class DeepSeekResidentProvider {
   constructor(config) { this.config = config; this.mode = 'live'; }
 
-  prepareRequest({ presentation, model }) {
+  prepareRequest({ presentation, model, thinking = this.config.thinking, tools, toolChoice }) {
     if (!this.config.apiKey) throw { code: 'provider_unavailable', message: 'Live DeepSeek resident wakes require DEEPSEEK_API_KEY.' };
     assertScrubbedPresentation(presentation);
-    const requestBody = { model, messages: presentation.messages, stream: false, thinking: { type: this.config.thinking === 'enabled' ? 'enabled' : 'disabled' } };
+    const requestBody = { model, messages: presentation.messages, stream: false, thinking: { type: thinking === 'enabled' ? 'enabled' : 'disabled' } };
+    if (tools) requestBody.tools = tools;
+    if (toolChoice) requestBody.tool_choice = toolChoice;
     return { requestBody, requestBodyString: JSON.stringify(requestBody) };
   }
 
-  async complete({ presentation, model, requestBodyString, onBeforeDispatch, onDispatch, onOutcome }) {
+  async complete({ presentation, model, phase = 'ordinary', requestBodyString, onBeforeDispatch, onDispatch, onOutcome }) {
     assertScrubbedPresentation(presentation);
     const prepared = requestBodyString ? { requestBodyString } : this.prepareRequest({ presentation, model });
     const requestBody = prepared.requestBodyString;
@@ -38,8 +40,9 @@ export class DeepSeekResidentProvider {
       throw { code: 'provider_invalid_response', message: 'DeepSeek returned invalid JSON.' };
     }
     const choice = payload?.choices?.[0];
-    const content = typeof choice?.message?.content === 'string' ? choice.message.content : '';
-    if (!content.trim()) {
+    const message = choice?.message && typeof choice.message === 'object' ? structuredClone(choice.message) : null;
+    const content = typeof message?.content === 'string' ? message.content : null;
+    if (phase !== 'orientation' && (!content || !content.trim())) {
       if (onOutcome) onOutcome({ kind: 'empty_content', http_status: response.status });
       throw { code: 'provider_empty_content', message: 'DeepSeek returned no resident content.' };
     }
@@ -51,7 +54,10 @@ export class DeepSeekResidentProvider {
       finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : null,
       systemFingerprint: typeof payload.system_fingerprint === 'string' ? payload.system_fingerprint : null,
       usage: payload.usage && typeof payload.usage === 'object' ? payload.usage : null,
-      content,
+      content: content || '',
+      message: message || { role: 'assistant', content },
+      toolCalls: Array.isArray(message?.tool_calls) ? message.tool_calls : null,
+      reasoningContent: Object.hasOwn(message || {}, 'reasoning_content') ? message.reasoning_content : undefined,
     };
   }
 }

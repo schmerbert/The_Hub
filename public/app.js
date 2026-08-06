@@ -155,7 +155,7 @@ async function submitWake(event) {
   const submitted = input.value;
   if (!submitted.trim()) return;
   busy = true; input.disabled = true; sendButton.disabled = true; setState('assembling');
-  setTimeout(() => { if (busy) setState('calling provider'); }, 0);
+  setTimeout(() => { if (busy) setState('orienting'); }, 0);
   try {
     const wake = await request('/api/wakes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: submitted }) });
     input.value = '';

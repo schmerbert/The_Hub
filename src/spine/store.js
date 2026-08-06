@@ -63,6 +63,7 @@ function readFrames(path) {
       if (typeof frame.request_body !== 'string' || typeof frame.thread_id !== 'string' || typeof frame.wake_id !== 'string' || typeof frame.provider !== 'string' || typeof frame.model !== 'string' || typeof frame.authorization_present !== 'boolean' || frame.body_byte_length !== byteLength(frame.request_body) || frame.body_sha256 !== sha256(frame.request_body)) {
         throw new Error('Spine request body length or hash mismatch.');
       }
+      if (frame.request_phase !== undefined && !['orientation', 'response', 'ordinary'].includes(frame.request_phase)) throw new Error('Spine request phase is invalid.');
     } else if (frame.frame_type === 'dispatch_attempted' || frame.frame_type === 'provider_outcome') {
       if (typeof frame.request_record_id !== 'string') throw new Error('Spine receipt is missing its request identifier.');
     } else {
@@ -137,7 +138,7 @@ export class SpineStore {
     return frame;
   }
 
-  prepareRequest({ requestBody, threadId, wakeId, provider, model, authorizationPresent }) {
+  prepareRequest({ requestBody, threadId, wakeId, provider, model, authorizationPresent, requestPhase }) {
     if (typeof requestBody !== 'string') throw new Error('Spine request body must be a string.');
     return this.append('request_prepared', {
       request_body: requestBody,
@@ -150,6 +151,7 @@ export class SpineStore {
       prepared_at: new Date().toISOString(),
       authorization_present: Boolean(authorizationPresent),
       safe_header_names: ['authorization', 'content-type'],
+      ...(requestPhase ? { request_phase: requestPhase } : {}),
     });
   }
 
