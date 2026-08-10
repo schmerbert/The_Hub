@@ -25,9 +25,11 @@
               <span id="mode-model" class="mode-model">Checking mode…</span>
               <span id="status" class="status" role="status" aria-live="polite">idle</span>
               <span id="room-state" class="mode-model">Center</span>
+              <span id="station-state" class="mode-model">No station</span>
+              <span id="approval-state" class="mode-model" hidden></span>
             </div>
           </div>
-          <div class="title-actions"><button id="inspect-world" type="button" class="ghost">Inspect world</button><button id="btn-compact" type="button" class="ghost" aria-label="Collapse Corner workbench">Collapse</button></div>
+          <div class="title-actions"><button id="inspect-world" type="button" class="ghost">Inspect world</button><button id="inspect-approvals" type="button" class="ghost approvals-button">Approvals<span id="approvals-badge" class="approvals-badge" hidden></span></button><button id="btn-compact" type="button" class="ghost" aria-label="Collapse Corner workbench">Collapse</button></div>
         </header>
 
         <div class="workspace">
@@ -41,8 +43,9 @@
           </aside>
 
           <section class="rail" aria-labelledby="conversation-heading">
-            <div class="rail-heading"><h2 id="conversation-heading">Conversation</h2><span id="thread-note">One local thread</span></div>
+            <div class="rail-heading"><h2 id="conversation-heading">Conversation</h2><span id="thread-note">This lifespan</span></div>
             <div id="log" class="log" aria-live="polite"></div>
+            <div id="gap" class="gap" aria-live="polite"></div>
             <form id="compose" class="compose">
               <label class="sr-only" for="input">Message</label>
               <textarea id="input" rows="2" maxlength="4000" placeholder="Write to Resident…" autocomplete="off" spellcheck="true"></textarea>

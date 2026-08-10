@@ -1,5 +1,21 @@
 import { assertScrubbedPresentation } from '../scrub/provider-presentation.js';
 
+/**
+ * DeepSeek thinking + tools requires every assistant history message to carry
+ * `reasoning_content` on subsequent requests. Orientation runs with thinking
+ * disabled (forced tool_choice), so that turn often has no field — echo "" so
+ * response/tool rounds do not 400. Never invent non-empty CoT.
+ */
+export function echoReasoningContentForContinuation(refs, { thinking, tools } = {}) {
+  const needsEcho = thinking === 'enabled' || (Array.isArray(tools) && tools.length > 0);
+  if (!needsEcho || !Array.isArray(refs)) return refs;
+  return refs.map(ref => {
+    const message = ref?.message;
+    if (!message || message.role !== 'assistant' || Object.hasOwn(message, 'reasoning_content')) return ref;
+    return { ...ref, message: { ...message, reasoning_content: '' } };
+  });
+}
+
 export class DeepSeekResidentProvider {
   constructor(config) { this.config = config; this.mode = 'live'; }
 
@@ -34,7 +50,13 @@ export class DeepSeekResidentProvider {
     const rawReturnFrame = onRawReturn?.({ body: bodyBytes, httpStatus: response.status, contentType: response.headers.get('content-type') || null, phase });
     if (!response.ok) {
       if (onOutcome) onOutcome({ kind: 'http_error', http_status: response.status });
-      throw { code: 'provider_http_error', message: `DeepSeek returned HTTP ${response.status}.` };
+      let detail = '';
+      try {
+        const payload = JSON.parse(bodyBytes.toString('utf8'));
+        const message = payload?.error?.message || payload?.message;
+        if (typeof message === 'string' && message.trim() && !/bearer|authorization|api[_-]?key/i.test(message)) detail = ` ${message.trim()}`;
+      } catch {}
+      throw { code: 'provider_http_error', message: `DeepSeek returned HTTP ${response.status}.${detail}` };
     }
     if (!bodyBytes.length) {
       if (onOutcome) onOutcome({ kind: 'empty_content', http_status: response.status });

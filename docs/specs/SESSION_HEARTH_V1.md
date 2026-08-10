@@ -2,7 +2,7 @@
 
 ## Status
 
-Adopted for the next inhabited Hub slice. This specification replaces the runtime fiction that every provider request is a wake. It introduces one process-lived resident session and one native tool-shaped Hearth handshake at the beginning of that session.
+**Implemented ancestry; current for lifespan and two-breath timing.** This specification replaced the runtime fiction that every provider request is a wake. It introduced one process-lived resident session and one native tool-shaped Hearth handshake at the beginning of that session. World Graph Workshop v1 later superseded its claims that rooms, movement, and environmental state were absent; the Hearth receipt now carries a truthful room projection.
 
 This slice does not add rooms, spatial state, a reset button, context-limit handling, embeddings, Forest exhale, autonomous wakes, summaries, or a final resident-authored Hearth collection.
 
@@ -105,6 +105,8 @@ Session startup must close any previously open session as `server_restart` and o
 ## Interface
 
 Corner shows one bounded `orienting` state between send and final response. It does not render the tool call or Hearth JSON as chat messages. Wake inspection exposes both request phases, the exact return, session identity, and custody status.
+
+The Corner gap may show host-authored Step Slips while a wake is active. They are deterministic operational glosses, not chat speech: neither the Hearth Scroll/tool JSON nor provider reasoning content may enter the utterance rail. Exact non-empty provider `reasoning_content` may be disclosed only in an expandable Step Slip, with the phase retained for inspection.
 
 The existing reset button is not added in this slice. A later reset calls the same session close/open primitive and then waits for the next human message to begin the two-breath wake.
 

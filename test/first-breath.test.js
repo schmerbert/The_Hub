@@ -215,8 +215,8 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
     response.writeHead(200, { 'content-type': 'application/json' });
     const orientation = requestBodies.at(-1).tool_choice;
     response.end(JSON.stringify(orientation
-      ? { id: 'orientation-test', model: 'deepseek-v4-flash', choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'deepseek-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }], reasoning_content: 'reasoning-preserved' }, finish_reason: 'tool_calls' }] }
-      : { id: 'response-test', model: 'deepseek-v4-flash', choices: [{ message: { role: 'assistant', content: rawProviderContent }, finish_reason: 'stop' }] }));
+      ? { id: 'orientation-test', model: 'deepseek-v4-flash', choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'deepseek-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] }
+      : { id: 'response-test', model: 'deepseek-v4-flash', choices: [{ message: { role: 'assistant', content: rawProviderContent, reasoning_content: 'response-cot' }, finish_reason: 'stop' }] }));
   });
   await new Promise(resolve => upstream.listen(0, resolve)); const port = upstream.address().port;
   const first = await fixture({ HUB_RESIDENT_MODE: 'live', DEEPSEEK_API_KEY: 'test-key', DEEPSEEK_BASE_URL: `http://127.0.0.1:${port}`, DEEPSEEK_THINKING: 'disabled' });
@@ -226,8 +226,29 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
     assert.equal(firstResult.response.status, 200);
     assert.equal(firstResult.body.events.find(event => event.actorKind === 'resident' && event.eventKind === 'utterance').content, rawProviderContent);
     assert.equal((await post(second.base, '/api/wakes', 'enabled thinking')).response.status, 200);
-    assert.deepEqual(requestBodies.map(body => body.thinking), [{ type: 'disabled' }, { type: 'disabled' }, { type: 'enabled' }, { type: 'enabled' }]);
+    assert.deepEqual(requestBodies.map(body => body.thinking), [{ type: 'disabled' }, { type: 'disabled' }, { type: 'disabled' }, { type: 'enabled' }]);
+    const enabledResponse = requestBodies[3];
+    const assistantWithTools = enabledResponse.messages.filter(message => message.role === 'assistant' && Array.isArray(message.tool_calls));
+    assert.ok(assistantWithTools.length >= 1);
+    for (const message of assistantWithTools) assert.equal(Object.hasOwn(message, 'reasoning_content'), true);
+    assert.equal(assistantWithTools[0].reasoning_content, '');
   } finally { await first.close(); await second.close(); await new Promise(resolve => upstream.close(resolve)); }
+});
+
+test('echoReasoningContentForContinuation preserves exact CoT and fills missing assistants', async () => {
+  const { echoReasoningContentForContinuation } = await import('../src/providers/deepseek.js');
+  const refs = [
+    { sourceEventId: null, message: { role: 'system', content: 'ground' } },
+    { sourceEventId: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'a' }] } },
+    { sourceEventId: null, message: { role: 'assistant', content: 'hi', reasoning_content: 'exact-cot' } },
+    { sourceEventId: null, message: { role: 'user', content: 'q' } },
+  ];
+  const echoed = echoReasoningContentForContinuation(refs, { thinking: 'enabled', tools: [{ type: 'function' }] });
+  assert.equal(Object.hasOwn(echoed[1].message, 'reasoning_content'), true);
+  assert.equal(echoed[1].message.reasoning_content, '');
+  assert.equal(echoed[2].message.reasoning_content, 'exact-cot');
+  assert.equal(Object.hasOwn(echoed[3].message, 'reasoning_content'), false);
+  assert.equal(echoReasoningContentForContinuation(refs, { thinking: 'disabled', tools: undefined }), refs);
 });
 
 test('interrupted nonterminal wakes remain visible', async () => {
@@ -264,7 +285,7 @@ test('Corner surface is static, responsive, and limited to First Breath APIs', a
   const [html, css, app, wave] = files;
   assert.match(html, /id="chip"/); assert.match(html, /id="bench"/); assert.match(html, /id="tray"/); assert.match(html, /aria-live/);
   assert.match(css, /\[hidden\] \{ display: none !important; \}/); assert.match(css, /@media \(min-width: 701px\)/); assert.match(css, /#app\[data-mode="compact"\] \.bench \{ display: none; \}/); assert.match(css, /#app\[data-mode="expanded"\] \.chip \{ display: none; \}/); assert.match(css, /@media \(max-width: 700px\)/); assert.match(css, /#btn-compact \{ display: none; \}/); assert.match(css, /prefers-reduced-motion/);
-  assert.match(app, /matchMedia\('\(max-width: 700px\)'\)/); assert.match(app, /next === 'compact'\) next = 'expanded'/); assert.match(app, /setMode\('expanded'\)/); assert.match(app, /setMode\('compact'\)/); assert.match(app, /\/api\/wakes/); assert.match(app, /\/api\/thread/); assert.match(app, /Inspect wake/); assert.match(wave, /class CornerWave/);
+  assert.match(app, /matchMedia\('\(max-width: 700px\)'\)/); assert.match(app, /next === 'compact'\) next = 'expanded'/); assert.match(app, /setMode\('expanded'\)/); assert.match(app, /setMode\('compact'\)/); assert.match(app, /\/api\/wakes/); assert.match(app, /\/api\/thread/); assert.match(app, /Inspect wake/); assert.match(app, /wakesForActiveSession/); assert.match(app, /This lifespan/); assert.match(html, /This lifespan/); assert.match(wave, /class CornerWave/);
   const surface = `${html}\n${css}\n${app}\n${wave}`.toLowerCase();
   for (const residue of ['chronicle', 'vault', 'forest', 'reach', 'empty reply', 'looking']) assert.equal(surface.includes(residue), false, `surface contains forbidden residue: ${residue}`);
 });

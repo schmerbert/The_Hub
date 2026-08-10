@@ -1,6 +1,6 @@
 # Corner Surface Adaptation
 
-**Status:** Approved second mission for First Breath
+**Status:** Implemented; current Corner surface contract
 **Source reference:** `[private local prototype path omitted]` (read-only user-owned prototype)
 **Supersedes:** The generic visual treatment in `FIRST_BREATH.md` section 10; all causal and accessibility requirements remain
 
@@ -54,12 +54,19 @@ Animation is ambience around explicit text. It must never be the only status ind
 
 ## 5. Conversation rail
 
-- Restore existing thread events on load.
+- On load, show only the **active lifespan session**: user/resident utterances (and retained step slips) for `session.id`, not the forever thread.
+- Earlier closed sessions remain in the Source Ledger and wake inspection APIs; the rail does not replay them after restart.
+- The rail heading notes “This lifespan” and may disclose how many earlier lifespans are closed.
 - Distinguish user ground, resident model-signed testimony, and host receipts/failures.
+- Keep the utterance rail to user and final resident utterances only. Host operational material never appears there as speech.
 - Show one inspection control per wake, not a duplicate on every event from the same wake.
 - Preserve exact text with safe DOM construction; no untrusted HTML insertion.
 - Keep the composer operable by keyboard and on a narrow phone.
 - Disable duplicate submission while a request is active.
+
+### Active-wake gap
+
+The gap between the log and composer is a polite live region for short host-authored Step Slips. While busy, Corner polls health for `activeWakeId` and projects that wake's persisted phases and World receipts. Phase, action, pending, and refused-outcome slips are slim rows; exact non-empty `reasoning_content` is an expandable disclosure. On completion, the slips move under the wake as collapsed Steps and the live gap clears for the next wake. The projection never asks an LLM to summarize and never inserts tool JSON, Hearth Scroll text, or reasoning into the conversation rail.
 
 ## 6. Looking/inspection tray
 

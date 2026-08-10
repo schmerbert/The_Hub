@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This specification is adopted for the next Hub slice. It extends, rather than rewrites, the completed Session/Hearth v1 implementation.
+**Status: Implemented.** This specification extends, rather than rewrites, the completed Session/Hearth v1 implementation. Its room/Wild/exhale non-goals describe this historical slice; later adopted specifications added rooms and Workshop Wild admission, while exhale remains unimplemented.
 
 Circulation v1 adds:
 
@@ -105,4 +105,3 @@ The current Home Forest must remain bijective with eligible human/resident utter
 - No provider-visible request bypasses the presentation Scrub.
 - Existing pre-return-custody Spine frames remain valid ancestry.
 - Live Home Forest counts and source bijection remain unchanged by migration and verification.
-

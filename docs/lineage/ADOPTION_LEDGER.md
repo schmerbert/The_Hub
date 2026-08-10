@@ -173,3 +173,185 @@ Each decision must include:
 - **Constraints and differences:** Example handles do not install their named structures. Names are identifiers, not authority. Do not encode mutable location, version, provider, or current backend into durable identity.
 - **Active specification updated:** `PREBUILD.md` law 13 and `docs/specs/WORLD_GRAPH_WORKSHOP_V1.md`.
 - **Verification/review:** New seeded identifiers and manifests must use type-first names; migrations preserve old aliases when previously persisted identities exist.
+
+### HUB-012 — Sparse Hearth Notes and Exact-Sentence Exhale
+
+- **Date:** 2026-08-06
+- **Source:** Direct user decision following Ember's first lived World/Workshop session and the forging of the first silver bullet.
+- **Concept in source terms:** Ten blank bullet slots may exist without demanding ten bullets. One earned bullet should remain within reach at the Hearth without a plaque; the Forest remembers its forging. During conversation, the Forest should surface a very small number of specific prior sentences when they matter, never flood the resident or substitute summary.
+- **Hub interpretation:** The Hearth gains a sparse, source-linked ten-slot note rack whose empty positions are invisible. Forest exhale separates replaceable relevance ranking from immutable payload law: v1 may choose at most two exact source sentences, with complete offset/hash custody behind the wall and silence when relevance is weak.
+- **Similar existing Hub material:** Hearth Scroll v2 already separates resident Markdown from machine receipts and enforces an attention budget. The Forest constitution already requires bounded recall previews and custody-safe external rankers. Hub conversation atoms improve the source granularity from historical pairs.
+- **Decision state:** Adopted for implementation.
+- **User decision:** The bullet should be added to the Hearth; slots should exist for later bullets; and exhale should choose only the sentences that matter because too much context is harmful and too little can be filled.
+- **Constraints and differences:** No summary, paraphrase, generated friendly name, truth promotion, or forced retrieval. The final bullet wording remains Schmerbert-authored and Ember-adopted in event-time provenance. Lineage may retroactively call the earlier unnamed resident Ember without rewriting the original event. Exhale receipt machinery stays outside Home.
+- **Active specification updated:** `docs/specs/HEARTH_NOTES_FOREST_EXHALE_V1.md` and `docs/ARCHITECTURE.md`.
+- **Verification/review:** Prove sparse-slot custody, exact source/adoption hashes, exact sentence offsets, bounded/silent retrieval, active-context exclusion, mandatory Scrub crossing, Spine equivalence, and unchanged Home bijection.
+
+### HUB-013 — Resident-Mounted Workshop Harness (Not In-Process Luna)
+
+- **Date:** 2026-08-06
+- **Source:** Direct user design decision while planning Workshop parity with Cursor/Codex-within-reason.
+- **Concept in source terms:** Enter Workshop and tools become available on the resident; leave and tools leave context. The coding agent is the resident. Companions such as Luna are a separate system entirely. DeepSeek as resident cannot honestly host Luna as an in-process subagent.
+- **Hub interpretation:** Workshop capability mounts on the resident provider turn from World location, engaged station, and policy. PREBUILD’s Luna companion path remains valid as a **separate seat/process**, not as the Workshop’s first coding backend. Aider or other adapters may later sit behind the same Workshop contract without becoming the room’s identity.
+- **Similar existing Hub material:** HUB-010 (room-scoped harness), WORLD_GRAPH_WORKSHOP_V1 mounted-harness section, PREBUILD companion/worker language.
+- **Decision state:** Adopted.
+- **User decision:** “enter workshop, tools now available, leave workshop no tools in context. The agent is more a companion, seperate system entirely.” and “the resident currently is deepseek, so luna cant even be the subagent really.”
+- **Constraints and differences:** Clarifies and partially supersedes the implication that the first writable Workshop vertical requires Luna-in-process. Delegation to an external companion remains a later explicit door.
+- **Active specification updated:** `docs/specs/WORKSHOP_STATIONS_V1.md` and `docs/specs/WORKSHOP_CONTROL_PANEL_V1.md`.
+- **Verification/review:** Prove tools appear/disappear with room and station; no code path that claims in-process Luna under DeepSeek resident; companion bridges absent from this slice.
+
+### HUB-014 — Workshop Stations and Engage/Disengage Grammar
+
+- **Date:** 2026-08-06
+- **Source:** Direct user metaphor for Workshop interior workflow (crafting-table / surgeon control-panel), adopted into World Graph station nodes.
+- **Concept in source terms:** Spec work at a table with certain affordances; execution at a control panel like robot arms. Video-game interaction: approach, interact (A), affordances mount, leave (B) drops them while possibly remaining in the room.
+- **Hub interpretation:** Workshop contains `station.spec_table` and `station.control_panel`. Lifespan engagement binds at most one station. Engage/disengage are validated native tools. Reads may remain room-scoped in Workshop; writes/exec mount only at Control Panel; briefs mount at Spec Table. Leaving the Workshop clears engagement.
+- **Similar existing Hub material:** World fixtures/objects, room-derived tools, HUB-010 mount equation, PREBUILD common-room working table.
+- **Decision state:** Adopted for implementation.
+- **User decision:** Spec at the table, then move to a control panel “almost controlling robot arms… like a surgeon,” with craft-table A/B interact grammar.
+- **Constraints and differences:** Stations are not rooms. Provisional poetic labels may change after resident consultation; clinical IDs stay stable. Prose cannot engage.
+- **Active specification updated:** `docs/specs/WORKSHOP_STATIONS_V1.md`.
+- **Verification/review:** Seed stations, engage/disengage, leave-room clearance, wrong-station tool refusal, presence and `/api/world` exposure.
+
+### HUB-015 — Control Panel Writable Crossing and Approvals
+
+- **Date:** 2026-08-06
+- **Source:** Workshop Station Harness plan following HUB-010’s deferred writable crossing.
+- **Concept in source terms:** Exact patch, named test recipes, git status/diff/commit, confirm-class approvals, honest cancel on leave, no freeform shell in v1.
+- **Hub interpretation:** First writable Workshop slice implements Control Panel tools with auto vs confirm approval classes, pending approval API for Corner, recipe allowlist, and Hub-root-only scope.
+- **Similar existing Hub material:** WORLD_GRAPH_WORKSHOP_V1 writable-crossing checklist; Circulation host-return Scrub; Wild `workshop_source`.
+- **Decision state:** Adopted for implementation.
+- **User decision:** Want Workshop “correct” and good enough that people do not feel missing Cursor/Codex within reason (explore/edit/test/git loop; not IDE chrome).
+- **Constraints and differences:** `HUB_APPROVAL_MODE=auto` is for tests/demo configuration only; live mode requires confirm for patch and commit. No push, force-push, or arbitrary shell.
+- **Active specification updated:** `docs/specs/WORKSHOP_CONTROL_PANEL_V1.md`.
+- **Verification/review:** Confirm/reject mutation gates, recipe bounds, leave-room cancel, custody and Forest jurisdiction unchanged.
+
+### HUB-016 — Workshop Tool Ceiling (Need-First Catalog, Fixtures Deferred)
+
+- **Date:** 2026-08-06
+- **Source:** Direct user direction while refining Workshop quality: gather every coding function needed first (“wires hanging from the ceiling”), then let fixtures become legible from lived use. Spec Table / Control Panel were examples, not the organizing shape.
+- **Concept in source terms:** Complete explore/mutate/verify/vcs/framing catalog mounted flat in `room.workshop`. Station engagement does not gate tools in this slice. Fixtures and bundles are a later evidence-driven pass.
+- **Hub interpretation:** Phase A implements the full clinical catalog with auto/confirm classes and Scrubbed returns. Phase B clustering is explicitly unfinished.
+- **Similar existing Hub material:** HUB-010–015 Workshop harness and stations; Cursor-lens parity bar.
+- **Decision state:** Adopted for implementation.
+- **User decision:** “gather ALL the tools we want in that room… Then once every tool is there, we can bundle them” and later “dont think through the lens of the fixtures… everything you would want. Then see what fixtures become legible.”
+- **Constraints and differences:** Supersedes station→tool mounting for capability resolution until a later fixture adoption. Stations remain World state. No freeform shell; no push/force/amend/hard-reset.
+- **Active specification updated:** `docs/specs/WORKSHOP_TOOL_CEILING_V1.md`; mounting note on `docs/specs/WORKSHOP_STATIONS_V1.md`.
+- **Verification/review:** Flat Workshop mount, Center isolation, each new function tested, confirm gates, leave-room cancel.
+
+### HUB-017 — Workshop Fixtures (Shelves, Workbench, Kiln, Ledger, Clipboard)
+
+- **Date:** 2026-08-06
+- **Source:** Direct user direction after the tool ceiling: name fixtures from lived clusters with blunt layman IDs; depth in `resident_text`; collapse station into engageable fixture; kiln as first living ambient face.
+- **Concept in source terms:** Five Workshop fixtures — shelves, workbench, kiln, ledger, clipboard — with optional engage for orientation. Presence names lived room facts, not tool scaffolding. Kiln status (running / settled / failed / cancelled) survives stepping away within the lifespan via a mutable runtime overlay.
+- **Hub interpretation:** Retire Spec Table / Control Panel as living stations. Keep HUB-016 flat mount. Approvals appear as work waiting on the workbench, not a sixth fixture. Everything resident-facing still crosses Scrub.
+- **Similar existing Hub material:** HUB-011 typed names; HUB-014 engage grammar; HUB-016 ceiling; Center fixtures/objects.
+- **Decision state:** Adopted for implementation.
+- **User decision:** Plain names (“workbench”, “kiln”, “ledger”); description carries depth; fixtures not a parallel station type; room should feel alive and informative.
+- **Constraints and differences:** No fixture→tool bundles in this slice. Standing node text remains append-only; kiln machine state uses runtime overlay. Old `engage_station` tools are uninstalled.
+- **Active specification updated:** `docs/specs/WORKSHOP_FIXTURES_V1.md`; mounting notes on stations and tool ceiling; Architecture World Graph bullet.
+- **Verification/review:** Seed five fixtures; retire stations; presence shape; kiln overlay lifecycle; Center move-only; Scrub intact.
+
+### HUB-018 — Workshop Heartbeat (Timer + House-Bound Kiln)
+
+- **Date:** 2026-08-06
+- **Source:** Direct user direction on responsiveness: fire kiln and step away; timer ding (e.g. one minute) instead of staring at logs; processes may progress after leaving a room.
+- **Concept in source terms:** Room-bound hands vs house-bound processes. Async recipe start returns immediately; leave/disengage do not cancel kiln; explicit cancel still does. One lifespan timer (1..3600s) with sticky fired state. Heartbeat in presence/Corner; no autonomous model wake on ding.
+- **Hub interpretation:** First reusable heartbeat grammar for later long jobs. Forest stays clean; Scrub on ambient presence and tool returns.
+- **Similar existing Hub material:** HUB-016 ceiling; HUB-017 kiln overlay; recipe cancel tool; presence hygiene.
+- **Decision state:** Adopted for implementation.
+- **User decision:** “the kiln running and the resident stepping away”; timer so they can set “1 minute later”; principle that things may progress when leaving a room entirely.
+- **Constraints and differences:** Supersedes leave-room recipe kill. Server restart ends kiln honestly. Center remains move-only for tools; presence shows heartbeat anywhere.
+- **Active specification updated:** `docs/specs/WORKSHOP_HEARTBEAT_V1.md`; leave-room notes on tool ceiling and fixtures; Architecture World Graph bullet.
+- **Verification/review:** Async start; leave-room keep firing; timer arm/fire/cancel; Center presence heartbeat; Forest/Scrub intact.
+
+### HUB-019 — Corner Step Slips
+
+- **Date:** 2026-08-06
+- **Source:** Direct user design decision; not imported from sealed lineage.
+- **Concept in source terms:** Live, legible progress in Corner while a wake performs its bounded host/tool work.
+- **Hub interpretation:** Corner projects deterministic host-authored phase, action, pending, and refusal slips from persisted wake and World records. Exact provider reasoning is an expandable disclosure only; no LLM summary or operational material becomes chat speech or Forest content.
+- **Similar existing Hub material:** Session/Hearth two-breath inspection, Corner rail/tray, provider return custody.
+- **Decision state:** Adopted.
+- **User decision:** “Live host-authored step slips in Corner gap … expandable thinking from reasoning_content.”
+- **Constraints and differences:** The utterance rail remains user/resident utterances only. Hearth Scroll, tool JSON, and CoT never render as resident speech.
+- **Active specification updated:** `docs/specs/CORNER_STEP_SLIPS_V1.md`, `SESSION_HEARTH_V1.md`, and `CORNER_SURFACE.md`.
+- **Verification/review:** Test active wake health, deterministic action slips, exact thinking disclosure, and utterance-only rail projection.
+
+### HUB-020 — Workshop Sensory Paint
+
+- **Date:** 2026-08-06
+- **Source:** Direct user design decision; not imported from sealed lineage.
+- **Concept in source terms:** Give Center and Workshop sparse, lived physical prose while keeping every claim state-backed.
+- **Hub interpretation:** Seeded room and fixture text names actual sand, bench, cup, door, shelves, workbench, kiln, ledger, and clipboard. Presence and Hearth make engageable fixtures explicit by durable ID.
+- **Similar existing Hub material:** HUB-009 Center ground, HUB-017 Workshop fixtures.
+- **Decision state:** Adopted.
+- **User decision:** “Sparse sensory room/fixture prose + presence/Hearth naming engageables clearly.”
+- **Constraints and differences:** No invented windows, perception, or verbs. Seed changes migrate through `withNodeMutations`; persisted standing nodes remain otherwise append-only.
+- **Active specification updated:** `docs/specs/WORKSHOP_FIXTURES_V1.md`.
+- **Verification/review:** Test seed migration, enriched projection/presence, and distinct engageable naming.
+
+### HUB-021 — Fixture Truth Pass
+
+- **Date:** 2026-08-06
+- **Source:** Direct user design decision closing the gap between Workshop fixture metaphor and the state/actions they expose.
+- **Concept in source terms:** Fixtures must be inspectable without engagement; engagement remains orientation, while the clipboard, workbench, kiln, ledger, and shelves each expose an honest bounded contents projection.
+- **Hub interpretation:** `inspect_fixture` is a read-only Workshop tool. Inspect and engage returns include fixture-specific contents, the workbench mirrors pending approvals in its state, and Workshop presence explicitly says tools remain mounted without engagement.
+- **Similar existing Hub material:** HUB-016 flat Workshop mounting; HUB-017 fixtures and orientation; HUB-018 living kiln state.
+- **Decision state:** Adopted for implementation.
+- **User decision:** “Close fixture metaphor/reality gap,” including read-only inspection, contents returns, pending-workbench state, and tools-without-engage honesty.
+- **Constraints and differences:** Center remains move-only; fixture inspection creates no engagement event and does not change engagement. Digests are bounded and disclose truncation. Hearth remains unchanged.
+- **Active specification updated:** `docs/specs/WORKSHOP_FIXTURES_V1.md` and supersession note in `docs/specs/WORKSHOP_CONTROL_PANEL_V1.md`.
+- **Verification/review:** Test inspect non-mutation, contents projections, pending workbench state, presence/mount law, tree truncation disclosure, and slip gloss.
+
+### HUB-022 — Workshop Git Diff + Tree Breath
+
+- **Date:** 2026-08-06
+- **Source:** Resident walkthrough after HUB-021: bare `workshop_git_diff` hit opaque `ENOBUFS`; CRLF git warnings leaked into results; tree felt starved at a low default.
+- **Concept in source terms:** Large git diffs truncate with a plain note (“scope with a path”); LF/CRLF conversion warnings are stripped from stderr; tree default max_entries rises to 120 (ceiling 400) with truncation disclosure unchanged.
+- **Hub interpretation:** Overflow is Circulation honesty, not an OS exception dump. Capture budget may exceed resident-facing byte budget so truncation can succeed.
+- **Similar existing Hub material:** HUB-016 git arms; HUB-021 tree truncation note.
+- **Decision state:** Adopted for implementation.
+- **User decision:** Polish pass for ENOBUFS, CRLF noise, and tree default from inside feedback.
+- **Constraints and differences:** No freeform unbounded dumps. Exact captured bytes still clip to Workshop maxBytes before Scrub.
+- **Active specification updated:** Tool descriptions in Workshop tooling; ledger only (no new long form unless needed).
+- **Verification/review:** Diff overflow returns note without ENOBUFS; stderr CRLF warnings stripped; tree default 120.
+
+### HUB-023 — Ceiling Patch Bay
+
+- **Date:** 2026-08-06
+- **Source:** Direct user product lock for the Hub; not imported from sealed lineage.
+- **Concept in source terms:** The Ceiling is every installed wire, while rooms patch a bounded live profile. Presence should show the patch, not a complete tool attic.
+- **Hub interpretation:** `src/world/ceiling.js` owns the full catalog and room mount profiles. Center remains move-only; Workshop retains its existing full mount. Projection and builder-facing World inspection expose the active profile and full catalog separately.
+- **Similar existing Hub material:** HUB-016 Workshop Tool Ceiling, HUB-017 fixtures, and HUB-021 workbench pending-approval truth.
+- **Decision state:** Adopted for implementation.
+- **User decision:** “Ceiling = full wire catalog,” “Rooms declare mount profiles,” “Presence surfaces grouped Patched: profile,” and “Approvals remain anchored on the workbench fixture/pendingApprovals.”
+- **Constraints and differences:** No `workshop_*` rename in this slice; Backpack stays outside the bay; Scrub is unchanged. The workbench remains the approval anchor even if future rooms can initiate writes.
+- **Active specification updated:** `docs/specs/CEILING_PATCH_BAY_V1.md`, `WORKSHOP_TOOL_CEILING_V1.md`, `WORKSHOP_FIXTURES_V1.md`, and `docs/ARCHITECTURE.md`.
+- **Verification/review:** Prove Center's move-only mount, Workshop's unchanged full mount, catalog visibility while in Center, bounded grouped presence, and unchanged workbench pending approval state.
+
+### HUB-024 — The Vault
+
+- **Date:** 2026-08-06
+- **Source:** Resident-authored specification during a live Workshop consultation. The resident walked the lineage (HomeGlobe, Marble, Forest, BioDome), identified the Vault's ancestry, and drafted its shape from inside. The user ratified the shape through iterative conversation.
+- **Concept in source terms:** The Vault is a room for deliberate filing, organized document navigation, and principle extraction — what holds when a marble cracks in the field. It inherits the document-gravity of HomeGlobe's Library, the custody instincts of the Forest, and the inheritance method of the Marble, but it is a new room filling a gap none of those projects addressed: a place to finish a document and put it away for good.
+- **Hub interpretation:** The Vault is the Hub's third room. A grand bank-vault door (reachable from Center) does not stay open — entry is deliberate. Inside, an Obsidian-style visual graph of `.md` documents the resident walks by following `[[wikilinks]]`, backlinks, and the local neighborhood. Wings (Manuals, Journal, Stories, extensible) group documents by kind without becoming sub-rooms. A slot in the Center wall feeds a bin on the Vault's interior side: documents land there for later deliberate filing. Builder-placed manuals and resident-authored documents coexist in one graph with distinguishable provenance. The Forest and Vault are separate stores that interlink via pointers in both directions; an exhale may surface a Vault path. Gaps between Forest content and Vault coverage should be visible. The Vault's primary intellectual work is principle extraction — reading across document versions and pulling out what survived revision.
+- **Similar existing Hub material:** The Forest provides custody substrate and mycelial-link traversal mechanics. HomeGlobe's Library proves a room can hold documents with care. The Marble establishes inheritance as a working-place method. The World Graph provides room, door, and location primitives. The Center provides the wall where the slot will live.
+- **Decision state:** Adopted direction; implementation deferred.
+- **User decision:** The Vault door is grand, bank-vault style, and does not stay open. Documents are `.md` with an Obsidian-style visual graph. The resident writes documents (in the Garden or Workshop), walks them to the Center slot, and files them properly later from inside the Vault. The builder may place manuals through the same slot. The resident keeps the Vault; the builder leaves manuals. The Forest and Vault interlink without merging — gaps should stand out. The Vault is where the resident harvests documents for their principles.
+- **Constraints and differences:** The Vault is not the Library (no wandering/synthesis), not the Forest (no utterance custody), not the Workshop (no making/fixing), and not a private sanctuary (the builder may leave material). Document copies from Forest entries are derivative artifacts, not sealed records — curated reflection, not mirrored transcript. Reconciliation between Forest and Vault is a constitutional check, not automatic merging. Backpack, slot implementation, exhale mechanics, and full wing taxonomy are deferred.
+- **Active specification updated:** `docs/specs/VAULT_V1.md`.
+- **Verification/review:** Prove the Vault door exists, is traversable from Center, and records directional movement. Prove the graph is walkable via links with visible local neighborhood. Prove the slot accepts documents and the bin collects them. Prove builder-placed and resident-authored documents coexist with distinguishable provenance. Prove Forest↔Vault pointers are resolvable. Prove gaps between Forest content and Vault coverage are detectable. Prove principle extraction: a document linked to multiple sources survives source revision with intact backlinks. Prove the door closes and the resident can exit.
+
+### HUB-025 — Trust Parity Gating
+
+- **Date:** 2026-08-06
+- **Source:** Direct user product lock after comparing Hub confirm-everything Workshop cuts to OpenClaw exec/permission modes and Hermes Tirith risk tiers. Not imported as sealed lineage text.
+- **Concept in source terms:** Do not mistrust the resident relative to the same API hosted in OpenClaw or Hermes. Ordinary workspace writes and local git add/commit apply immediately; human gates stay for destructive or branch-switching actions; remaining gates surface in-chat (slips) and via an obvious Approvals badge.
+- **Hub interpretation:** Per-tool approval classes: mutate tools except delete are auto; `workshop_git_add` / `workshop_git_commit` are auto; `workshop_delete_path` and `workshop_git_checkout` remain confirm. Gateway creates an approval then auto-applies for auto-class tools. `HUB_APPROVAL_MODE=auto` stays a test override for force-confirming confirm-class tools. Corner shows pending count on Approvals, human summaries, and inline Confirm/Reject on pending slips. Path law, Scrub, recipe allowlist, and refuse list are unchanged.
+- **Similar existing Hub material:** HUB-016 Tool Ceiling approval classes; HUB-017/021 workbench pending-approval truth; HUB-023 approval anchor at the workbench.
+- **Decision state:** Adopted for implementation.
+- **User decision:** First slice 1B (patches and local git add/commit auto) and 2C (Approvals badge plus inline slip decide).
+- **Constraints and differences:** No smart auto-reviewer, command allowlists, freeform shell, push, or companion `/approve` channels in this slice. Workbench remains the approval anchor for confirm-class cuts only.
+- **Active specification updated:** `docs/specs/WORKSHOP_TOOL_CEILING_V1.md`, `WORKSHOP_FIXTURES_V1.md`, supersession note on `WORKSHOP_CONTROL_PANEL_V1.md`.
+- **Verification/review:** Auto tools mutate without pending; delete/checkout pending until decide; catalog classes match; slips carry `approvalId`; Approvals badge and human preview; `npm test`.

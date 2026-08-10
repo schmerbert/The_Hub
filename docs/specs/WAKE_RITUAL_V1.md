@@ -2,7 +2,7 @@
 
 ## Status
 
-Adopted for the first inhabited Hub. This specification defines the smallest always-present wake anchor. It does not implement Forest retrieval, threshold objects, change-folds, autonomous waking, spatial movement, or the resident's deliberate carry-forward gesture.
+**Implemented ancestry; constitutional ground and blessing provenance retained.** Session/Hearth v1 superseded the presentation ordering below: the clinical bootstrap remains transport ground, while the resident-authored blessing now arrives once per lifespan through the first `tend_hearth` return rather than being independently injected on every provider request. This slice did not implement Forest retrieval, threshold objects, change-folds, autonomous waking, spatial movement, or the resident's deliberate carry-forward gesture; later World specifications added spatial state.
 
 ## Resident decision
 

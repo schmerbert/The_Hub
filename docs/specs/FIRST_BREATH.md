@@ -1,6 +1,6 @@
 # First Breath — Technical Specification
 
-**Status:** Approved implementation starting point  
+**Status:** Implemented ancestry; later Session/Hearth, Circulation, World, Workshop, and Corner slices supersede its context, capability, and surface ceilings
 **Scope:** One resident, one thread, one honest wake  
 **Implementation owner:** Luna coding subagent  
 **Architecture and review owner:** Primary orchestrator  

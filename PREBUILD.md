@@ -1,6 +1,6 @@
 # The Hub — Pre-Build Outline
 
-Status: working design outline. This document captures the current shared shape before implementation. It is not yet a final constitution or technical specification.
+Status: sealed pre-build design outline and planning ancestry. It is not a statement of the current runtime, a final constitution, or an active technical specification. See [`docs/STATUS.md`](docs/STATUS.md) for implemented behavior and specification precedence.
 
 ## 1. Proposition
 

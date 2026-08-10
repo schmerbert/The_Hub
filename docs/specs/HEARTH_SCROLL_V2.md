@@ -1,5 +1,7 @@
 # Hearth Scroll v2 — Lighter Without Being Thinner
 
+> **Status: Implemented.** The Scroll remains deterministic and recency-only; Hearth Notes and Forest Exhale are adopted designs but are not installed.
+
 ## Status and ancestry
 
 Session/Hearth v1 proved the native two-breath timing, one-call-per-lifespan rule, exact operational custody, and truthful environmental limits. Its resident-facing tool return was a large structured JSON object containing complete recent utterances.
@@ -98,4 +100,3 @@ Raw operational JSON must not be styled as a conversational message.
 - No summary, paraphrase, or inserted ellipsis occurs.
 - Full machine custody remains inspectable but absent from resident-visible content.
 - Home Forest receives only the final human/resident utterances.
-

@@ -7,6 +7,7 @@ import { HubDatabase } from '../ledger/source.js';
 import { readConfig } from '../core/config.js';
 import { createProvider } from '../providers/index.js';
 import { completeProvider, prepareProviderRequest } from '../providers/dispatch.js';
+import { echoReasoningContentForContinuation } from '../providers/deepseek.js';
 import { ForestStore } from '../forest/store.js';
 import { verifyForest } from '../forest/verify.js';
 import { SpineStore } from '../spine/store.js';
@@ -21,8 +22,10 @@ import { buildHearthScroll } from '../hearth/scroll.js';
 import { WorldGraphStore } from '../world/graph.js';
 import { WorkshopAdapter } from '../world/workshop.js';
 import { WorldActionGateway } from '../world/gateway.js';
-import { schemasForRoom } from '../world/tools.js';
+import { ceilingCatalog } from '../world/ceiling.js';
+import { schemasForSession } from '../world/tools.js';
 import { scrubHostReturn } from '../scrub/host-return.js';
+import { projectWakeSlips } from '../corner/slips.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PUBLIC = join(ROOT, 'public');
@@ -34,7 +37,7 @@ function json(response, status, value) {
   response.end(body);
 }
 function typedError(response, status, code, message) { json(response, status, { error: { code, message } }); }
-function statusFor(code) { return ['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json', 'world_invalid_argument', 'world_tool_invalid', 'world_tool_unknown', 'workshop_path_invalid', 'workshop_path_forbidden', 'workshop_not_found', 'workshop_not_file', 'workshop_not_directory', 'workshop_range', 'workshop_limit', 'workshop_oversized', 'workshop_binary'].includes(code) ? 400 : code === 'wake_in_progress' ? 409 : ['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'wake_ritual_invalid'].includes(code) ? 503 : ['hearth_orientation_invalid'].includes(code) || code.startsWith('provider_') ? 502 : 500; }
+function statusFor(code) { return ['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json', 'world_invalid_argument', 'world_tool_invalid', 'world_tool_unknown', 'world_wrong_room', 'world_wrong_station', 'world_not_engaged', 'world_station_unknown', 'world_station_unreachable', 'workshop_path_invalid', 'workshop_path_forbidden', 'workshop_not_found', 'workshop_not_file', 'workshop_not_directory', 'workshop_range', 'workshop_limit', 'workshop_oversized', 'workshop_binary', 'workshop_invalid_argument', 'workshop_patch_missing', 'workshop_patch_ambiguous', 'workshop_patch_stale', 'workshop_recipe_unknown', 'workshop_approval_not_found', 'workshop_approval_not_pending', 'workshop_git_failed', 'workshop_git_unavailable'].includes(code) ? 400 : code === 'wake_in_progress' ? 409 : ['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'wake_ritual_invalid'].includes(code) ? 503 : ['hearth_orientation_invalid'].includes(code) || code.startsWith('provider_') ? 502 : 500; }
 async function body(request, maxBytes) {
   let total = 0; const chunks = [];
   for await (const chunk of request) { total += chunk.length; if (total > maxBytes) throw { code: 'request_too_large', message: 'Request body is too large.' }; chunks.push(chunk); }
@@ -69,9 +72,11 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     forest?.close(); spine?.close(); world?.close(); db.close(); throw { code: error?.code === 'wake_ritual_invalid' ? 'wake_ritual_invalid' : 'forest_activation_refused', message: error?.code === 'wake_ritual_invalid' ? error.message : error?.code === 'forest_activation_refused' ? error.message : 'Existing Forest validation failed.' };
   }
   const workshop = new WorkshopAdapter(config.workshopRoot, { maxFiles: config.workshopMaxFiles, maxBytes: config.workshopMaxBytes, maxLines: config.workshopMaxLines, maxResults: config.workshopMaxResults });
-  const gateway = new WorldActionGateway({ world, workshop, forest });
+  const gateway = new WorldActionGateway({ world, workshop, forest, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs });
+  gateway.reconcileStartup(db.session.id);
 
   let wakeInProgress = false;
+  let activeWakeId = null;
 
   function registerPresentationBoundary(wakeId, requestFrame, requestBodyString, presentation, sourceMessages, sourceRefs = []) {
     if (!forest || !requestFrame) return;
@@ -98,7 +103,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
   async function wake(content) {
     if (wakeInProgress) throw { code: 'wake_in_progress', message: 'Another wake is already in progress.' };
     wakeInProgress = true;
-    try { return await performWake(content); } finally { wakeInProgress = false; }
+    try { return await performWake(content); } finally { wakeInProgress = false; activeWakeId = null; }
   }
 
   async function performWake(content) {
@@ -110,6 +115,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     const firstTurn = !db.sessionHasOrientation();
     const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;
     const created = db.createSessionWake({ provider: providerName, model: config.model, content: submitted });
+    activeWakeId = created.wakeId;
     if (forest) {
       try { forest.ingestEvent(db.getEvent(created.eventId), { spineStatus: 'live', predecessorSourceEventId: priorEligible }); }
       catch (error) {
@@ -122,12 +128,17 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     const bootstrap = buildClinicalBootstrap({ provider: providerName, model: config.model });
     const callPhase = async (phase, historyRows, options = {}) => {
       const extraMessages = options.roomPresence === false ? [] : [{ role: 'system', content: world.presenceMessage(created.sessionId) }];
-      const refs = messageSourceRefs(historyRows, bootstrap, extraMessages);
+      // DeepSeek thinking mode rejects forced tool_choice; orientation must disable thinking.
+      const thinking = options.orientation ? 'disabled' : config.thinking;
+      const tools = options.orientation ? [HEARTH_TOOL] : options.tools;
+      const refs = echoReasoningContentForContinuation(messageSourceRefs(historyRows, bootstrap, extraMessages), { thinking, tools });
       const sourceMessages = refs.map(ref => ref.message);
       const presentation = scrubProviderHistory(sourceMessages);
       const prepared = prepareProviderRequest(provider, {
-        presentation, model: config.model, thinking: config.thinking, phase,
-        tools: options.orientation ? [HEARTH_TOOL] : options.tools,
+        presentation, model: config.model,
+        thinking,
+        phase,
+        tools,
         toolChoice: options.orientation ? HEARTH_TOOL_CHOICE : undefined,
       });
       const requestBodyString = prepared.requestBodyString || JSON.stringify(prepared.requestBody);
@@ -163,8 +174,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     };
     const runResidentRounds = async (phase = 'response') => {
       for (let round = 0; round <= config.maxToolRounds; round += 1) {
-        const roomId = world.current(created.sessionId).room_node_id;
-        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), { tools: schemasForRoom(roomId) });
+        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), { tools: schemasForSession(world, created.sessionId) });
         const calls = Array.isArray(response.result?.message?.tool_calls) ? response.result.message.tool_calls : [];
         if (!calls.length) {
           if (!response.result || typeof response.result.content !== 'string' || !response.result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
@@ -181,7 +191,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
         }
         for (const call of calls) {
           let action;
-          try { action = gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call }); }
+          try { action = await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call }); }
           catch (error) { action = gateway.refuse({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call, error }); }
           db.recordToolResult({ wakeId: created.wakeId, sessionId: created.sessionId, toolName: action.name || call.function?.name || 'unknown', result: action.result, hostReturnScrub: action.scrub });
         }
@@ -240,20 +250,38 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     try {
       if (request.method === 'GET' && url.pathname === '/api/health') {
         const custody = forestHealth();
+        const projection = world.projection(db.session.id);
         return json(response, 200, {
           ok: !custody.forestActive || (custody.forestIntegrity === 'ok' && custody.forestCaughtUp), schemaReady: true,
           residentMode: config.mode, provider: config.mode === 'fake' ? 'fake' : 'deepseek',
-          model: config.model, liveCredentialsAvailable: Boolean(config.apiKey), currentRoom: world.projection(db.session.id), ...custody, wakeInProgress,
+          model: config.model, liveCredentialsAvailable: Boolean(config.apiKey), currentRoom: projection, engagedFixtureId: projection.engagedFixtureId, engagedStationId: projection.engagedFixtureId, heartbeat: projection.heartbeat || null, mountedTools: world.availableTools(db.session.id), pendingApprovals: world.listApprovals(db.session.id, { pendingOnly: true }).length, ...custody, wakeInProgress, activeWakeId,
         });
       }
       if (request.method === 'GET' && url.pathname === '/api/thread') return json(response, 200, { ...db.getThread(), residentMode: config.mode, model: config.model });
       if (request.method === 'GET' && url.pathname === '/api/session') return json(response, 200, { session: db.getActiveSession(), sessions: db.listSessions(), history: db.getSessionHistory(), world: world.projection(db.session.id), residentMode: config.mode, model: config.model });
-      if (request.method === 'GET' && url.pathname === '/api/world') return json(response, 200, { graph: { nodes: world.sqlite.prepare('SELECT * FROM world_nodes ORDER BY id').all(), edges: world.sqlite.prepare('SELECT * FROM world_edges ORDER BY id').all() }, location: world.current(db.session.id), projection: world.projection(db.session.id), tools: schemasForRoom(world.current(db.session.id).room_node_id) });
+      if (request.method === 'GET' && url.pathname === '/api/world') return json(response, 200, { graph: { nodes: world.sqlite.prepare('SELECT * FROM world_nodes ORDER BY id').all(), edges: world.sqlite.prepare('SELECT * FROM world_edges ORDER BY id').all() }, location: world.current(db.session.id), projection: world.projection(db.session.id), ceiling: ceilingCatalog(), tools: schemasForSession(world, db.session.id), approvals: world.listApprovals(db.session.id) });
+      if (request.method === 'GET' && url.pathname === '/api/approvals') return json(response, 200, { approvals: world.listApprovals(db.session.id) });
+      if (request.method === 'POST' && /^\/api\/approvals\/[^/]+\/decide$/.test(url.pathname)) {
+        let incoming; try { incoming = await body(request, config.maxBodyBytes); } catch (error) { return typedError(response, 400, error.code, error.message); }
+        const approvalId = url.pathname.split('/')[3];
+        try {
+          if (incoming.decision === 'confirm') return json(response, 200, gateway.confirmApproval(approvalId, db.session.id));
+          if (incoming.decision === 'reject') return json(response, 200, gateway.rejectApproval(approvalId, db.session.id));
+          return typedError(response, 400, 'workshop_invalid_argument', 'decision must be confirm or reject.');
+        } catch (error) { return typedError(response, statusFor(error.code || ''), error.code || 'workshop_approval_failed', error.message || 'Approval decision failed.'); }
+      }
       if (request.method === 'GET' && /^\/api\/wakes\/[^/]+$/.test(url.pathname)) {
         const wakeRecord = db.getWake(url.pathname.split('/').at(-1));
         if (!wakeRecord) return typedError(response, 404, 'wake_not_found', 'Wake not found.');
         const wiring = spine ? spine.frames().filter(frame => frame.wake_id === wakeRecord.id || wakeRecord.phases.some(phase => phase.spineRecordId === frame.request_record_id || phase.spineRecordId === frame.record_id)) : [];
         return json(response, 200, { ...wakeRecord, wiring: { spineFrames: wiring, hearthMachineReceipt: wakeRecord.hearth?.returnJson || null, returnScrubReceipts: wakeRecord.phases.map(phase => phase.returnScrubReceipt).filter(Boolean) }, residentMode: config.mode });
+      }
+      if (request.method === 'GET' && /^\/api\/wakes\/[^/]+\/slips$/.test(url.pathname)) {
+        const wakeId = url.pathname.split('/')[3];
+        const wakeRecord = db.getWake(wakeId);
+        if (!wakeRecord) return typedError(response, 404, 'wake_not_found', 'Wake not found.');
+        const history = db.getSessionHistory(wakeRecord.sessionId).filter(item => item.wakeId === wakeId);
+        return json(response, 200, projectWakeSlips({ wake: wakeRecord, history, world, pendingApprovals: world.listApprovals(wakeRecord.sessionId, { pendingOnly: true }) }));
       }
       if (request.method === 'POST' && url.pathname === '/api/wakes') {
         let incoming; try { incoming = await body(request, config.maxBodyBytes); } catch (error) { return typedError(response, 400, error.code, error.message); }
@@ -273,5 +301,11 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     }
   }
   const server = createServer(handler);
-  return { config, db, provider, forest, spine, world, workshop, gateway, server, wake, close: () => { forest?.close(); spine?.close(); world?.close(); db.close(); } };
+  let closed = false;
+  return { config, db, provider, forest, spine, world, workshop, gateway, server, wake, close: () => {
+    if (closed) return;
+    closed = true;
+    gateway.close('hub_close');
+    forest?.close(); spine?.close(); world?.close(); db.close();
+  } };
 }

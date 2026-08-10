@@ -1,6 +1,6 @@
 # Spine and Pristine Forest Intake — Technical Specification
 
-**Status:** Approved implementation slice
+**Status:** Implemented; current custody and ingestion contract
 **Date:** 2026-08-05
 **Implementation owner:** Luna coding subagent
 **Architecture and review owner:** Primary orchestrator

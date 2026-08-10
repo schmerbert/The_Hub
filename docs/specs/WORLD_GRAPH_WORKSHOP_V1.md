@@ -1,5 +1,7 @@
 # World Graph and Workshop v1 — The First Two Rooms
 
+> **Status: Implemented ancestry; current for Center/Workshop topology, World custody, movement, and the original read boundary.** Tool Ceiling, Fixtures, Heartbeat, and Ceiling Patch Bay later supersede this document's read-only capability ceiling, original seed cardinality, and affordance presentation. The historical text below is preserved as the contract that those slices extended.
+
 ## Status and scope
 
 This specification adopts the Hub's first tangible resident environment. It follows the resident's own room consultation and the user's explicit acceptance of three requested features: a packed-sand floor, a low stone bench, and a tin cup. It also installs one real door leading to a read-only Workshop where the resident can inspect the Hub's own code.

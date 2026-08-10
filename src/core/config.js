@@ -26,10 +26,12 @@ export function readConfig(env = process.env) {
     hearthExcerptLimit: Number(env.HUB_HEARTH_EXCERPT_LIMIT || 600),
     maxMessageLength: Number(env.HUB_MAX_MESSAGE_LENGTH || 4000),
     maxBodyBytes: Number(env.HUB_MAX_BODY_BYTES || 10000),
-    maxToolRounds: Number(env.HUB_MAX_TOOL_ROUNDS || 4),
+    maxToolRounds: Number(env.HUB_MAX_TOOL_ROUNDS || 8),
     workshopMaxFiles: Number(env.HUB_WORKSHOP_MAX_FILES || 100),
     workshopMaxBytes: Number(env.HUB_WORKSHOP_MAX_BYTES || 120000),
     workshopMaxLines: Number(env.HUB_WORKSHOP_MAX_LINES || 160),
     workshopMaxResults: Number(env.HUB_WORKSHOP_MAX_RESULTS || 50),
+    approvalMode: mode === 'fake' && env.HUB_APPROVAL_MODE === 'auto' ? 'auto' : 'confirm',
+    recipeTimeoutMs: Number(env.HUB_RECIPE_TIMEOUT_MS || 120000),
   };
 }

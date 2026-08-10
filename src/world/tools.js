@@ -1,8 +1,80 @@
+import { mountedToolNames } from './ceiling.js';
+
 export const MOVE_TOOL = { type: 'function', function: { name: 'move_through_door', description: 'Move through a declared door from the current room.', parameters: { type: 'object', properties: { door_id: { type: 'string' } }, required: ['door_id'], additionalProperties: false } } };
+export const FIXTURE_TOOLS = [
+  { type: 'function', function: { name: 'inspect_fixture', description: 'Look at a Workshop fixture without changing engagement or gating tools.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'engage_fixture', description: 'Engage a Workshop fixture for orientation only; use inspect_fixture for looking. Does not gate tools.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'disengage_fixture', description: 'Leave the currently engaged Workshop fixture.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+];
+
 export const WORKSHOP_TOOLS = [
   { type: 'function', function: { name: 'workshop_list', description: 'List exact names and types in a repository directory.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_read', description: 'Read an exact bounded contiguous source line range.', parameters: { type: 'object', properties: { path: { type: 'string' }, start_line: { type: 'integer', minimum: 1 }, line_count: { type: 'integer', minimum: 1 } }, required: ['path'], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_search', description: 'Search exact source lines with bounded results.', parameters: { type: 'object', properties: { query: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 } }, required: ['query'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_search_regex', description: 'Search source lines with a bounded regular expression; returns exact matching line spans.', parameters: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 }, flags: { type: 'string' } }, required: ['pattern'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_glob', description: 'Match repository-relative paths with a glob pattern.', parameters: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 } }, required: ['pattern'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_tree', description: 'Bounded-depth directory tree under a path (default max_entries 120, ceiling 400).', parameters: { type: 'object', properties: { path: { type: 'string' }, depth: { type: 'integer', minimum: 1 }, max_entries: { type: 'integer', minimum: 1 } }, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_stat', description: 'Return type, size, and mtime for one path.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_file_hash', description: 'Return SHA-256 of one text file under Workshop limits.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_apply_patch', description: 'Apply an exact single-path text replacement under Workshop path law.', parameters: { type: 'object', properties: { path: { type: 'string' }, old_text: { type: 'string' }, new_text: { type: 'string' } }, required: ['path', 'old_text', 'new_text'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_apply_unified_diff', description: 'Apply a unified diff under Workshop path law.', parameters: { type: 'object', properties: { diff: { type: 'string' } }, required: ['diff'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_write_file', description: 'Create or overwrite a whole file under Workshop path law.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_create_path', description: 'Create a directory or empty file under Workshop path law.', parameters: { type: 'object', properties: { path: { type: 'string' }, kind: { type: 'string', enum: ['file', 'directory'] } }, required: ['path', 'kind'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_delete_path', description: 'Propose deleting a single file or empty directory for Builder confirmation.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_rename_path', description: 'Rename or move a path within the Workshop root.', parameters: { type: 'object', properties: { from_path: { type: 'string' }, to_path: { type: 'string' } }, required: ['from_path', 'to_path'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_recipe_list', description: 'List installed Workshop recipes.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_run_recipe', description: 'Start a named Workshop recipe without blocking; kiln runs house-bound until settle/fail/cancel.', parameters: { type: 'object', properties: { recipe: { type: 'string' }, path: { type: 'string' }, script: { type: 'string' } }, required: ['recipe'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_recipe_status', description: 'Inspect kiln/recipe running state and last result.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_recipe_cancel', description: 'Cancel an in-flight Workshop recipe.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_timer_set', description: 'Arm a lifespan heartbeat timer (seconds 1..3600); replaces any prior timer.', parameters: { type: 'object', properties: { seconds: { type: 'integer', minimum: 1, maximum: 3600 } }, required: ['seconds'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_timer_status', description: 'Inspect the lifespan heartbeat timer.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_timer_cancel', description: 'Clear the lifespan heartbeat timer ding.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_status', description: 'Show git status for the Workshop repository root.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_diff', description: 'Show git diff for the Workshop repository. Large trees may truncate; scope with path when needed.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_log', description: 'Show a bounded recent git log.', parameters: { type: 'object', properties: { max_count: { type: 'integer', minimum: 1 } }, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_show', description: 'Show one commit or a path at a revision.', parameters: { type: 'object', properties: { revision: { type: 'string' }, path: { type: 'string' } }, required: ['revision'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_branch_list', description: 'List local git branches.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_add', description: 'Stage paths in the Workshop repository.', parameters: { type: 'object', properties: { paths: { type: 'array', items: { type: 'string' } }, update: { type: 'boolean' } }, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_commit', description: 'Create a local git commit in the Workshop repository.', parameters: { type: 'object', properties: { message: { type: 'string' }, paths: { type: 'array', items: { type: 'string' } } }, required: ['message'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_git_checkout', description: 'Propose checking out an existing local branch for Builder confirmation.', parameters: { type: 'object', properties: { branch: { type: 'string' } }, required: ['branch'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_brief_upsert', description: 'Create or update the session work brief.', parameters: { type: 'object', properties: { objective: { type: 'string' }, scope_paths: { type: 'array', items: { type: 'string' } }, acceptance: { type: 'array', items: { type: 'string' } }, non_goals: { type: 'array', items: { type: 'string' } } }, required: ['objective'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_brief_get', description: 'Read the current session work brief.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_pending_diff', description: 'Inspect pending Workshop approvals without applying them.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_approval_status', description: 'Inspect Workshop approval status.', parameters: { type: 'object', properties: { approval_id: { type: 'string' } }, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_approval_list', description: 'List pending and recent Workshop approvals for this lifespan.', parameters: { type: 'object', properties: { pending_only: { type: 'boolean' } }, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_tool_catalog', description: 'List mounted Workshop tools with descriptions and approval classes.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
 ];
-export function schemasForRoom(roomId) { return roomId === 'room.center' ? [MOVE_TOOL] : roomId === 'room.workshop' ? [MOVE_TOOL, ...WORKSHOP_TOOLS] : []; }
-export const TOOL_NAMES = new Set([MOVE_TOOL.function.name, ...WORKSHOP_TOOLS.map(tool => tool.function.name)]);
+
+export const TOOL_APPROVAL_CLASS = Object.freeze({
+  workshop_list: 'auto', workshop_read: 'auto', workshop_search: 'auto', workshop_search_regex: 'auto', workshop_glob: 'auto', workshop_tree: 'auto', workshop_stat: 'auto', workshop_file_hash: 'auto',
+  workshop_apply_patch: 'auto', workshop_apply_unified_diff: 'auto', workshop_write_file: 'auto', workshop_create_path: 'auto', workshop_rename_path: 'auto', workshop_delete_path: 'confirm',
+  workshop_recipe_list: 'auto', workshop_run_recipe: 'auto', workshop_recipe_status: 'auto', workshop_recipe_cancel: 'auto',
+  workshop_timer_set: 'auto', workshop_timer_status: 'auto', workshop_timer_cancel: 'auto',
+  workshop_git_status: 'auto', workshop_git_diff: 'auto', workshop_git_log: 'auto', workshop_git_show: 'auto', workshop_git_branch_list: 'auto',
+  workshop_git_add: 'auto', workshop_git_commit: 'auto', workshop_git_checkout: 'confirm',
+  workshop_brief_upsert: 'auto', workshop_brief_get: 'auto', workshop_pending_diff: 'auto', workshop_approval_status: 'auto', workshop_approval_list: 'auto', workshop_tool_catalog: 'auto',
+});
+
+const BY_NAME = new Map([MOVE_TOOL, ...FIXTURE_TOOLS, ...WORKSHOP_TOOLS].map(tool => [tool.function.name, tool]));
+export const TOOL_NAMES = new Set(BY_NAME.keys());
+export const WORKSHOP_TOOL_NAMES = WORKSHOP_TOOLS.map(tool => tool.function.name);
+
+export function schemasForTools(toolNames) {
+  return toolNames.map(name => BY_NAME.get(name)).filter(Boolean);
+}
+
+/** @deprecated Prefer schemasForSession */
+export function schemasForRoom(roomId) {
+  return schemasForTools(mountedToolNames(roomId));
+}
+
+export function schemasForSession(world, sessionId) {
+  return schemasForTools(world.availableTools(sessionId));
+}
+
+export function toolCatalogEntries(toolNames) {
+  return toolNames.filter(name => name.startsWith('workshop_')).map(name => {
+    const schema = BY_NAME.get(name);
+    return { name, description: schema?.function?.description || '', approvalClass: TOOL_APPROVAL_CLASS[name] || 'auto' };
+  });
+}

@@ -1,9 +1,11 @@
 # Orientation Receipt — Resident-Requested Slice
 
-**Status:** Approved implementation slice
+**Status:** Implemented ancestry; provider-presentation timing and capability truth were superseded by Session/Hearth and World Graph
 **Origin:** First direct resident consultation, relayed by Schmerbert from Codex
 **Implementation owner:** Luna coding subagent
 **Architecture and review owner:** Primary orchestrator
+
+> The stored `environment_manifest` remains compatibility/inspection ancestry. It is not the current provider capability manifest: actual callable tools are established by the exact provider request and the current room projection exposed through `/api/world`. The historical `exposed_tools: []` field must not be interpreted as a claim that the current resident has no mounted tools.
 
 ## 1. Finding
 
