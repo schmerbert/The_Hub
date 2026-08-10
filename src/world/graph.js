@@ -43,12 +43,14 @@ CREATE TABLE IF NOT EXISTS world_locations (session_id TEXT PRIMARY KEY, room_no
 CREATE TABLE IF NOT EXISTS world_location_events (event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, actor TEXT NOT NULL, from_room TEXT REFERENCES world_nodes(id), to_room TEXT NOT NULL REFERENCES world_nodes(id), edge_id TEXT REFERENCES world_edges(id), door_identity TEXT, created_at TEXT NOT NULL, attribution_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS world_action_receipts (receipt_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, room_node_id TEXT NOT NULL REFERENCES world_nodes(id), tool_name TEXT NOT NULL, arguments_json TEXT NOT NULL, result_json TEXT NOT NULL, outcome TEXT NOT NULL CHECK(outcome IN ('committed','refused')), request_record_id TEXT, spine_record_id TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS world_work_briefs (brief_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), objective TEXT NOT NULL, scope_paths_json TEXT NOT NULL, acceptance_json TEXT NOT NULL, non_goals_json TEXT NOT NULL, field_hashes_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS world_approvals (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, kind TEXT NOT NULL CHECK(kind IN ('patch','unified_diff','write_file','create_path','delete_path','rename_path','git_add','commit','git_checkout')), status TEXT NOT NULL CHECK(status IN ('pending','confirmed','rejected','cancelled')), payload_json TEXT NOT NULL, preview_json TEXT NOT NULL, outcome_json TEXT, created_at TEXT NOT NULL, decided_at TEXT);
+CREATE TABLE IF NOT EXISTS world_approvals (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, kind TEXT NOT NULL CHECK(kind IN ('patch','unified_diff','write_file','create_path','delete_path','rename_path','git_add','commit','git_checkout','sandbox_promotion')), status TEXT NOT NULL CHECK(status IN ('pending','confirmed','rejected','cancelled')), payload_json TEXT NOT NULL, preview_json TEXT NOT NULL, outcome_json TEXT, created_at TEXT NOT NULL, decided_at TEXT);
+CREATE TABLE IF NOT EXISTS world_approval_receipts (receipt_id TEXT PRIMARY KEY, approval_id TEXT NOT NULL REFERENCES world_approvals(approval_id), session_id TEXT NOT NULL, wake_id TEXT, phase TEXT NOT NULL CHECK(phase IN ('pending','confirmed','rejected','cancelled')), action_receipt_id TEXT NOT NULL REFERENCES world_action_receipts(receipt_id), result_json TEXT NOT NULL, host_return_scrub_json TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS world_fixture_runtime (fixture_id TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS world_timers (session_id TEXT PRIMARY KEY, seconds INTEGER NOT NULL CHECK(seconds>=1 AND seconds<=3600), due_at TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS world_location_events_session_order ON world_location_events(session_id, created_at, event_id);
 CREATE INDEX IF NOT EXISTS world_action_receipts_session_order ON world_action_receipts(session_id, created_at, receipt_id);
 CREATE INDEX IF NOT EXISTS world_approvals_session_order ON world_approvals(session_id, created_at, approval_id);
+CREATE INDEX IF NOT EXISTS world_approval_receipts_approval_order ON world_approval_receipts(approval_id, created_at, receipt_id);
 CREATE TRIGGER IF NOT EXISTS world_nodes_append_only_update BEFORE UPDATE ON world_nodes BEGIN SELECT RAISE(ABORT, 'standing world nodes are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS world_nodes_append_only_delete BEFORE DELETE ON world_nodes BEGIN SELECT RAISE(ABORT, 'standing world nodes are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS world_edges_append_only_update BEFORE UPDATE ON world_edges BEGIN SELECT RAISE(ABORT, 'standing world edges are append-only'); END;
@@ -57,6 +59,8 @@ CREATE TRIGGER IF NOT EXISTS world_location_events_append_only_update BEFORE UPD
 CREATE TRIGGER IF NOT EXISTS world_location_events_append_only_delete BEFORE DELETE ON world_location_events BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS world_action_receipts_append_only_update BEFORE UPDATE ON world_action_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS world_action_receipts_append_only_delete BEFORE DELETE ON world_action_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS world_approval_receipts_append_only_update BEFORE UPDATE ON world_approval_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS world_approval_receipts_append_only_delete BEFORE DELETE ON world_approval_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 `;
 
 function assertWithin(root, target) {
@@ -95,15 +99,19 @@ export class WorldGraphStore {
     const nodeSql = this.sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='world_nodes'").get()?.sql || '';
     if (nodeSql && !nodeSql.includes("'station'")) this.rebuildNodesForStations();
     const approvalSql = this.sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='world_approvals'").get()?.sql || '';
-    if (approvalSql && !approvalSql.includes('unified_diff')) this.rebuildApprovalsKinds();
+    if (approvalSql && (!approvalSql.includes('unified_diff') || !approvalSql.includes('sandbox_promotion'))) this.rebuildApprovalsKinds();
     this.sqlite.exec('CREATE TABLE IF NOT EXISTS world_fixture_runtime (fixture_id TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL)');
     this.sqlite.exec('CREATE TABLE IF NOT EXISTS world_timers (session_id TEXT PRIMARY KEY, seconds INTEGER NOT NULL CHECK(seconds>=1 AND seconds<=3600), due_at TEXT NOT NULL, created_at TEXT NOT NULL)');
+    this.sqlite.exec("CREATE TABLE IF NOT EXISTS world_approval_receipts (receipt_id TEXT PRIMARY KEY, approval_id TEXT NOT NULL REFERENCES world_approvals(approval_id), session_id TEXT NOT NULL, wake_id TEXT, phase TEXT NOT NULL CHECK(phase IN ('pending','confirmed','rejected','cancelled')), action_receipt_id TEXT NOT NULL REFERENCES world_action_receipts(receipt_id), result_json TEXT NOT NULL, host_return_scrub_json TEXT NOT NULL, created_at TEXT NOT NULL)");
+    this.sqlite.exec('CREATE INDEX IF NOT EXISTS world_approval_receipts_approval_order ON world_approval_receipts(approval_id, created_at, receipt_id)');
+    this.sqlite.exec("CREATE TRIGGER IF NOT EXISTS world_approval_receipts_append_only_update BEFORE UPDATE ON world_approval_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;");
+    this.sqlite.exec("CREATE TRIGGER IF NOT EXISTS world_approval_receipts_append_only_delete BEFORE DELETE ON world_approval_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;");
     this.migrateWorkshopFixtures();
   }
   rebuildApprovalsKinds() {
     this.sqlite.exec('PRAGMA foreign_keys=OFF;');
     this.sqlite.exec(`
-CREATE TABLE world_approvals_v2 (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, kind TEXT NOT NULL CHECK(kind IN ('patch','unified_diff','write_file','create_path','delete_path','rename_path','git_add','commit','git_checkout')), status TEXT NOT NULL CHECK(status IN ('pending','confirmed','rejected','cancelled')), payload_json TEXT NOT NULL, preview_json TEXT NOT NULL, outcome_json TEXT, created_at TEXT NOT NULL, decided_at TEXT);
+CREATE TABLE world_approvals_v2 (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, kind TEXT NOT NULL CHECK(kind IN ('patch','unified_diff','write_file','create_path','delete_path','rename_path','git_add','commit','git_checkout','sandbox_promotion')), status TEXT NOT NULL CHECK(status IN ('pending','confirmed','rejected','cancelled')), payload_json TEXT NOT NULL, preview_json TEXT NOT NULL, outcome_json TEXT, created_at TEXT NOT NULL, decided_at TEXT);
 INSERT INTO world_approvals_v2 SELECT * FROM world_approvals;
 DROP TABLE world_approvals;
 ALTER TABLE world_approvals_v2 RENAME TO world_approvals;
@@ -468,17 +476,37 @@ CREATE TRIGGER IF NOT EXISTS world_nodes_append_only_delete BEFORE DELETE ON wor
     }
     return pending.map(item => item.approvalId);
   }
+  recordApprovalReceipt({ approvalId, phase, actionReceiptId, result, hostReturnScrub }) {
+    const approval = this.getApproval(approvalId);
+    if (!approval) throw Object.assign(new Error('Approval not found.'), { code: 'workshop_approval_not_found' });
+    if (!['pending', 'confirmed', 'rejected', 'cancelled'].includes(phase)) throw Object.assign(new Error('Approval receipt phase is invalid.'), { code: 'workshop_invalid_argument' });
+    const scrub = hostReturnScrub?.receipt ? hostReturnScrub.receipt : hostReturnScrub;
+    if (!scrub || typeof scrub.receiptId !== 'string') throw Object.assign(new Error('Approval completion requires a host-return Scrub receipt.'), { code: 'host_return_scrub_invalid' });
+    const receiptId = id('approval_receipt');
+    this.sqlite.prepare('INSERT INTO world_approval_receipts(receipt_id,approval_id,session_id,wake_id,phase,action_receipt_id,result_json,host_return_scrub_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(receiptId, approvalId, approval.sessionId, approval.wakeId || null, phase, actionReceiptId, JSON.stringify(result), JSON.stringify(scrub), NOW());
+    return { receiptId, approvalId, phase, actionReceiptId, hostReturnScrubReceiptId: scrub.receiptId };
+  }
+  listApprovalReceipts(approvalId) {
+    return this.sqlite.prepare('SELECT receipt_id AS receiptId, approval_id AS approvalId, session_id AS sessionId, wake_id AS wakeId, phase, action_receipt_id AS actionReceiptId, result_json AS resultJson, host_return_scrub_json AS hostReturnScrubJson, created_at AS createdAt FROM world_approval_receipts WHERE approval_id=? ORDER BY created_at, receipt_id').all(approvalId)
+      .map(row => ({ ...row, result: JSON.parse(row.resultJson), hostReturnScrub: JSON.parse(row.hostReturnScrubJson) }));
+  }
   listLocationEvents(sessionId) { return this.sqlite.prepare('SELECT * FROM world_location_events WHERE session_id=? ORDER BY created_at,event_id').all(sessionId); }
   close() { this.sqlite.close(); }
 }
 
 export function seedWorldGraph(path) { const store = new WorldGraphStore(path); const result = { nodes: store.sqlite.prepare('SELECT COUNT(*) AS count FROM world_nodes').get().count, edges: store.sqlite.prepare('SELECT COUNT(*) AS count FROM world_edges').get().count }; store.close(); return result; }
 
-export function resolveRepositoryPath(root, requested, { allowMissing = false } = {}) {
+export function assertWorkshopRepositoryPath(requested) {
   if (typeof requested !== 'string' || !requested || requested.includes('\0') || isAbsolute(requested)) throw Object.assign(new Error('Workshop paths must be relative repository paths.'), { code: 'workshop_path_invalid' });
   const normalized = requested.replaceAll('\\', '/'); const parts = normalized.split('/');
   if (parts.includes('..') || parts.includes('') && normalized.startsWith('/')) throw Object.assign(new Error('Workshop traversal is refused.'), { code: 'workshop_path_invalid' });
-  if (parts.some(part => part === '.git' || part === '.runtime' || /^\.env(?:\.|$)/i.test(part) || /(credential|secret|token|password)/i.test(part))) throw Object.assign(new Error('Workshop protected paths are refused.'), { code: 'workshop_path_forbidden' });
+  if (parts.some(part => /^\.(?:git|runtime)$/i.test(part) || /^\.env(?:\.|$)/i.test(part) || /^\.gitignore$/i.test(part) || /(credential|secret|token|password)/i.test(part))) throw Object.assign(new Error('Workshop protected paths are refused.'), { code: 'workshop_path_forbidden' });
+  return normalized;
+}
+
+export function resolveRepositoryPath(root, requested, { allowMissing = false } = {}) {
+  const normalized = assertWorkshopRepositoryPath(requested); const parts = normalized.split('/');
   const absoluteRoot = realpathSync(root); const absolute = join(absoluteRoot, ...parts); assertWithin(absoluteRoot, absolute);
   const meaningfulParts = parts.filter(part => part && part !== '.');
   let cursor = absoluteRoot;

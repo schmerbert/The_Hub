@@ -1,4 +1,4 @@
-import { mountedToolNames } from './ceiling.js';
+import { CEILING_WIRES, mountedToolNames } from './ceiling.js';
 
 export const MOVE_TOOL = { type: 'function', function: { name: 'move_through_door', description: 'Move through a declared door from the current room.', parameters: { type: 'object', properties: { door_id: { type: 'string' } }, required: ['door_id'], additionalProperties: false } } };
 export const FIXTURE_TOOLS = [
@@ -26,6 +26,8 @@ export const WORKSHOP_TOOLS = [
   { type: 'function', function: { name: 'workshop_run_recipe', description: 'Start a named Workshop recipe without blocking; kiln runs house-bound until settle/fail/cancel.', parameters: { type: 'object', properties: { recipe: { type: 'string' }, path: { type: 'string' }, script: { type: 'string' } }, required: ['recipe'], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_recipe_status', description: 'Inspect kiln/recipe running state and last result.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_recipe_cancel', description: 'Cancel an in-flight Workshop recipe.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_sandbox_diff', description: 'Inspect the exact candidate diff in the active isolated Workshop job.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_sandbox_promote', description: 'Propose promoting the isolated job diff into the clean canonical checkout; always requires Builder confirmation.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_timer_set', description: 'Arm a lifespan heartbeat timer (seconds 1..3600); replaces any prior timer.', parameters: { type: 'object', properties: { seconds: { type: 'integer', minimum: 1, maximum: 3600 } }, required: ['seconds'], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_timer_status', description: 'Inspect the lifespan heartbeat timer.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_timer_cancel', description: 'Clear the lifespan heartbeat timer ding.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
@@ -49,6 +51,7 @@ export const TOOL_APPROVAL_CLASS = Object.freeze({
   workshop_list: 'auto', workshop_read: 'auto', workshop_search: 'auto', workshop_search_regex: 'auto', workshop_glob: 'auto', workshop_tree: 'auto', workshop_stat: 'auto', workshop_file_hash: 'auto',
   workshop_apply_patch: 'auto', workshop_apply_unified_diff: 'auto', workshop_write_file: 'auto', workshop_create_path: 'auto', workshop_rename_path: 'auto', workshop_delete_path: 'confirm',
   workshop_recipe_list: 'auto', workshop_run_recipe: 'auto', workshop_recipe_status: 'auto', workshop_recipe_cancel: 'auto',
+  workshop_sandbox_diff: 'auto', workshop_sandbox_promote: 'confirm',
   workshop_timer_set: 'auto', workshop_timer_status: 'auto', workshop_timer_cancel: 'auto',
   workshop_git_status: 'auto', workshop_git_diff: 'auto', workshop_git_log: 'auto', workshop_git_show: 'auto', workshop_git_branch_list: 'auto',
   workshop_git_add: 'auto', workshop_git_commit: 'auto', workshop_git_checkout: 'confirm',
@@ -70,6 +73,46 @@ export function schemasForRoom(roomId) {
 
 export function schemasForSession(world, sessionId) {
   return schemasForTools(world.availableTools(sessionId));
+}
+
+const RESIDENT_CORE_NAMES = Object.freeze([
+  'move_through_door',
+  'inspect_fixture',
+  'engage_fixture',
+  'disengage_fixture',
+  'workshop_tool_catalog',
+]);
+
+const FIXTURE_ATTENTION_GROUP = Object.freeze({
+  'fixture.workshop_shelves': 'explore',
+  'fixture.workshop_workbench': 'workbench',
+  'fixture.workshop_kiln': 'kiln',
+  'fixture.workshop_ledger': 'ledger',
+  'fixture.workshop_clipboard': 'clipboard',
+});
+
+/**
+ * Provider-facing schema fitting is deliberately separate from World authority.
+ * The World keeps the complete room catalog mounted; this function only chooses
+ * which schemas consume resident attention on the next provider crossing.
+ */
+export function residentToolProfile(world, sessionId) {
+  const available = world.availableTools(sessionId);
+  if (!available.includes('workshop_tool_catalog')) {
+    return { names: available, activeGroup: null, completeCount: available.length, omittedCount: 0 };
+  }
+  const engagedFixtureId = world.projection(sessionId).engagedFixtureId || null;
+  const activeGroup = FIXTURE_ATTENTION_GROUP[engagedFixtureId] || null;
+  const groupNames = activeGroup
+    ? CEILING_WIRES.filter(wire => wire.groupId === activeGroup || (activeGroup === 'kiln' && wire.groupId === 'heartbeat')).map(wire => wire.name)
+    : [];
+  const selected = new Set([...RESIDENT_CORE_NAMES, ...groupNames]);
+  const names = available.filter(name => selected.has(name));
+  return { names, activeGroup, completeCount: available.length, omittedCount: available.length - names.length };
+}
+
+export function schemasForResidentSession(world, sessionId) {
+  return schemasForTools(residentToolProfile(world, sessionId).names);
 }
 
 export function toolCatalogEntries(toolNames) {

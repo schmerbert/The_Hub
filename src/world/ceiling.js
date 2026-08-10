@@ -44,6 +44,8 @@ const wires = [
   ['workshop_run_recipe', 'kiln'],
   ['workshop_recipe_status', 'kiln'],
   ['workshop_recipe_cancel', 'kiln'],
+  ['workshop_sandbox_diff', 'kiln'],
+  ['workshop_sandbox_promote', 'workbench'],
   ['workshop_git_status', 'ledger'],
   ['workshop_git_diff', 'ledger'],
   ['workshop_git_log', 'ledger'],

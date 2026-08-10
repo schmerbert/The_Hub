@@ -6,10 +6,10 @@ import { resolveRepositoryPath } from './graph.js';
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 
 const BASE_RECIPES = Object.freeze({
-  npm_test: { id: 'npm_test', command: 'npm', args: ['test'], allowPath: false, allowScript: false, shell: process.platform === 'win32' },
-  node_test: { id: 'node_test', command: process.execPath, args: ['--test'], allowPath: true, allowScript: false, shell: false },
-  npm_run: { id: 'npm_run', command: 'npm', args: ['run'], allowPath: false, allowScript: true, shell: process.platform === 'win32' },
-  node_file: { id: 'node_file', command: process.execPath, args: [], allowPath: true, allowScript: false, requirePath: true, shell: false },
+  npm_test: { id: 'npm_test', executable: 'npm', args: ['test'], allowPath: false, allowScript: false },
+  node_test: { id: 'node_test', executable: 'node', args: ['--test'], allowPath: true, allowScript: false },
+  npm_run: { id: 'npm_run', executable: 'npm', args: ['run'], allowPath: false, allowScript: true },
+  node_file: { id: 'node_file', executable: 'node', args: [], allowPath: true, allowScript: false, requirePath: true },
 });
 
 const RECIPE_ENVIRONMENT_KEYS = new Set([
@@ -78,6 +78,41 @@ function packageScripts(root) {
   }
 }
 
+export function buildRecipeInvocation(root, recipeId, { path, script } = {}, { runtime = 'host' } = {}) {
+  if (runtime !== 'host' && runtime !== 'container') fail('workshop_invalid_argument', 'Recipe runtime must be host or container.');
+  const recipe = BASE_RECIPES[recipeId];
+  if (!recipe) fail('workshop_recipe_unknown', 'That Workshop recipe is not installed.');
+  const args = [...recipe.args];
+  if (recipe.allowScript) {
+    if (typeof script !== 'string' || !script || script.length > 80 || !/^[A-Za-z0-9:_-]+$/.test(script)) fail('workshop_invalid_argument', 'Recipe script name is invalid.');
+    const scripts = packageScripts(root);
+    if (!Object.hasOwn(scripts, script)) fail('workshop_recipe_script_missing', 'That npm script is not listed in package.json.');
+    args.push(script);
+  }
+  if (path !== undefined || recipe.requirePath) {
+    if (recipe.requirePath && (typeof path !== 'string' || !path)) fail('workshop_invalid_argument', 'That recipe requires a path.');
+    if (path !== undefined) {
+      if (!recipe.allowPath) fail('workshop_invalid_argument', 'That recipe does not accept a path.');
+      resolveRepositoryPath(root, path);
+      if (recipeId === 'node_file' && !path.endsWith('.js')) fail('workshop_invalid_argument', 'node_file requires a .js path.');
+      args.push(runtime === 'container' ? path.replaceAll('\\', '/') : path);
+    }
+  }
+  const command = runtime === 'container'
+    ? recipe.executable
+    : recipe.executable === 'node' ? process.execPath : recipe.executable;
+  const shell = runtime === 'host' && process.platform === 'win32' && recipe.executable === 'npm';
+  return {
+    recipe: { ...recipe },
+    recipeId,
+    runtime,
+    command,
+    args,
+    shell,
+    argv: [command, ...args],
+  };
+}
+
 export class RecipeRunner {
   constructor(root, { timeoutMs = 120000, maxOutputBytes = 120000, env = process.env } = {}) {
     this.root = root;
@@ -88,39 +123,17 @@ export class RecipeRunner {
     this.lastRecipe = null;
     this.lastResult = null;
   }
-  #buildArgs(recipeId, { path, script } = {}) {
-    const recipe = BASE_RECIPES[recipeId];
-    if (!recipe) fail('workshop_recipe_unknown', 'That Workshop recipe is not installed.');
-    const args = [...recipe.args];
-    if (recipe.allowScript) {
-      if (typeof script !== 'string' || !script || script.length > 80 || !/^[A-Za-z0-9:_-]+$/.test(script)) fail('workshop_invalid_argument', 'Recipe script name is invalid.');
-      const scripts = packageScripts(this.root);
-      if (!Object.hasOwn(scripts, script)) fail('workshop_recipe_script_missing', 'That npm script is not listed in package.json.');
-      args.push(script);
-    }
-    if (path !== undefined || recipe.requirePath) {
-      if (recipe.requirePath && (typeof path !== 'string' || !path)) fail('workshop_invalid_argument', 'That recipe requires a path.');
-      if (path !== undefined) {
-        if (!recipe.allowPath) fail('workshop_invalid_argument', 'That recipe does not accept a path.');
-        resolveRepositoryPath(this.root, path);
-        if (recipeId === 'node_file' && !path.endsWith('.js')) fail('workshop_invalid_argument', 'node_file requires a .js path.');
-        args.push(path);
-      }
-    }
-    return { recipe, args };
-  }
   /** Non-blocking start; completion invokes onComplete with the final recipe result. */
   start(recipeId, { path, script } = {}, { onComplete = null } = {}) {
     if (this.active) fail('workshop_recipe_busy', 'A Workshop recipe is already running.');
-    const { recipe, args } = this.#buildArgs(recipeId, { path, script });
+    const { command, args, shell } = buildRecipeInvocation(this.root, recipeId, { path, script }, { runtime: 'host' });
     this.lastRecipe = recipeId;
     this.lastResult = null;
-    const command = recipe.command;
     const child = spawn(command, args, {
       cwd: this.root,
       env: this.env,
       windowsHide: true,
-      shell: recipe.shell,
+      shell,
       detached: process.platform !== 'win32',
     });
     const job = { child, cancelled: null, recipeId, argv: [command, ...args], onComplete };

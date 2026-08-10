@@ -3,20 +3,25 @@ import { canonicalize, sha256 } from '../core/hash.js';
 const BRAND = Symbol('ScrubbedHostReturn');
 const IDENTITY_POLICY = 'host_return_identity';
 const HEARTH_MARKDOWN_POLICY = 'hearth_scroll_markdown_v1';
+const RESULT_RACK_POLICY = 'result_rack_projection_v1';
 function invalid(message) { throw Object.assign(new Error(message), { code: 'host_return_scrub_invalid' }); }
-function render(policy, result) {
+function render(policy, result, projection) {
   if (policy === HEARTH_MARKDOWN_POLICY) {
     if (typeof result?.markdown !== 'string') invalid('Hearth Markdown rendering requires a markdown result field.');
     return result.markdown;
   }
+  if (policy === RESULT_RACK_POLICY) {
+    if (!projection || typeof projection.content !== 'string' || projection.contentHash !== sha256(projection.content) || typeof projection.exactPointer !== 'string' || !projection.exactPointer.startsWith('result-rack://')) invalid('Result Rack rendering requires a hashed deterministic projection and exact custody pointer.');
+    return projection.content;
+  }
   invalid('Host return projection policy is not installed.');
 }
 
-export function scrubHostReturn({ toolName, toolCallId = null, arguments: args, result, content = null, renderPolicy = null, roomId, actionReceiptId = null, requestRecordId = null, spineRecordId = null }) {
+export function scrubHostReturn({ toolName, toolCallId = null, arguments: args, result, content = null, renderPolicy = null, projection = null, roomId, actionReceiptId = null, requestRecordId = null, spineRecordId = null }) {
   if (typeof toolName !== 'string' || !toolName || !result || typeof result !== 'object') throw Object.assign(new Error('Host return Scrub requires a named result object.'), { code: 'host_return_scrub_invalid' });
   const canonicalResult = JSON.stringify(result);
-  const output = renderPolicy ? render(renderPolicy, result) : content === null ? canonicalResult : content;
-  const identity = output === canonicalResult;
+  const output = renderPolicy ? render(renderPolicy, result, projection) : content === null ? canonicalResult : content;
+  const identity = !renderPolicy && output === canonicalResult;
   if (!identity && !renderPolicy) invalid('Custom host content requires a named deterministic render policy.');
   if (renderPolicy && content !== null && content !== output) invalid('Host content does not match its deterministic render policy.');
   const message = { role: 'tool', ...(toolCallId ? { tool_call_id: toolCallId } : {}), content: output };
@@ -27,6 +32,7 @@ export function scrubHostReturn({ toolName, toolCallId = null, arguments: args, 
     result,
     output,
     renderPolicy,
+    projection: projection ? { projectionId: projection.projectionId, contentHash: projection.contentHash, sourceHash: projection.sourceHash, exactPointer: projection.exactPointer } : null,
     roomId,
     actionReceiptId,
     requestRecordId,
@@ -49,6 +55,7 @@ export function scrubHostReturn({ toolName, toolCallId = null, arguments: args, 
     inputHash: sha256(canonicalResult),
     outputHash: sha256(message.content),
     exact: identity,
+    ...(projection ? { projectionId: projection.projectionId, projectionHash: projection.contentHash, sourceCustodyHash: projection.sourceHash, exactPointer: projection.exactPointer } : {}),
   };
   return Object.freeze({ [BRAND]: true, message, result: structuredClone(result), receipt });
 }
@@ -59,5 +66,6 @@ export function assertScrubbedHostReturn(value) {
   if (!identity && !projection) invalid('Host return Scrub mode is invalid.');
   if (identity && (value.receipt.changed !== false || value.receipt.exact !== true || value.message.content !== JSON.stringify(value.result))) invalid('Identity host return Scrub is not unchanged canonical serialization.');
   if (projection && (value.receipt.changed !== true || value.receipt.exact !== false)) invalid('Projected host return Scrub falsely claims identity.');
+  if (value.receipt.policy === RESULT_RACK_POLICY && (value.receipt.projectionHash !== sha256(value.message.content) || typeof value.receipt.exactPointer !== 'string' || !value.receipt.exactPointer.startsWith('result-rack://'))) invalid('Result Rack host return projection custody is invalid.');
   return value;
 }

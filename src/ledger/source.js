@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS provider_requests (
   ordinal INTEGER NOT NULL,
   request_body TEXT NOT NULL,
   message_sources_json TEXT NOT NULL,
+  attention_json TEXT,
   spine_record_id TEXT,
   raw_return_record_id TEXT,
   raw_return_byte_length INTEGER,
@@ -127,6 +128,19 @@ CREATE TABLE IF NOT EXISTS provider_requests (
   UNIQUE(wake_id, ordinal)
 );
 CREATE INDEX IF NOT EXISTS provider_requests_wake_order ON provider_requests(wake_id, ordinal);
+CREATE TABLE IF NOT EXISTS attention_receipts (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  wake_id TEXT NOT NULL REFERENCES wakes(id),
+  phase TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('ok','warn','refuse')),
+  receipt_json TEXT NOT NULL,
+  receipt_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS attention_receipts_wake_order ON attention_receipts(wake_id, created_at, id);
+CREATE TRIGGER IF NOT EXISTS attention_receipts_append_only_update BEFORE UPDATE ON attention_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS attention_receipts_append_only_delete BEFORE DELETE ON attention_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TABLE IF NOT EXISTS return_scrub_receipts (
   id TEXT PRIMARY KEY,
   provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id),
@@ -195,13 +209,20 @@ export class HubDatabase {
       const columns = this.sqlite.prepare(`PRAGMA table_info(${table})`).all().map(item => item.name);
       if (!columns.includes(column)) this.sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
     };
-    for (const [column, definition] of [['raw_return_record_id', 'TEXT'], ['raw_return_byte_length', 'INTEGER'], ['raw_return_sha256', 'TEXT'], ['return_scrub_receipt_id', 'TEXT'], ['return_scrub_receipt_json', 'TEXT']]) addColumn('provider_requests', column, definition);
+    for (const [column, definition] of [['raw_return_record_id', 'TEXT'], ['raw_return_byte_length', 'INTEGER'], ['raw_return_sha256', 'TEXT'], ['return_scrub_receipt_id', 'TEXT'], ['return_scrub_receipt_json', 'TEXT'], ['attention_json', 'TEXT']]) addColumn('provider_requests', column, definition);
     addColumn('hearth_receipts', 'scroll_markdown', 'TEXT');
     addColumn('hearth_receipts', 'scroll_hash', 'TEXT');
     this.sqlite.exec(`CREATE TABLE IF NOT EXISTS return_scrub_receipts (
       id TEXT PRIMARY KEY, provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id), spine_record_id TEXT NOT NULL,
       receipt_json TEXT NOT NULL, message_json TEXT NOT NULL, created_at TEXT NOT NULL
     )`);
+    this.sqlite.exec(`CREATE TABLE IF NOT EXISTS attention_receipts (
+      id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id), wake_id TEXT NOT NULL REFERENCES wakes(id), phase TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('ok','warn','refuse')), receipt_json TEXT NOT NULL, receipt_hash TEXT NOT NULL, created_at TEXT NOT NULL
+    )`);
+    this.sqlite.exec('CREATE INDEX IF NOT EXISTS attention_receipts_wake_order ON attention_receipts(wake_id, created_at, id)');
+    this.sqlite.exec("CREATE TRIGGER IF NOT EXISTS attention_receipts_append_only_update BEFORE UPDATE ON attention_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;");
+    this.sqlite.exec("CREATE TRIGGER IF NOT EXISTS attention_receipts_append_only_delete BEFORE DELETE ON attention_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;");
   }
 
   openSession() {
@@ -484,12 +505,21 @@ export class HubDatabase {
     return this.sqlite.prepare('SELECT * FROM host_return_scrub_receipts WHERE id=?').get(receiptId);
   }
 
-  recordProviderRequest({ sessionId, wakeId, phase, requestBody, messageSources, spineRecordId }) {
+  recordProviderRequest({ sessionId, wakeId, phase, requestBody, messageSources, spineRecordId, attention = null }) {
     const ordinal = this.sqlite.prepare('SELECT COUNT(*) AS count FROM provider_requests WHERE wake_id=?').get(wakeId).count + 1;
     const requestId = id('provider_request');
-    this.sqlite.prepare(`INSERT INTO provider_requests(id, session_id, wake_id, phase, ordinal, request_body, message_sources_json, spine_record_id, created_at)
-      VALUES(?,?,?,?,?,?,?,?,?)`).run(requestId, sessionId, wakeId, phase, ordinal, requestBody, JSON.stringify(messageSources), spineRecordId || null, now());
+    this.sqlite.prepare(`INSERT INTO provider_requests(id, session_id, wake_id, phase, ordinal, request_body, message_sources_json, spine_record_id, attention_json, created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?)`).run(requestId, sessionId, wakeId, phase, ordinal, requestBody, JSON.stringify(messageSources), spineRecordId || null, attention ? JSON.stringify(attention) : null, now());
     return requestId;
+  }
+
+  recordAttentionReceipt({ sessionId, wakeId, phase, attention }) {
+    if (!attention || !['ok', 'warn', 'refuse'].includes(attention.status)) throw new Error('Attention receipt status is invalid.');
+    const receiptJson = JSON.stringify(attention);
+    const receiptId = id('attention');
+    this.sqlite.prepare('INSERT INTO attention_receipts(id,session_id,wake_id,phase,status,receipt_json,receipt_hash,created_at) VALUES(?,?,?,?,?,?,?,?)')
+      .run(receiptId, sessionId, wakeId, phase, attention.status, receiptJson, sha256(receiptJson), now());
+    return { receiptId, receiptHash: sha256(receiptJson), status: attention.status };
   }
 
   completeProviderRequest(requestId, result, outcome = null, returnScrub = null) {
@@ -638,16 +668,19 @@ export class HubDatabase {
       return normalizedItem;
     });
     normalized.events = this.sqlite.prepare('SELECT id, session_id AS sessionId, actor_kind AS actorKind, event_kind AS eventKind, content, authority, provider, model, created_at AS createdAt FROM events WHERE wake_id=? ORDER BY created_at, id').all(wakeId).map(event => ({ ...event, sessionId: event.sessionId || SESSION_ZERO_ID }));
-    normalized.phases = this.sqlite.prepare(`SELECT id, phase, ordinal, request_body AS requestBody, message_sources_json AS messageSources,
+    normalized.phases = this.sqlite.prepare(`SELECT id, phase, ordinal, request_body AS requestBody, message_sources_json AS messageSources, attention_json AS attention,
       spine_record_id AS spineRecordId, raw_return_record_id AS rawReturnRecordId, raw_return_byte_length AS rawReturnByteLength, raw_return_sha256 AS rawReturnSha256,
       return_scrub_receipt_id AS returnScrubReceiptId, return_scrub_receipt_json AS returnScrubReceiptJson, response_message_json AS responseMessage, response_id AS responseId, finish_reason AS finishReason,
       outcome_json AS outcome, created_at AS createdAt, completed_at AS completedAt FROM provider_requests WHERE wake_id=? ORDER BY ordinal`).all(wakeId).map(phase => ({
       ...phase,
       messageSources: JSON.parse(phase.messageSources),
+      attention: phase.attention ? JSON.parse(phase.attention) : null,
       responseMessage: phase.responseMessage ? JSON.parse(phase.responseMessage) : null,
       outcome: phase.outcome ? JSON.parse(phase.outcome) : null,
       returnScrubReceipt: phase.returnScrubReceiptJson ? JSON.parse(phase.returnScrubReceiptJson) : null,
     }));
+    normalized.attentionReceipts = this.sqlite.prepare('SELECT id, phase, status, receipt_json AS receiptJson, receipt_hash AS receiptHash, created_at AS createdAt FROM attention_receipts WHERE wake_id=? ORDER BY created_at,id').all(wakeId)
+      .map(receipt => ({ ...receipt, receipt: JSON.parse(receipt.receiptJson) }));
     normalized.hearth = this.sqlite.prepare(`SELECT tool_call_id AS toolCallId, return_json AS returnJson, return_hash AS returnHash, scroll_markdown AS scrollMarkdown, scroll_hash AS scrollHash,
       action_event_id AS actionEventId, return_event_id AS returnEventId FROM hearth_receipts WHERE wake_id=?`).get(wakeId) || null;
     return normalized;

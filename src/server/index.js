@@ -1,11 +1,35 @@
 import { loadEnvFile } from '../core/env.js';
 import { createHub } from './app.js';
+import { pathToFileURL } from 'node:url';
 
-loadEnvFile();
+export function installShutdownHandlers(hub, { processTarget = process, logger = console } = {}) {
+  let shutdownPromise = null;
+  const shutdown = signal => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = (async () => {
+      try {
+        await hub.close();
+        processTarget.exit(0);
+      } catch (error) {
+        logger.error(`The Hub failed to shut down cleanly after ${signal}:`, error);
+        processTarget.exit(1);
+      }
+    })();
+    return shutdownPromise;
+  };
+  processTarget.once('SIGINT', () => { void shutdown('SIGINT'); });
+  processTarget.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+  return shutdown;
+}
 
-const hub = createHub();
-hub.server.listen(hub.config.port, () => {
-  console.log(`The Hub listening on http://localhost:${hub.config.port} (${hub.config.mode}, ${hub.config.model}, thinking=${hub.config.thinking})`);
-});
-process.on('SIGINT', () => { hub.close(); process.exit(0); });
-process.on('SIGTERM', () => { hub.close(); process.exit(0); });
+export function startHubProcess() {
+  loadEnvFile();
+  const hub = createHub();
+  hub.server.listen(hub.config.port, () => {
+    console.log(`The Hub listening on http://localhost:${hub.config.port} (${hub.config.mode}, ${hub.config.model}, thinking=${hub.config.thinking})`);
+  });
+  installShutdownHandlers(hub);
+  return hub;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) startHubProcess();

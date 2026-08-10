@@ -45,6 +45,12 @@ function normalizeOmissions(omissions, sourceOrLengths) {
       throw scrubError('Provider scrub omission receipts require a source index, range, and reason.');
     }
     const length = lengths[omission.sourceIndex];
+    if (omission.omitMessage === true) {
+      const normalizedRange = omission.start === 0 && omission.end === length;
+      if (((omission.start !== undefined || omission.end !== undefined) && !normalizedRange) || seen.has(omission.sourceIndex)) throw scrubError('Whole-message omissions may only carry their normalized full range and may not overlap another omission.');
+      seen.set(omission.sourceIndex, [{ start: 0, end: length, omitMessage: true }]);
+      return { sourceIndex: omission.sourceIndex, start: 0, end: length, reason: omission.reason, omitMessage: true };
+    }
     const start = omission.start === undefined && omission.end === undefined ? 0 : omission.start;
     const end = omission.start === undefined && omission.end === undefined ? length : omission.end;
     if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > length) {
@@ -63,6 +69,7 @@ function projectionFor(sourceMessages, omissions) {
   return sourceMessages.flatMap((message, sourceIndex) => {
     const ranges = bySource.get(sourceIndex) || [];
     if (!ranges.length) return [message];
+    if (ranges.some(range => range.omitMessage)) return [];
     let cursor = 0; let content = '';
     for (const range of ranges) { content += message.content.slice(cursor, range.start); cursor = range.end; }
     content += message.content.slice(cursor);
@@ -76,6 +83,7 @@ function fullyOmittedSourceIndexes(omissions, lengths) {
   for (const omission of omissions) rangesBySource.set(omission.sourceIndex, [...(rangesBySource.get(omission.sourceIndex) || []), omission]);
   const fullyOmitted = new Set();
   for (const [sourceIndex, ranges] of rangesBySource) {
+    if (ranges.some(range => range.omitMessage)) { fullyOmitted.add(sourceIndex); continue; }
     let cursor = 0;
     for (const range of ranges.sort((left, right) => left.start - right.start)) {
       if (range.start !== cursor) break;
