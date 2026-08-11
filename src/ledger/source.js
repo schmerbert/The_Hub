@@ -14,6 +14,7 @@ import { id, sha256 } from '../core/hash.js';
 import { SESSION_ZERO_ID, SESSION_ZERO_LABEL, buildClinicalBootstrap } from '../session/lifespan.js';
 import { assertScrubbedProviderReturn } from '../scrub/provider-return.js';
 import { assertScrubbedHostReturn } from '../scrub/host-return.js';
+import { WakeStreamJournal } from './wake-stream.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS threads (
@@ -163,7 +164,7 @@ CREATE TABLE IF NOT EXISTS hearth_receipts (
   created_at TEXT NOT NULL,
   UNIQUE(wake_id)
 );
-  CREATE TABLE IF NOT EXISTS host_return_scrub_receipts (
+CREATE TABLE IF NOT EXISTS host_return_scrub_receipts (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id),
   wake_id TEXT NOT NULL REFERENCES wakes(id),
@@ -187,6 +188,7 @@ export class HubDatabase {
     this.migrateCustodyFailureColumns();
     this.migrateSessionColumns();
     this.migrateCirculationColumns();
+    this.wakeStream = new WakeStreamJournal(this.sqlite);
     this.threadId = this.ensureThread();
     this.session = this.openSession();
   }
@@ -299,6 +301,16 @@ export class HubDatabase {
     try { const result = fn(); this.sqlite.exec('COMMIT'); return result; }
     catch (error) { try { this.sqlite.exec('ROLLBACK'); } catch {} throw error; }
   }
+
+  appendWakeStreamEvent(input) { return this.wakeStream.appendWakeStreamEvent(input); }
+  wakeStreamEventFromRow(row) { return this.wakeStream.wakeStreamEventFromRow(row); }
+  wakeStreamLimit(limit) { return this.wakeStream.wakeStreamLimit(limit); }
+  getWakeStreamEvent(eventId) { return this.wakeStream.getWakeStreamEvent(eventId); }
+  getLatestWakeStreamSequence() { return this.wakeStream.getLatestWakeStreamSequence(); }
+  listWakeStreamEvents(options) { return this.wakeStream.listWakeStreamEvents(options); }
+  listWakeStreamEventsAfter(afterSequence, options) { return this.wakeStream.listWakeStreamEventsAfter(afterSequence, options); }
+  listWakeStreamEventsByWake(wakeId, options) { return this.wakeStream.listWakeStreamEventsByWake(wakeId, options); }
+  listRecentWakeStreamEvents(options) { return this.wakeStream.listRecentWakeStreamEvents(options); }
 
   ensureThread() {
     const found = this.sqlite.prepare('SELECT id FROM threads ORDER BY created_at LIMIT 1').get();

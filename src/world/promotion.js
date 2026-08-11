@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { canonicalize, sha256 } from '../core/hash.js';
-import { assertWorkshopRepositoryPath } from './graph.js';
+import { assertWorkshopRepositoryPath } from '../workshop/path-law.js';
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 

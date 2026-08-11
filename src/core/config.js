@@ -17,10 +17,12 @@ export function readConfig(env = process.env) {
   const attentionWarnBytes = Number(env.HUB_ATTENTION_WARN_BYTES || 80000);
   const attentionRefuseBytes = Number(env.HUB_ATTENTION_REFUSE_BYTES || 120000);
   const retainedToolPairs = Number(env.HUB_RETAINED_TOOL_PAIRS || 2);
+  const providerMaxReturnBytes = Number(env.HUB_PROVIDER_MAX_RETURN_BYTES || 8 * 1024 * 1024);
   if (!Number.isInteger(resultProjectionMaxBytes) || resultProjectionMaxBytes < 192) throw new Error('HUB_RESULT_PROJECTION_MAX_BYTES must be an integer of at least 192');
   if (!Number.isInteger(resultProjectionMaxLines) || resultProjectionMaxLines < 1) throw new Error('HUB_RESULT_PROJECTION_MAX_LINES must be a positive integer');
   if (!Number.isInteger(attentionWarnBytes) || attentionWarnBytes < 0 || !Number.isInteger(attentionRefuseBytes) || attentionRefuseBytes <= attentionWarnBytes) throw new Error('Attention thresholds require 0 <= HUB_ATTENTION_WARN_BYTES < HUB_ATTENTION_REFUSE_BYTES');
   if (!Number.isInteger(retainedToolPairs) || retainedToolPairs < 0) throw new Error('HUB_RETAINED_TOOL_PAIRS must be a non-negative integer');
+  if (!Number.isInteger(providerMaxReturnBytes) || providerMaxReturnBytes < 1) throw new Error('HUB_PROVIDER_MAX_RETURN_BYTES must be a positive integer');
   return {
     mode,
     baseUrl: (env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, ''),
@@ -54,6 +56,7 @@ export function readConfig(env = process.env) {
     attentionWarnBytes,
     attentionRefuseBytes,
     retainedToolPairs,
+    providerMaxReturnBytes,
     sandboxBackend,
     sandboxImage: env.HUB_SANDBOX_IMAGE || 'node:22-alpine',
     sandboxJobsRoot: env.HUB_SANDBOX_JOBS_ROOT || join(tmpdir(), 'hub-sandbox-bay'),

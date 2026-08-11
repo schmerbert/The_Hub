@@ -3,12 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "src/corner/electron-main.js",
   "scripts": {
     "start": "node src/server/index.js",
+    "desktop": "electron .",
     "test": "node --test",
     "forest:plan": "node src/scripts/forest-plan.js",
     "forest:apply": "node src/scripts/forest-apply.js",
     "forest:verify": "node src/scripts/forest-verify.js",
     "spine:verify": "node src/scripts/spine-verify.js"
+  },
+  "devDependencies": {
+    "electron": "43.2.0"
   }
 }

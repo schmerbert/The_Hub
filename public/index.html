@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <title>The Hub — Corner</title>
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/wave.js"></script>
@@ -45,6 +46,8 @@
           <section class="rail" aria-labelledby="conversation-heading">
             <div class="rail-heading"><h2 id="conversation-heading">Conversation</h2><span id="thread-note">This lifespan</span></div>
             <div id="log" class="log" aria-live="polite"></div>
+            <div id="live-conversation" class="live-conversation" aria-live="polite"></div>
+            <div id="live-gap" class="gap live-gap" aria-live="polite"></div>
             <div id="gap" class="gap" aria-live="polite"></div>
             <form id="compose" class="compose">
               <label class="sr-only" for="input">Message</label>

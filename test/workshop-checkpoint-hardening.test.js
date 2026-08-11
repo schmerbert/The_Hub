@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { readConfig } from '../src/core/config.js';
 import { createHub } from '../src/server/app.js';
 import { KILN_FIXTURE_ID, WorldGraphStore } from '../src/world/graph.js';
-import { buildRecipeEnvironment, RecipeRunner } from '../src/world/recipes.js';
+import { buildRecipeEnvironment, buildRecipeInvocation, RecipeRunner } from '../src/world/recipes.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 
@@ -40,9 +40,11 @@ test('approval auto override is fake-only', () => {
 test('recipe environment is an operational allowlist, not inherited credentials', async () => {
   const windows = buildRecipeEnvironment({
     Path: 'C:\\Tools', SystemRoot: 'C:\\Windows', ComSpec: 'cmd.exe',
-    DEEPSEEK_API_KEY: 'provider', SERVICE_TOKEN: 'token', DB_SECRET: 'secret', LOGIN_PASSWORD: 'password', PROXY_AUTH: 'auth',
+    ELECTRON_RUN_AS_NODE: 'untrusted', DEEPSEEK_API_KEY: 'provider', SERVICE_TOKEN: 'token', DB_SECRET: 'secret', LOGIN_PASSWORD: 'password', PROXY_AUTH: 'auth',
   }, 'win32');
   assert.deepEqual(windows, { Path: 'C:\\Tools', SystemRoot: 'C:\\Windows', ComSpec: 'cmd.exe' });
+  const electronWindows = buildRecipeEnvironment({ Path: 'C:\\Tools', ELECTRON_RUN_AS_NODE: '0', DEEPSEEK_API_KEY: 'provider' }, 'win32');
+  assert.deepEqual(electronWindows, { Path: 'C:\\Tools' });
   const unix = buildRecipeEnvironment({
     PATH: '/usr/bin', HOME: '/home/test',
     DEEPSEEK_API_KEY: 'provider', SERVICE_TOKEN: 'token', DB_SECRET: 'secret', LOGIN_PASSWORD: 'password', PROXY_AUTH: 'auth',
@@ -54,12 +56,21 @@ test('recipe environment is an operational allowlist, not inherited credentials'
     await writeFile(join(dir, 'inspect.js'), `console.log(JSON.stringify({
       path: Boolean(process.env.PATH || process.env.Path),
       systemRoot: process.env.SystemRoot || process.env.SYSTEMROOT || null,
+      electronRunAsNode: process.env.ELECTRON_RUN_AS_NODE || null,
       deepseek: process.env.DEEPSEEK_API_KEY || null,
       token: process.env.SERVICE_TOKEN || null,
       secret: process.env.DB_SECRET || null,
       password: process.env.LOGIN_PASSWORD || null,
       auth: process.env.PROXY_AUTH || null
     }));`, 'utf8');
+    await writeFile(join(dir, 'package.json'), JSON.stringify({
+      scripts: { inspect_env: 'node inspect.js' },
+    }), 'utf8');
+    await writeFile(join(dir, 'inspect-node.test.js'), `import test from 'node:test';
+import assert from 'node:assert/strict';
+test('Electron-backed node_test receives its node-mode flag', () => {
+  assert.equal(process.env.ELECTRON_RUN_AS_NODE, '1');
+});`, 'utf8');
     const sourceEnv = {
       PATH: process.env.PATH || process.env.Path || '',
       ...(process.platform === 'win32' ? {
@@ -67,7 +78,7 @@ test('recipe environment is an operational allowlist, not inherited credentials'
         ComSpec: process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe',
         PATHEXT: process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD',
       } : { HOME: process.env.HOME || tmpdir() }),
-      DEEPSEEK_API_KEY: 'provider', SERVICE_TOKEN: 'token', DB_SECRET: 'secret', LOGIN_PASSWORD: 'password', PROXY_AUTH: 'auth',
+      ELECTRON_RUN_AS_NODE: 'untrusted', DEEPSEEK_API_KEY: 'provider', SERVICE_TOKEN: 'token', DB_SECRET: 'secret', LOGIN_PASSWORD: 'password', PROXY_AUTH: 'auth',
     };
     const result = await new RecipeRunner(dir, { env: sourceEnv, timeoutMs: 5000 }).run('node_file', { path: 'inspect.js' });
     assert.equal(result.status, 'settled', result.stderr);
@@ -75,8 +86,44 @@ test('recipe environment is an operational allowlist, not inherited credentials'
     assert.equal(observed.path, true);
     if (process.platform === 'win32') assert.ok(observed.systemRoot);
     assert.deepEqual({ ...observed, path: undefined, systemRoot: undefined }, {
-      path: undefined, systemRoot: undefined, deepseek: null, token: null, secret: null, password: null, auth: null,
+      path: undefined, systemRoot: undefined, electronRunAsNode: null, deepseek: null, token: null, secret: null, password: null, auth: null,
     });
+
+    const injectedElectronPath = process.platform === 'win32' ? 'C:\\Electron\\electron.exe' : '/opt/electron/electron';
+    const electronInvocation = buildRecipeInvocation(dir, 'node_file', { path: 'inspect.js' }, { runtime: 'host', execPath: injectedElectronPath, platform: process.platform });
+    assert.equal(electronInvocation.command, injectedElectronPath);
+    const containerInvocation = buildRecipeInvocation(dir, 'node_file', { path: 'inspect.js' }, { runtime: 'container', execPath: injectedElectronPath, platform: process.platform });
+    assert.equal(containerInvocation.command, 'node');
+
+    const electronResult = await new RecipeRunner(dir, {
+      env: sourceEnv,
+      execPath: process.execPath,
+      electronRuntime: true,
+      timeoutMs: 5000,
+    }).run('node_file', { path: 'inspect.js' });
+    assert.equal(electronResult.status, 'settled', electronResult.stderr);
+    const electronObserved = JSON.parse(electronResult.stdout.trim());
+    assert.equal(electronObserved.electronRunAsNode, '1');
+    assert.deepEqual({ deepseek: electronObserved.deepseek, token: electronObserved.token, secret: electronObserved.secret }, { deepseek: null, token: null, secret: null });
+
+    const electronTestResult = await new RecipeRunner(dir, {
+      env: sourceEnv,
+      execPath: process.execPath,
+      electronRuntime: true,
+      timeoutMs: 5000,
+    }).run('node_test', { path: 'inspect-node.test.js' });
+    assert.equal(electronTestResult.status, 'settled', electronTestResult.stderr || electronTestResult.stdout);
+
+    const npmResult = await new RecipeRunner(dir, {
+      env: sourceEnv,
+      execPath: process.execPath,
+      electronRuntime: true,
+      timeoutMs: 5000,
+    }).run('npm_run', { script: 'inspect_env' });
+    assert.equal(npmResult.status, 'settled', npmResult.stderr);
+    const npmObserved = JSON.parse(npmResult.stdout.trim().split(/\r?\n/).at(-1));
+    assert.equal(npmObserved.electronRunAsNode, null);
+    assert.deepEqual({ deepseek: npmObserved.deepseek, token: npmObserved.token, secret: npmObserved.secret }, { deepseek: null, token: null, secret: null });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

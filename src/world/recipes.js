@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveRepositoryPath } from './graph.js';
+import { resolveRepositoryPath } from '../workshop/path-law.js';
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 
@@ -26,12 +26,14 @@ const WINDOWS_RECIPE_ENVIRONMENT_KEYS = new Set([
   'COMMONPROGRAMFILES', 'COMMONPROGRAMFILES(X86)',
   'OS', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE',
 ]);
+const ELECTRON_NODE_RECIPE_ENVIRONMENT_KEY = 'ELECTRON_RUN_AS_NODE';
 
 export function buildRecipeEnvironment(source = process.env, platform = process.platform) {
   const allowed = platform === 'win32' ? WINDOWS_RECIPE_ENVIRONMENT_KEYS : RECIPE_ENVIRONMENT_KEYS;
   const result = {};
   for (const [key, value] of Object.entries(source || {})) {
     const candidate = platform === 'win32' ? key.toUpperCase() : key;
+    if (candidate === ELECTRON_NODE_RECIPE_ENVIRONMENT_KEY) continue;
     if (allowed.has(candidate) && typeof value === 'string') result[key] = value;
   }
   return result;
@@ -78,7 +80,7 @@ function packageScripts(root) {
   }
 }
 
-export function buildRecipeInvocation(root, recipeId, { path, script } = {}, { runtime = 'host' } = {}) {
+export function buildRecipeInvocation(root, recipeId, { path, script } = {}, { runtime = 'host', execPath = process.execPath, platform = process.platform } = {}) {
   if (runtime !== 'host' && runtime !== 'container') fail('workshop_invalid_argument', 'Recipe runtime must be host or container.');
   const recipe = BASE_RECIPES[recipeId];
   if (!recipe) fail('workshop_recipe_unknown', 'That Workshop recipe is not installed.');
@@ -100,8 +102,8 @@ export function buildRecipeInvocation(root, recipeId, { path, script } = {}, { r
   }
   const command = runtime === 'container'
     ? recipe.executable
-    : recipe.executable === 'node' ? process.execPath : recipe.executable;
-  const shell = runtime === 'host' && process.platform === 'win32' && recipe.executable === 'npm';
+    : recipe.executable === 'node' ? execPath : recipe.executable;
+  const shell = runtime === 'host' && platform === 'win32' && recipe.executable === 'npm';
   return {
     recipe: { ...recipe },
     recipeId,
@@ -114,10 +116,18 @@ export function buildRecipeInvocation(root, recipeId, { path, script } = {}, { r
 }
 
 export class RecipeRunner {
-  constructor(root, { timeoutMs = 120000, maxOutputBytes = 120000, env = process.env } = {}) {
+  constructor(root, {
+    timeoutMs = 120000,
+    maxOutputBytes = 120000,
+    env = process.env,
+    execPath = process.execPath,
+    electronRuntime = Boolean(process.versions?.electron),
+  } = {}) {
     this.root = root;
     this.timeoutMs = timeoutMs;
     this.maxOutputBytes = maxOutputBytes;
+    this.execPath = execPath;
+    this.electronRuntime = Boolean(electronRuntime);
     this.env = buildRecipeEnvironment(env);
     this.active = null;
     this.lastRecipe = null;
@@ -126,12 +136,14 @@ export class RecipeRunner {
   /** Non-blocking start; completion invokes onComplete with the final recipe result. */
   start(recipeId, { path, script } = {}, { onComplete = null } = {}) {
     if (this.active) fail('workshop_recipe_busy', 'A Workshop recipe is already running.');
-    const { command, args, shell } = buildRecipeInvocation(this.root, recipeId, { path, script }, { runtime: 'host' });
+    const { command, args, shell, recipe } = buildRecipeInvocation(this.root, recipeId, { path, script }, { runtime: 'host', execPath: this.execPath });
+    const env = { ...this.env };
+    if (this.electronRuntime && recipe.executable === 'node') env[ELECTRON_NODE_RECIPE_ENVIRONMENT_KEY] = '1';
     this.lastRecipe = recipeId;
     this.lastResult = null;
     const child = spawn(command, args, {
       cwd: this.root,
-      env: this.env,
+      env,
       windowsHide: true,
       shell,
       detached: process.platform !== 'win32',

@@ -1,7 +1,21 @@
+import {
+  clearLiveWake,
+  clearOptimisticUser,
+  createLiveState,
+  projectLiveState,
+  recoverHubEventHistory,
+  reduceHubEvent,
+  registerHubEventSource,
+  setLiveConnection,
+  setOptimisticUser,
+} from './live-state.js';
+
 const app = document.querySelector('#app');
 const chip = document.querySelector('#chip');
 const bench = document.querySelector('#bench');
 const log = document.querySelector('#log');
+const liveConversation = document.querySelector('#live-conversation');
+const liveGap = document.querySelector('#live-gap');
 const gap = document.querySelector('#gap');
 const threadNote = document.querySelector('#thread-note');
 const form = document.querySelector('#compose');
@@ -20,6 +34,8 @@ const trayTabs = document.querySelector('#tray-tabs');
 const panelHost = document.querySelector('#panel-host');
 const waveCompact = new window.CornerWave(document.querySelector('#wave-compact'), { amp: .22 });
 const waveMain = new window.CornerWave(document.querySelector('#wave-main'), { amp: .3 });
+const desktopShell = window.cornerDesktop || null;
+document.documentElement.dataset.shell = desktopShell ? 'desktop' : 'browser';
 
 let busy = false;
 let currentWake = null;
@@ -28,6 +44,13 @@ let currentApprovals = [];
 const wakeSlips = new Map();
 let slipPoll = null;
 let slipPollBusy = false;
+let liveState = createLiveState();
+let terminalReconcileSequence = 0;
+let resyncInFlight = false;
+let liveEventSource = null;
+let unregisterLiveEvents = null;
+let liveRecoveryTimer = null;
+let liveUnloading = false;
 
 function node(tag, className, content) {
   const element = document.createElement(tag);
@@ -43,8 +66,8 @@ function setState(state) {
   waveMain.setState(state);
 }
 
-function setMode(next) {
-  if (window.matchMedia('(max-width: 700px)').matches && next === 'compact') next = 'expanded';
+function applyMode(next) {
+  if (!desktopShell && window.matchMedia('(max-width: 700px)').matches && next === 'compact') next = 'expanded';
   app.dataset.mode = next;
   bench.hidden = next !== 'expanded';
   chip.setAttribute('aria-expanded', String(next === 'expanded'));
@@ -52,6 +75,13 @@ function setMode(next) {
     waveMain.start();
     requestAnimationFrame(() => input.focus());
   }
+  return next;
+}
+
+async function setMode(next) {
+  if (!desktopShell) return applyMode(next);
+  try { return applyMode(await desktopShell.setMode(next)); }
+  catch { setState('host unavailable'); return app.dataset.mode; }
 }
 
 function modeLabel(health) {
@@ -123,6 +153,72 @@ function renderSlips(parent, slips) {
   }
 }
 
+function renderLive() {
+  const projection = projectLiveState(liveState);
+  const conversation = [];
+  if (projection.optimisticUser) {
+    const event = node('div', 'event user optimistic-user');
+    event.append(node('span', 'event-label', 'You · sending'), node('span', null, projection.optimisticUser.content));
+    conversation.push(event);
+  }
+  if (projection.draft) {
+    const event = node('div', 'event resident provisional-resident');
+    event.append(node('span', 'event-label', 'Resident · provisional'), node('span', null, projection.draft));
+    conversation.push(event);
+  }
+  if (conversation.length) {
+    const wake = node('article', 'wake live-wake');
+    wake.append(...conversation);
+    liveConversation.replaceChildren(wake);
+  } else liveConversation.replaceChildren();
+
+  const machinery = [];
+  if (projection.thinking) {
+    const detail = node('details', 'slip slip-thinking live-thinking');
+    detail.append(node('summary', null, 'Thinking'), node('p', null, projection.thinking));
+    machinery.push(detail);
+  }
+  for (const toolCall of projection.toolCalls) {
+    const detail = node('details', 'slip live-tool-call');
+    const name = toolCall.name || toolCall.id || `#${toolCall.index}`;
+    detail.append(node('summary', null, `Preparing tool · ${name}`));
+    const text = toolCall.id ? `id: ${toolCall.id}` : '';
+    if (text) detail.append(node('pre', 'live-machine-text', text));
+    machinery.push(detail);
+  }
+  for (const card of projection.cards) {
+    const row = node('section', `slip live-card card-${card.cardKind}`);
+    row.append(node('div', 'live-card-heading', `${card.label} · ${card.state}`));
+    if (card.detail) row.append(node('pre', 'live-card-detail', card.detail));
+    if (card.pointer) row.append(node('div', 'live-card-pointer', card.pointer));
+    if (card.cardKind === 'approval' && card.state === 'pending' && card.decidable && card.approvalId) {
+      const actions = node('div', 'slip-decide');
+      const confirm = node('button', null, 'Confirm');
+      confirm.type = 'button';
+      confirm.addEventListener('click', async () => {
+        try { await decideApproval(card.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+      });
+      const reject = node('button', null, 'Reject');
+      reject.type = 'button';
+      reject.addEventListener('click', async () => {
+        try { await decideApproval(card.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+      });
+      actions.append(confirm, reject);
+      row.append(actions);
+    }
+    machinery.push(row);
+  }
+  liveGap.replaceChildren(...machinery);
+  log.scrollTop = log.scrollHeight;
+}
+
+function reconcileOptimisticUser(thread) {
+  const optimistic = liveState.optimisticUser;
+  if (!optimistic?.wakeId) return;
+  const committed = (thread.events || []).some(event => event.wakeId === optimistic.wakeId && event.eventKind === 'utterance' && event.actorKind === 'user' && event.content === optimistic.content);
+  if (committed) liveState = clearOptimisticUser(liveState);
+}
+
 function activeSessionId(data) {
   return data.session?.id || null;
 }
@@ -140,6 +236,7 @@ function describeLifespan(data) {
 
 function renderThread(data) {
   log.replaceChildren();
+  reconcileOptimisticUser(data);
   if (threadNote) threadNote.textContent = describeLifespan(data);
   const sessionId = activeSessionId(data);
   const activeWakes = wakesForActiveSession(data);
@@ -179,6 +276,7 @@ function renderThread(data) {
     log.append(wakeElement);
   }
   log.scrollTop = log.scrollHeight;
+  renderLive();
 }
 
 async function request(path, options) {
@@ -353,7 +451,7 @@ async function refresh() {
 }
 
 async function pollSlips() {
-  if (!busy || slipPollBusy) return;
+  if (!busy || slipPollBusy || liveState.connection === 'open') return;
   slipPollBusy = true;
   try {
     const health = await request('/api/health');
@@ -381,20 +479,120 @@ async function retainWakeSlips(wakeId) {
   wakeSlips.set(wakeId, projected.slips || []);
 }
 
+async function reconcileTerminal(terminal) {
+  if (!terminal || terminal.sequence <= terminalReconcileSequence) return;
+  terminalReconcileSequence = terminal.sequence;
+  await retainWakeSlips(terminal.wakeId).catch(() => {});
+  await refresh().catch(() => {});
+  liveState = clearLiveWake(liveState, terminal.wakeId);
+  renderLive();
+  stopSlipPoll();
+  gap.replaceChildren();
+  setState(terminal.kind === 'wake.failed' ? 'failed' : 'committed');
+}
+
+async function resyncLiveEvents() {
+  if (resyncInFlight) return;
+  resyncInFlight = true;
+  let recovered = false;
+  closeLiveEventSource();
+  liveState = setLiveConnection(liveState, 'disconnected');
+  renderLive();
+  try {
+    liveState = await recoverHubEventHistory(liveState, (afterSequence, limit) => request(`/api/events/history?after=${afterSequence}&limit=${limit}`));
+    renderLive();
+    const projection = projectLiveState(liveState);
+    setState(projection.status);
+    if (projection.terminal) await reconcileTerminal(projection.terminal);
+    recovered = true;
+  } catch {
+    liveState = setLiveConnection(liveState, 'disconnected');
+    renderLive();
+    startSlipPoll();
+    scheduleLiveRecovery();
+  } finally {
+    resyncInFlight = false;
+    if (recovered) openLiveEventSource(liveState.lastSequence);
+  }
+}
+
+function receiveHubEvent(messageEvent) {
+  let envelope;
+  try { envelope = JSON.parse(messageEvent.data); } catch { return; }
+  const next = reduceHubEvent(liveState, envelope);
+  if (next === liveState) return;
+  liveState = next;
+  const projection = projectLiveState(liveState);
+  renderLive();
+  setState(projection.status);
+  if (projection.resyncRequired) void resyncLiveEvents();
+  if (projection.terminal) void reconcileTerminal(projection.terminal);
+}
+
+function closeLiveEventSource() {
+  unregisterLiveEvents?.();
+  unregisterLiveEvents = null;
+  liveEventSource?.close();
+  liveEventSource = null;
+}
+
+function scheduleLiveRecovery() {
+  if (liveUnloading || liveRecoveryTimer !== null) return;
+  liveRecoveryTimer = setTimeout(() => {
+    liveRecoveryTimer = null;
+    if (liveState.resyncRequired) void resyncLiveEvents();
+    else openLiveEventSource(liveState.lastSequence);
+  }, 1000);
+}
+
+function openLiveEventSource(afterSequence) {
+  if (liveUnloading || typeof EventSource !== 'function' || liveEventSource) return;
+  const path = Number.isInteger(afterSequence) ? `/api/events?after=${afterSequence}` : '/api/events';
+  const source = new EventSource(path);
+  liveEventSource = source;
+  unregisterLiveEvents = registerHubEventSource(source, receiveHubEvent);
+  source.addEventListener('open', () => {
+    if (liveEventSource !== source) return;
+    liveState = setLiveConnection(liveState, 'open');
+    renderLive();
+  });
+  source.addEventListener('error', () => {
+    if (liveEventSource !== source) return;
+    liveState = setLiveConnection(liveState, 'disconnected');
+    renderLive();
+    if (busy) void pollSlips();
+  });
+}
+
+if (typeof EventSource === 'function') {
+  openLiveEventSource();
+  window.addEventListener('beforeunload', () => {
+    liveUnloading = true;
+    if (liveRecoveryTimer !== null) clearTimeout(liveRecoveryTimer);
+    closeLiveEventSource();
+  }, { once: true });
+} else liveState = setLiveConnection(liveState, 'unavailable');
+
 async function submitWake(event) {
   event.preventDefault();
   if (busy) return;
   const submitted = input.value;
   if (!submitted.trim()) return;
+  const localId = globalThis.crypto?.randomUUID?.() || `local-${Date.now()}`;
+  liveState = setOptimisticUser(liveState, submitted, localId);
+  renderLive();
   busy = true; input.disabled = true; sendButton.disabled = true; setState('assembling');
   setTimeout(() => { if (busy) setState('orienting'); }, 0);
   startSlipPoll();
   try {
     const wake = await request('/api/wakes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: submitted }) });
     input.value = '';
+    if (!liveState.optimisticUser?.wakeId) liveState = clearOptimisticUser(liveState);
     if (wake.__failedWake || wake.status === 'failed') {
       setState('failed');
       await refresh();
+      liveState = clearLiveWake(liveState, wake.id);
+      renderLive();
       if (wake.id) { currentWake = wake; currentInspectionTab = 'summary'; tray.hidden = false; renderInspection(); }
       statusEl.title = wake.failureMessage || wake.failureCode || 'Wake failed';
       return;
@@ -402,6 +600,8 @@ async function submitWake(event) {
     setState('committed');
     await retainWakeSlips(wake.id);
     await refresh();
+    liveState = clearLiveWake(liveState, wake.id);
+    renderLive();
     setState('committed');
     setTimeout(() => { if (!busy) setState('idle'); }, 1200);
     if (wake.id) currentWake = wake;
@@ -409,6 +609,8 @@ async function submitWake(event) {
     setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed');
     statusEl.title = error.message || error.code || 'failed';
     await refresh().catch(() => {});
+    liveState = clearLiveWake(clearOptimisticUser(liveState));
+    renderLive();
   } finally {
     stopSlipPoll();
     gap.replaceChildren();
@@ -416,14 +618,18 @@ async function submitWake(event) {
   }
 }
 
-chip.addEventListener('click', () => setMode('expanded'));
-document.querySelector('#btn-compact').addEventListener('click', () => setMode('compact'));
+chip.addEventListener('click', () => { void setMode('expanded'); });
+document.querySelector('#btn-compact').addEventListener('click', () => { void setMode('compact'); });
 inspectWorldButton.addEventListener('click', inspectWorld);
 inspectApprovalsButton.addEventListener('click', inspectApprovals);
 document.querySelector('#close-tray').addEventListener('click', () => { tray.hidden = true; currentWake = null; });
 form.addEventListener('submit', submitWake);
 
 waveCompact.start();
-if (window.matchMedia('(max-width: 700px)').matches) setMode('expanded');
-else setMode('compact');
+if (desktopShell) {
+  const disposeDesktopMode = desktopShell.onMode(applyMode);
+  window.addEventListener('beforeunload', disposeDesktopMode, { once: true });
+  desktopShell.getMode().then(applyMode).catch(() => applyMode('compact'));
+} else if (window.matchMedia('(max-width: 700px)').matches) applyMode('expanded');
+else applyMode('compact');
 refresh().catch(() => { modeModel.textContent = 'unavailable · host'; setState('host unavailable'); });

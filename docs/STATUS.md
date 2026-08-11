@@ -14,6 +14,11 @@ This page is the canonical map of the current runtime. Specifications under `doc
 - Append-only approval custody. A pending confirm-class call records a pending approval receipt linked to its original action receipt; confirmed, rejected, and restart-cancelled decisions create distinct completion action and approval receipts. Promotion confirmation is therefore separate from the initial pending result.
 - Live-mode named recipes run in one persistent job-scoped Docker Sandbox Bay backed by a disposable Git worktree. The canonical checkout is not mounted read-write, container networking is `none`, the child environment is minimal, resource caps are declared, and backend failure refuses without host fallback.
 - `workshop_sandbox_diff` and always-confirm `workshop_sandbox_promote`. Promotion is plan- and patch-hash bound, requires a clean and unchanged canonical checkout, refuses symlink/submodule and Hub control paths, applies only through the host-owned crossing, records completion custody, and resets the sandbox job after success.
+- The Result Rack implementation is split across `src/result-rack/`, with `src/world/results.js` retained as a compatibility facade. The shared Workshop protected-path law lives in `src/workshop/path-law.js`, and the World Gateway dispatches through a complete registry checked against the installed Ceiling catalog.
+- `WakeService` owns wake orchestration. DeepSeek responses stream over provider SSE; bytes admitted under the 8 MiB default `HUB_PROVIDER_MAX_RETURN_BYTES` ceiling are retained exactly in the Spine and independently assembled by provider-return Scrub before terminal use. Oversized returns seal the exact admitted prefix as incomplete custody and fail closed.
+- Durable append-only `wake_stream_events` custody and a bounded process event bus. Safe provisional thinking/content/tool-name deltas, receipt-backed tool/approval/result cards, and terminal events are persisted before broadcast. Tool argument fragments are withheld, and credential-shaped provisional channels are suppressed without changing final provider custody. `GET /api/events` exposes same-origin named SSE events; `GET /api/events/history` is the recovery authority when replay requires resynchronization. Corner keeps polling as a fallback.
+- Live Corner thinking, draft, tool-call, approval, diff, and result views derived from provisional provider envelopes or committed host receipts/Result Rack projections. Provisional text never becomes conversation history; only the terminal scrubbed message enters history, Forest admission, or tool execution.
+- An Electron 43.2.0 Corner shell launched by `npm run desktop`: single instance, owned loopback Hub lifecycle, secure preload/IPC boundary, 96x96 compact and 980x680 expanded geometry at a 24-pixel display margin, tray expand/collapse/quit, ordinary-close hiding, configurable normal always-on-top, and renderer parity with the browser.
 
 ## Specification precedence
 
@@ -30,6 +35,8 @@ Later adopted slices supersede only the named parts of earlier slices; remaining
 | `CORNER_STEP_SLIPS_V1.md` | A single undifferentiated active-wake gap |
 | `WORKSHOP_SANDBOX_BAY_V1.md` | Direct-host recipe execution in live mode and promotion without an isolation boundary |
 | `WORKSHOP_RESULT_RACK_V1.md` | Unfitted ordinary host returns and unreceipted removal of old completed tool exchanges |
+| `WAKE_STREAM_V1.md` | Polling-only active-wake presentation and non-streaming provider-return assumptions |
+| `CORNER_DESKTOP_V1.md` | The web-only wrapper boundary in `CORNER_SURFACE.md` section 2 |
 
 `WORKSHOP_CONTROL_PANEL_V1.md` and `WORKSHOP_STATIONS_V1.md` remain implementation ancestry. Use them only where a later Workshop specification has not superseded their claims.
 
@@ -57,6 +64,15 @@ For a confirm-class call, the initial action receipt may be `committed` because 
 - `HEARTH_NOTES_FOREST_EXHALE_V1.md`: ten-slot Hearth-note custody, Slot One, lexical Forest selection, exact sentence atoms, and exhale presentation.
 - `VAULT_V1.md`: the Vault room, door, document graph, wings, bin/slot crossing, principle documents, and Forest-to-Vault pointers.
 
+## Current streaming and desktop boundaries
+
+- Durable wake events use monotonic, append-only, hash-linked custody and persist before process broadcast. The process replay buffer is an optimization. Its `resync_required` envelope is synthesized non-durable transport control, not a journal row; Corner preserves its last contiguous cursor and pages the durable history endpoint before reconnecting.
+- Provider deltas are provisional (`authority=provider_provisional`, `committed=false`). Host lifecycle/tool/card events are receipt-derived. The terminal scrubbed assistant message is the only provider message admitted to canonical history and downstream authority.
+- Disconnecting EventSource does not cancel, pause, or backpressure an active wake. User cancellation is not implemented, and the 400 ms persisted-slip poll remains the renderer fallback. Process shutdown does abort the active provider crossing, allows 250 ms for partial raw/outcome custody, then gates late callbacks before closing stores. Tool and World execution outside that provider window remains awaited.
+- DeepSeek SSE bytes are parsed as they arrive, but the Spine appends one terminal raw-return frame rather than one record per network chunk. Normal and interrupted crossings retain the complete admitted bytes; an oversized crossing retains only the exact bounded prefix admitted before the offending chunk and records incomplete capture.
+- The desktop shell has automated geometry, lifecycle, and security coverage. Native GUI/tray smoke verification remains pending, and no installer, signing, update, or packaging pipeline exists yet.
+- Corner does not currently provide general file/artifact opening, editor navigation, or source highlighting. Result and diff cards are bounded textual projections with exact custody pointers.
+
 ## Deferred
 
-The partial Sandbox Bay and Result Rack items named above; Vault runtime; Hearth Notes; Forest exhale/retrieval and synthesis; embeddings and semantic ranking; reset UI; context-limit lifespan closure; free-form shell; companion/delegation bridges; multi-root workspaces; browser/web tools; autonomous model wakes; streaming; authentication; external publishing, deployment, and network Git operations.
+The partial Sandbox Bay and Result Rack items named above; Vault runtime; Hearth Notes; Forest exhale/retrieval and synthesis; embeddings and semantic ranking; reset UI; context-limit lifespan closure; free-form shell; companion/delegation bridges; multi-root workspaces; browser/web tools; autonomous model wakes; user cancellation; streaming backpressure; per-chunk Spine custody; desktop packaging/installers; general file/artifact opening and highlighting; authentication; external publishing, deployment, and network Git operations.

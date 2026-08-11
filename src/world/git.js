@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { resolveRepositoryPath } from './graph.js';
+import { resolveRepositoryPath } from '../workshop/path-law.js';
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 

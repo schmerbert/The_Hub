@@ -1,7 +1,10 @@
 import { canonicalize, sha256, sha256Bytes } from '../core/hash.js';
+import { OPENAI_SSE_POLICY, parseOpenAiSseBytes } from '../providers/sse.js';
 
 const POLICY_NAME = 'provider_return_exact_selection';
 const POLICY_VERSION = 'v1';
+const STREAM_POLICY_NAME = 'provider_return_openai_sse_exact_assembly';
+const STREAM_POLICY_VERSION = 'v1';
 const RETURN_BRAND = Symbol('ScrubbedProviderReturn');
 
 function invalid(message) { return Object.assign(new Error(message), { code: 'return_scrub_invalid' }); }
@@ -32,6 +35,8 @@ function selectedMessage(payload) {
 
 export function scrubProviderReturn(rawReturn) {
   const bytes = exactBytes(rawReturn);
+  const contentType = typeof rawReturn.content_type === 'string' ? rawReturn.content_type : null;
+  if (/^text\/event-stream(?:\s*;|$)/i.test(contentType || '')) return scrubStreamingReturn(rawReturn, bytes, contentType);
   let payload;
   try { payload = JSON.parse(bytes.toString('utf8')); } catch { throw invalid('Provider raw return is not valid JSON.'); }
   const message = selectedMessage(payload);
@@ -52,13 +57,46 @@ export function scrubProviderReturn(rawReturn) {
   return freeze({ [RETURN_BRAND]: true, message, receipt });
 }
 
+function scrubStreamingReturn(rawReturn, bytes, contentType) {
+  let assembled;
+  try { assembled = parseOpenAiSseBytes(bytes); }
+  catch { throw invalid('Provider raw return is not a valid complete OpenAI-compatible SSE stream.'); }
+  const message = structuredClone(assembled.message);
+  const receipt = {
+    receiptId: `return_scrub_${rawReturn.record_id}`,
+    policyName: STREAM_POLICY_NAME,
+    policyVersion: STREAM_POLICY_VERSION,
+    streamingPolicy: OPENAI_SSE_POLICY,
+    source: {
+      spineRecordId: rawReturn.record_id,
+      recordHash: rawReturn.record_hash,
+      byteLength: bytes.length,
+      sha256: sha256Bytes(bytes),
+      contentType,
+    },
+    assemblyPath: 'data[].choices[0].delta',
+    streamEventCount: assembled.eventCount,
+    doneObserved: assembled.doneObserved,
+    responseId: assembled.responseId,
+    resolvedModel: assembled.resolvedModel,
+    finishReason: assembled.finishReason,
+    selectedMessageHash: sha256(canonicalize(message)),
+    selectedMessageJson: JSON.stringify(message),
+  };
+  return freeze({ [RETURN_BRAND]: true, message, receipt });
+}
+
 export function assertScrubbedProviderReturn(value) {
   if (!value || value[RETURN_BRAND] !== true || !value.message || !value.receipt) throw invalid('Only a validated provider return Scrub result may enter session history.');
   const receipt = value.receipt;
-  if (receipt.policyName !== POLICY_NAME || receipt.policyVersion !== POLICY_VERSION || !receipt.source ||
+  const jsonPolicy = receipt.policyName === POLICY_NAME && receipt.policyVersion === POLICY_VERSION;
+  const streamPolicy = receipt.policyName === STREAM_POLICY_NAME && receipt.policyVersion === STREAM_POLICY_VERSION &&
+    receipt.streamingPolicy?.name === OPENAI_SSE_POLICY.name && receipt.streamingPolicy?.version === OPENAI_SSE_POLICY.version &&
+    receipt.assemblyPath === 'data[].choices[0].delta' && receipt.doneObserved === true && Number.isInteger(receipt.streamEventCount) && receipt.streamEventCount > 0;
+  if ((!jsonPolicy && !streamPolicy) || !receipt.source ||
     typeof receipt.receiptId !== 'string' || typeof receipt.source.spineRecordId !== 'string' || !Number.isInteger(receipt.source.byteLength) ||
     typeof receipt.source.sha256 !== 'string' || receipt.selectedMessageHash !== sha256(canonicalize(value.message)) ||
-    receipt.selectedMessageJson !== JSON.stringify(value.message) || JSON.stringify(receipt.selectionPath) !== JSON.stringify(['choices', 0, 'message'])) {
+    receipt.selectedMessageJson !== JSON.stringify(value.message) || (jsonPolicy && JSON.stringify(receipt.selectionPath) !== JSON.stringify(['choices', 0, 'message']))) {
     throw invalid('Provider return Scrub receipt does not match its exact selected message.');
   }
   return value;
@@ -68,4 +106,8 @@ export function isScrubbedProviderReturn(value) {
   try { assertScrubbedProviderReturn(value); return true; } catch { return false; }
 }
 
-export const PROVIDER_RETURN_SCRUB_POLICY = Object.freeze({ name: POLICY_NAME, version: POLICY_VERSION });
+export const PROVIDER_RETURN_SCRUB_POLICY = Object.freeze({
+  name: POLICY_NAME,
+  version: POLICY_VERSION,
+  streaming: Object.freeze({ name: STREAM_POLICY_NAME, version: STREAM_POLICY_VERSION, parser: OPENAI_SSE_POLICY }),
+});

@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, relative } from 'node:path';
 import { sha256, sha256Bytes } from '../core/hash.js';
-import { resolveRepositoryPath } from './graph.js';
+import { resolveRepositoryPath } from '../workshop/path-law.js';
 
 const DEFAULTS = Object.freeze({
   maxFiles: 100,

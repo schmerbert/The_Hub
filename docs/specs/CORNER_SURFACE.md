@@ -1,6 +1,6 @@
 # Corner Surface Adaptation
 
-**Status:** Implemented; current Corner surface contract
+**Status:** Implemented ancestry; current browser/renderer contract, extended by [`CORNER_DESKTOP_V1.md`](CORNER_DESKTOP_V1.md) and [`WAKE_STREAM_V1.md`](WAKE_STREAM_V1.md)
 **Source reference:** `[private local prototype path omitted]` (read-only user-owned prototype)
 **Supersedes:** The generic visual treatment in `FIRST_BREATH.md` section 10; all causal and accessibility requirements remain
 
@@ -19,12 +19,14 @@ The existing prototype is Chronicle-specific and Electron-specific. Adapt the gr
 
 ## 2. Universal shell boundary
 
+**Current correction:** the original web-only wrapper constraint below described this slice. The Electron shell is now adopted and implemented by [`CORNER_DESKTOP_V1.md`](CORNER_DESKTOP_V1.md). The same renderer and HTTP contract remain authoritative in browser and desktop modes.
+
 The First Breath remains a local web surface so it can work on mobile.
 
 - On a wide browser, support a compact Corner state that expands into the bench.
 - On a narrow/mobile browser, open directly into the expanded bench and use the full viewport.
-- Do not attempt operating-system always-on-top, system tray, transparent-window, or Electron behavior in this mission.
-- Keep the renderer compatible with a future Electron or native wrapper without making that wrapper part of the core host.
+- This slice did not attempt operating-system always-on-top, tray, or Electron behavior. The later desktop slice adds an opaque frameless Electron wrapper without moving provider, store, or World authority into the renderer.
+- Keep the renderer usable as an ordinary browser page; desktop-only compact behavior must not make a narrow browser unusable.
 
 The compact state is interface state only. It must not imply the resident is asleep, awake, present, absent, or continuously running.
 
@@ -66,7 +68,9 @@ Animation is ambience around explicit text. It must never be the only status ind
 
 ### Active-wake gap
 
-The gap between the log and composer is a polite live region for short host-authored Step Slips. While busy, Corner polls health for `activeWakeId` and projects that wake's persisted phases and World receipts. Phase, action, pending, and refused-outcome slips are slim rows; exact non-empty `reasoning_content` is an expandable disclosure. On completion, the slips move under the wake as collapsed Steps and the live gap clears for the next wake. The projection never asks an LLM to summarize and never inserts tool JSON, Hearth Scroll text, or reasoning into the conversation rail.
+**Current correction:** polling remains available, but [`WAKE_STREAM_V1.md`](WAKE_STREAM_V1.md) now supplies durable SSE events and provisional provider deltas as the primary live path.
+
+The gap between the log and composer is a polite live region for short host-authored Step Slips and streaming projections. Corner consumes named persisted wake events for safe provisional thinking/draft and receipt-derived action, approval, diff, and result cards. It withholds provisional tool arguments and suppresses credential-shaped delta channels. On a sequence gap it pages durable history from its last contiguous cursor before reconnecting. While busy it also polls health/slips as a fallback. On completion, the persisted slips move under the wake as collapsed Steps and the live gap clears for the next wake. The projection never asks an LLM to summarize and never inserts tool JSON, Hearth Scroll text, reasoning, or provisional draft into the conversation rail.
 
 ## 6. Looking/inspection tray
 
@@ -112,3 +116,9 @@ The same mission must correct and test:
 - UI contains no Chronicle, Vault, gendered resident, old endpoint, tool, Forest-count, or reach-ritual residue.
 - No files under `[private local prototype path omitted]` are modified.
 - Luna reports all changed files and verification performed.
+
+## 10. Present limitations
+
+- Corner does not yet initiate user cancellation; disconnecting or closing a renderer does not cancel a wake.
+- Result and diff cards show bounded receipt-derived text and pointers. General file/artifact opening, editor navigation, and source highlighting are not installed.
+- Desktop packaging, signing, installers, updates, and native GUI/tray smoke verification remain outside the implemented shell slice.

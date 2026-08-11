@@ -10,11 +10,20 @@ function validateOutcome(outcome) {
   const status = outcome.http_status;
   const validStatus = Number.isInteger(status) && status >= 100 && status <= 599;
   if (outcome.kind === 'network_error') {
-    if (Object.keys(outcome).some(key => !['kind', 'network_code'].includes(key)) || outcome.network_code !== 'fetch_failed') throw new Error('Spine network outcome shape is invalid.');
+    const codes = new Set(['fetch_failed', 'aborted', 'stream_interrupted']);
+    const hasStatus = Object.hasOwn(outcome, 'http_status');
+    if (Object.keys(outcome).some(key => !['kind', 'network_code', 'http_status'].includes(key)) || !codes.has(outcome.network_code)
+      || (hasStatus && !validStatus)
+      || (outcome.network_code === 'fetch_failed' && hasStatus)
+      || (outcome.network_code === 'stream_interrupted' && !hasStatus)) throw new Error('Spine network outcome shape is invalid.');
     return;
   }
   if (['http_error', 'invalid_response', 'empty_content'].includes(outcome.kind)) {
     if (!validStatus || Object.keys(outcome).some(key => !['kind', 'http_status'].includes(key))) throw new Error('Spine HTTP outcome shape is invalid.');
+    return;
+  }
+  if (outcome.kind === 'oversized_response') {
+    if (!validStatus || !Number.isInteger(outcome.limit_bytes) || outcome.limit_bytes < 1 || !Number.isInteger(outcome.observed_bytes) || outcome.observed_bytes <= outcome.limit_bytes || Object.keys(outcome).some(key => !['kind', 'http_status', 'limit_bytes', 'observed_bytes'].includes(key))) throw new Error('Spine oversized response outcome shape is invalid.');
     return;
   }
   if (outcome.kind === 'success') {

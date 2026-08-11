@@ -1,6 +1,6 @@
 # The Hub — First Breath
 
-This repository contains one process-lived resident session. Each server start supersedes any prior open session and opens a new one; its first human message takes a native two-breath Hearth handshake, and later messages remain ordinary turns in the same complete active history. It uses Node.js built-ins, SQLite, a replaceable provider boundary, and the Corner-derived static mobile-first page.
+This repository contains one process-lived resident session. Each server start supersedes any prior open session and opens a new one; its first human message takes a native two-breath Hearth handshake, and later messages remain ordinary turns in the same complete active history. It uses Node.js, SQLite, a replaceable provider boundary, a browser Corner surface, and an Electron desktop shell.
 
 See [`docs/STATUS.md`](docs/STATUS.md) for the canonical implemented surface, specification precedence, partial adopted designs, and deferred work.
 
@@ -15,6 +15,16 @@ npm start
 
 Open <http://localhost:3000>. The fake adapter does not claim to be DeepSeek or the resident provider.
 
+## Run the desktop Corner
+
+```powershell
+npm run desktop
+```
+
+Electron 43.2.0 starts the same Hub on loopback, then loads it into a secure frameless Corner window. The desktop surface is 96x96 when compact and 980x680 when expanded, stays 24 pixels inside the active display, and offers tray controls to expand, collapse, or quit. Ordinary window close collapses and hides it; explicit quit awaits Hub custody shutdown. Set `HUB_CORNER_ALWAYS_ON_TOP=false` to disable its normal-level always-on-top behavior. The browser and desktop use the same renderer and API; a 96-pixel desktop window remains compact while a narrow browser opens expanded.
+
+The shell is single-instance, opaque, and loopback-only. Its preload exposes only compact/expanded mode operations with sender validation; renderer Node integration, permissions, new windows, and external navigation are denied. There is not yet an installer or packaging pipeline, and a native GUI/tray smoke pass remains pending even though the desktop lifecycle, geometry, and security seams have automated coverage.
+
 ## Run live DeepSeek mode
 
 Live mode is the default. It fails honestly when the key is absent; it never falls back to fake output.
@@ -27,7 +37,7 @@ $env:DEEPSEEK_MODEL = "deepseek-v4-flash"
 npm start
 ```
 
-Optional settings include the path and ceiling keys shown in `.env.example`, including Result Rack projection limits, provider attention thresholds, retained tool-pair count, and Sandbox Bay configuration. When a database path is overridden without explicit Spine, World, or Result paths, the host derives sibling paths beside that database. Keep credentials only in the ignored `.env` or launching environment. The host does not store or return the API key or authorization header.
+Optional settings include the path and ceiling keys shown in `.env.example`, including Result Rack projection limits, provider attention thresholds, retained tool-pair count, the provider-return capture ceiling, and Sandbox Bay configuration. `HUB_PROVIDER_MAX_RETURN_BYTES` defaults to 8 MiB. When a database path is overridden without explicit Spine, World, or Result paths, the host derives sibling paths beside that database. Keep credentials only in the ignored `.env` or launching environment. The host does not store or return the API key or authorization header.
 
 Live mode requires Docker sandbox execution. `HUB_SANDBOX_BACKEND` is mode-locked to `docker`, and `HUB_SANDBOX_IMAGE` (default `node:22-alpine`) must already be available locally. Each job starts from committed `HEAD` in a disposable Git worktree; uncommitted and ignored canonical files are absent unless a future admission crossing explicitly adds them. Container networking is disabled and the environment is minimal. Docker/image/provisioning failure refuses the recipe; it never falls back to executing that live recipe in the canonical checkout. Docker is not exercised by the normal test suite.
 
@@ -69,8 +79,14 @@ Named recipes remain allowlisted command shapes. In live mode their execution cr
 - `POST /api/wakes` with `{ "content": "..." }`
 - `GET /api/wakes/:id`
 - `GET /api/wakes/:id/slips`
+- `GET /api/events` (same-origin Server-Sent Events; `?after=<sequence>` or `Last-Event-ID` resumes within the process buffer)
+- `GET /api/events/history?after=<sequence>&limit=<1..1000>` (durable recovery journal)
 
 Every wake inspection exposes session identity, provider phases, exact structured messages, Hearth custody, provenance, SHA-256 content hashes, linked events, and typed failures. The tool call and tool-role return are not rendered as chat utterances.
+
+DeepSeek live responses use SSE. Response bytes admitted under the configured return ceiling are retained exactly in one terminal Spine frame and independently assembled by provider-return Scrub. An oversized response retains the exact admitted prefix, records incomplete capture, and fails before canonical use. Safe thinking, draft, tool-call-name, and card updates are persisted as append-only wake-stream events before delivery to Corner; provisional tool arguments are withheld and a credential-shaped delta suppresses its channel. Provider deltas are provisional: only the terminal scrubbed assistant message enters session history, Forest admission, or later tool rounds. A disconnected Corner does not cancel the wake. It reconnects from its last contiguous event cursor, pages the durable journal when the process buffer discloses a gap, and retains persisted-slip polling as a fallback.
+
+Closing the Hub is different from disconnecting a renderer. Shutdown stops intake and aborts the active provider crossing. A compliant provider has up to 250 ms to seal any admitted partial raw bytes and an aborted outcome; an adapter that ignores cancellation is detached after that grace period, and late callbacks are gated before custody stores close. Tool and World execution already in progress remains awaited and custodied.
 
 ## Verify
 
@@ -82,4 +98,4 @@ The suite exercises the real HTTP and SQLite path in temporary databases, includ
 
 The current World Graph implements Center and Workshop only: packed sand, a stone bench, an unspecified tin cup, one bidirectional Workshop door, per-lifespan location, and the five Workshop fixtures. Center mounts movement only; Workshop mounts its complete coding catalog. The kiln runs named recipes asynchronously and survives room changes within the lifespan; the timer likewise remains visible through room presence. Result Rack captures ordinary tool/refusal/approval crossings and async recipe completion, while deterministic projections keep exact large results behind fitted pointers. Corner projects deterministic phase, thinking, action, pending-approval, completion, and refusal slips without placing host machinery in the utterance rail.
 
-The adopted Vault and Hearth Notes/Forest Exhale designs are not implemented. Other deferred work includes free-form shell, companion/delegation bridges, reset UI, context-limit lifespan closure, summaries, embeddings and semantic retrieval, autonomous model wakes, streaming, authentication, external publishing, deployment, and network Git operations.
+The adopted Vault and Hearth Notes/Forest Exhale designs are not implemented. Other deferred work includes free-form shell, companion/delegation bridges, reset UI, context-limit lifespan closure, summaries, embeddings and semantic retrieval, autonomous model wakes, user cancellation, authentication, desktop installers/packaging, general file or artifact opening/highlighting, external publishing, deployment, and network Git operations.
