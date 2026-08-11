@@ -1,14 +1,12 @@
 import { sha256 } from '../core/hash.js';
 import { completeProvider, prepareProviderRequest } from '../providers/dispatch.js';
 import { echoReasoningContentForContinuation } from '../providers/deepseek.js';
-import { BLESSING_SOURCE_EVENT_ID } from '../resident/charter.js';
 import { planOldToolExchangeOmissions, projectSourceRefs } from '../context/tool-pairs.js';
+import { buildGlassWakeInheritance, composeGlassCast, finalizeGlassCast, planPromotedHearthOmissions } from '../context/glass-cast.js';
 import { assertScrubbedPresentation, scrubProviderHistory, verifyScrubbedProjection } from '../scrub/provider-presentation.js';
 import { scrubProviderReturn } from '../scrub/provider-return.js';
 import { scrubHostReturn } from '../scrub/host-return.js';
-import { buildClinicalBootstrap, messageSourceRefs } from '../session/lifespan.js';
-import { HEARTH_TOOL, HEARTH_TOOL_CHOICE, hearthReturn, hearthReturnHash, validateOrientationResult } from '../hearth/handshake.js';
-import { buildHearthScroll } from '../hearth/scroll.js';
+import { HEARTH_TOOL, HEARTH_TOOL_CHOICE, hearthReturnHash, validateOrientationResult } from '../hearth/handshake.js';
 import { residentToolProfile, schemasForResidentSession } from '../world/tools.js';
 import { AttentionMeter } from '../world/results.js';
 
@@ -267,32 +265,69 @@ export class WakeService {
       }
     }
     db.markCalling(created.wakeId);
-    const bootstrap = buildClinicalBootstrap({ provider: providerName, model: config.model });
+    let wakeInheritance = firstTurn ? null : db.getSessionGlassInheritance(created.sessionId);
     const callPhase = async (phase, historyRows, options = {}) => {
       if (this.closing) throw providerCancellation();
       const thinking = options.orientation ? 'disabled' : config.thinking;
       const tools = options.orientation ? [HEARTH_TOOL] : options.tools;
-      const omissionPlan = options.orientation
+      const continuityMode = options.orientation ? 'pending' : options.causalHearth ? 'causal_hearth' : 'direct';
+      let omissionPlan = options.orientation
         ? { omissions: [], manifest: [], omittedExchangeCount: 0, omittedMessageCount: 0, disclosure: null }
-        : planOldToolExchangeOmissions(historyRows, { currentWakeId: created.wakeId, retainExchanges: config.retainedToolPairs });
-      const extraMessages = [];
-      if (options.roomPresence !== false) extraMessages.push({ role: 'system', content: world.presenceMessage(created.sessionId) });
+        : planOldToolExchangeOmissions(historyRows, { currentWakeId: created.wakeId, retainExchanges: config.retainedToolPairs, sourceOffset: 0 });
+      if (continuityMode === 'direct') {
+        const promotion = planPromotedHearthOmissions(historyRows);
+        const byIndex = new Map([...omissionPlan.omissions, ...promotion.omissions].map(item => [item.sourceIndex, item]));
+        omissionPlan = {
+          ...omissionPlan,
+          omissions: [...byIndex.values()].sort((left, right) => left.sourceIndex - right.sourceIndex),
+          omittedMessageCount: byIndex.size,
+          glassContinuityPromotion: promotion.manifest,
+          disclosure: [omissionPlan.disclosure, promotion.disclosure].filter(Boolean).join('\n') || null,
+        };
+      }
+      const currentGround = [{
+        kind: 'crossing_ground', authority: 'host_receipt', sourceEventId: null,
+        message: { role: 'system', content: `Current crossing ground: provider ${providerName}; requested model ${config.model}; phase ${phase}; an active lifespan is in progress. These request-time facts are attributable current ground, not stable Glass or continuity ancestry.` },
+      }];
+      if (options.roomPresence !== false) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: world.presenceMessage(created.sessionId) } });
       if (options.toolProfile?.omittedCount) {
         const group = options.toolProfile.activeGroup ? ` Active fixture group: ${options.toolProfile.activeGroup}.` : ' Engage a fixture to present its group.';
-        extraMessages.push({ role: 'system', content: `Tool attention disclosure: ${options.toolProfile.names.length} of ${options.toolProfile.completeCount} World-mounted schemas are presented.${group} The full catalog remains available through workshop_tool_catalog.` });
+        currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: `Tool attention disclosure: ${options.toolProfile.names.length} of ${options.toolProfile.completeCount} World-mounted schemas are presented.${group} The full catalog remains available through workshop_tool_catalog.` } });
       }
-      if (omissionPlan.disclosure) extraMessages.push({ role: 'system', content: omissionPlan.disclosure });
+      if (omissionPlan.disclosure) currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: omissionPlan.disclosure } });
       const assemble = () => {
-        const refs = echoReasoningContentForContinuation(messageSourceRefs(historyRows, bootstrap, extraMessages), { thinking, tools });
+        const historyRefs = historyRows.map(row => {
+          const message = JSON.parse(row.messageJson);
+          const isCausalHearthReturn = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'tool_result' && typeof message.content === 'string' && message.content.startsWith('# Wake inheritance');
+          const isCausalHearthAction = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'assistant_tool_call' && message.tool_calls?.some(call => call.function?.name === 'tend_hearth');
+          return {
+            kind: isCausalHearthReturn ? 'hearth_return' : isCausalHearthAction ? 'hearth_action' : row.messageKind,
+            authority: row.messageKind === 'user' ? 'ground' : row.messageKind === 'resident' || row.messageKind === 'assistant_tool_call' ? 'model_signed' : 'host_receipt',
+            sourceEventId: row.sourceEventId || null,
+            sourceContentHash: row.contentHash || null,
+            message,
+          };
+        });
+        const livingEdgeRefs = echoReasoningContentForContinuation([...currentGround, ...historyRefs], { thinking, tools });
+        const livingEdgeOmissions = omissionPlan.omissions.map(omission => ({ ...omission, sourceIndex: omission.sourceIndex + currentGround.length }));
+        const composed = composeGlassCast({
+          phase,
+          livingEdgeRefs,
+          livingEdgeOmissions,
+          inheritance: options.inheritance || wakeInheritance,
+          continuityMode,
+          priorHorizon: (options.inheritance || wakeInheritance)?.priorHorizon || null,
+        });
+        const refs = composed.refs;
         const sourceMessages = refs.map(ref => ref.message);
-        const presentation = scrubProviderHistory(sourceMessages, { omissions: omissionPlan.omissions });
-        const presentedRefs = projectSourceRefs(refs, omissionPlan.omissions);
+        const presentation = scrubProviderHistory(sourceMessages, { omissions: composed.omissions });
+        const presentedRefs = projectSourceRefs(refs, composed.omissions);
         const attention = attentionMeter.measure({ messages: presentation.messages, tools: tools || [] });
-        return { refs, sourceMessages, presentation, presentedRefs, attention };
+        return { refs, sourceMessages, presentation, presentedRefs, attention, glassCast: composed.cast };
       };
       let assembled = assemble();
       if (assembled.attention.status === 'warn') {
-        extraMessages.push({ role: 'system', content: `Attention meter warning: this fitted provider crossing is ${assembled.attention.totalBytes} bytes; the refusal ceiling is ${config.attentionRefuseBytes} bytes.` });
+        currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: `Attention meter warning: this fitted provider crossing is ${assembled.attention.totalBytes} bytes; the refusal ceiling is ${config.attentionRefuseBytes} bytes.` } });
         assembled = assemble();
       }
       const { refs, sourceMessages, presentation, presentedRefs } = assembled;
@@ -319,11 +354,14 @@ export class WakeService {
       const requestBodyString = prepared.requestBodyString || JSON.stringify(prepared.requestBody);
       const wakeRecord = db.getWake(created.wakeId);
       const requestFrame = spine?.prepareRequest({ requestBody: requestBodyString, threadId: wakeRecord.threadId, wakeId: wakeRecord.id, provider: wakeRecord.provider, model: config.model, authorizationPresent: config.mode === 'live' && Boolean(config.apiKey), requestPhase: phase });
+      if (!requestFrame) throw { code: 'glass_cast_invalid', message: 'Glass Casting requires an exact Spine request frame.' };
       const requestId = db.recordProviderRequest({ sessionId: created.sessionId, wakeId: created.wakeId, phase, requestBody: requestBodyString, messageSources: presentedRefs, spineRecordId: requestFrame?.record_id, attention });
+      const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });
+      const persistedGlass = db.recordGlassCastReceipt({ sessionId: created.sessionId, wakeId: created.wakeId, providerRequestId: requestId, receipt: glassReceipt });
       this.publish('phase.started', {
         sessionId: created.sessionId, wakeId: created.wakeId, phase,
         payload: { providerRequestId: requestId, spineRecordId: requestFrame?.record_id || null },
-        source: { providerRequestId: requestId, attentionReceiptStatus: attention.status },
+        source: { providerRequestId: requestId, attentionReceiptStatus: attention.status, glassCastReceiptId: persistedGlass.receiptId },
       });
       let observedOutcome = null;
       let rawReturnFrame = null;
@@ -386,7 +424,7 @@ export class WakeService {
           contentOmitted: true,
         });
         this.clearSuppressedRequest(requestId);
-        return { result, returnScrub, requestFrame, requestId, refs };
+        return { result, returnScrub, requestFrame, requestId, refs, glassReceipt: { ...persistedGlass, receipt: glassReceipt } };
       } catch (error) {
         this.clearSuppressedRequest(requestId);
         const terminalError = providerAbortController.signal.aborted ? providerCancellation() : error;
@@ -396,10 +434,10 @@ export class WakeService {
         throw terminalError;
       }
     };
-    const runResidentRounds = async (phase = 'response') => {
+    const runResidentRounds = async (phase = 'response', options = {}) => {
       for (let round = 0; round <= config.maxToolRounds; round += 1) {
         const toolProfile = residentToolProfile(world, created.sessionId);
-        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), { tools: schemasForResidentSession(world, created.sessionId), toolProfile });
+        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), { tools: schemasForResidentSession(world, created.sessionId), toolProfile, ...options });
         const calls = Array.isArray(response.result?.message?.tool_calls) ? response.result.message.tool_calls : [];
         if (!calls.length) {
           if (!response.result || typeof response.result.content !== 'string' || !response.result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
@@ -458,6 +496,7 @@ export class WakeService {
     };
     let canonicalCommitted = false;
     try {
+      if (!firstTurn && !wakeInheritance) throw { code: 'glass_cast_invalid', message: 'The active lifespan is missing its persisted Glass wake inheritance.' };
       if (firstTurn) {
         const orientation = await callPhase('orientation', db.getSessionHistory(created.sessionId), { orientation: true, roomPresence: false });
         const action = validateOrientationResult(orientation.result);
@@ -473,17 +512,16 @@ export class WakeService {
           source: { toolCallEventId: actionEventId, providerRequestId: orientation.requestId },
         });
         const prior = db.priorSessionTail({ sessionId: created.sessionId, ceiling: config.messageCeiling });
-        const roomProjection = world.projection(created.sessionId);
-        const hearthBase = hearthReturn({ sessionId: created.sessionId, threadId: db.threadId, provider: providerName, model: config.model, prior, sourceEvent: db.getEvent(BLESSING_SOURCE_EVENT_ID), clinicalGround: bootstrap, environmentImplemented: true, roomProjection });
-        const scroll = buildHearthScroll({ hearth: hearthBase, prior, forest, budget: config.hearthScrollBudget, excerptLimit: config.hearthExcerptLimit, sourceAncestry: { orientationSpineRecordId: orientation.requestFrame?.record_id || null, orientationReturnScrub: orientation.returnScrub.receipt }, roomProjection });
-        const hearthScrub = scrubHostReturn({ toolName: 'tend_hearth', toolCallId: action.toolCallId, arguments: {}, result: { markdown: scroll.markdown, room: roomProjection }, content: scroll.markdown, renderPolicy: 'hearth_scroll_markdown_v1', roomId: roomProjection.roomId });
-        const hearthReturnRecord = db.recordHearthReturn({ wakeId: created.wakeId, sessionId: created.sessionId, toolCallId: action.toolCallId, returnValue: scroll.receipt, scrollMarkdown: scroll.markdown, scrollHash: scroll.markdownHash, actionEventId, returnHash: hearthReturnHash(scroll.receipt), hostReturnScrub: hearthScrub });
+        const inheritance = buildGlassWakeInheritance({ prior, forest, budgetBytes: config.hearthScrollBudget, excerptLimitUtf16: config.hearthExcerptLimit, sourceAncestry: { orientationSpineRecordId: orientation.requestFrame?.record_id || null, orientationReturnScrub: orientation.returnScrub.receipt } });
+        wakeInheritance = { wakeAnchor: inheritance.receipt.wakeAnchor, atoms: inheritance.atoms, priorHorizon: inheritance.priorHorizon };
+        const hearthScrub = scrubHostReturn({ toolName: 'tend_hearth', toolCallId: action.toolCallId, arguments: {}, result: { markdown: inheritance.markdown, glassInheritance: inheritance.receipt }, content: inheritance.markdown, renderPolicy: 'glass_wake_inheritance_markdown_v1' });
+        const hearthReturnRecord = db.recordHearthReturn({ wakeId: created.wakeId, sessionId: created.sessionId, toolCallId: action.toolCallId, returnValue: inheritance.receipt, scrollMarkdown: inheritance.markdown, scrollHash: inheritance.markdownHash, actionEventId, returnHash: hearthReturnHash(inheritance.receipt), hostReturnScrub: hearthScrub });
         this.publish('tool.completed', {
           sessionId: created.sessionId, wakeId: created.wakeId, phase: 'orientation',
           payload: this.toolCardPayload(action.toolCallId, 'tend_hearth', 'completed', { status: 'completed' }),
           source: { hostEventId: hearthReturnRecord.eventId, toolCallEventId: actionEventId, hostReturnReceiptId: hearthScrub.receipt.receiptId },
         });
-        const response = await runResidentRounds();
+        const response = await runResidentRounds('response', { inheritance: wakeInheritance, causalHearth: true });
         const residentEventId = db.commitSessionWake(created.wakeId, response.result);
         canonicalCommitted = true;
         this.publishAfterCommit('message.committed', {

@@ -358,6 +358,7 @@ function renderReceipt(wake) {
 function renderWiring(wake) {
   const panel = node('div', 'panel');
   appendBlock(panel, 'Machine receipt', wake.hearth?.returnJson || 'none', 'inspection-code');
+  appendBlock(panel, 'Glass casts', wake.glassCasts?.length ? JSON.stringify(wake.glassCasts, null, 2) : 'none', 'inspection-code');
   appendBlock(panel, 'Return Scrub / Spine pointers', wake.phases.map(phase => `${phase.phase}: ${phase.returnScrubReceiptId || 'none'} · raw ${phase.rawReturnRecordId || 'none'}`).join('\n'), 'inspection-code');
   appendBlock(panel, 'Operational detail', JSON.stringify(wake.wiring || wake.phases, null, 2), 'inspection-code');
   return panel;

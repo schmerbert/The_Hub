@@ -10,6 +10,7 @@ import { HubDatabase } from '../src/core/db.js';
 import { buildContext } from '../src/core/context.js';
 import { sha256 } from '../src/core/hash.js';
 import { ARRIVAL_CHARTER } from '../src/resident/charter.js';
+import { STABLE_GLASS_TEXT } from '../src/context/glass-cast.js';
 
 async function fixture(env = {}, provider) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-first-breath-'));
@@ -51,7 +52,15 @@ test('context ordering and hashes match actual adapter input', async () => {
   const f = await fixture({ HUB_RESIDENT_MODE: 'fake' });
   try {
     const result = await post(f.base, '/api/wakes', 'Exact words.'); const included = result.body.context.filter(item => item.included);
-    assert.deepEqual(f.hub.provider.calls[0].messages, included.map(item => ({ role: item.actorRole, content: item.content })));
+    const presented = f.hub.provider.calls[0].messages;
+    assert.equal(presented[0].content, STABLE_GLASS_TEXT);
+    assert.equal(presented.at(-1).content, 'Exact words.');
+    assert.match(presented[1].content, /^Prior horizon:/);
+    assert.match(presented[2].content, /^Current crossing ground:/);
+    assert.equal(presented[2].content.includes(result.body.sessionId), false);
+    assert.equal(presented[2].content.includes(result.body.id), false);
+    assert.deepEqual(included.map(item => item.content), [STABLE_GLASS_TEXT, 'Exact words.']);
+    assert.equal(result.body.glassCasts.length, 2);
     for (const item of result.body.context) assert.equal(item.contentHash, sha256(item.content));
   } finally { await f.close(); }
 });

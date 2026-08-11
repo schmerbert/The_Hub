@@ -25,14 +25,18 @@ test('v1 first turn stores one user, performs two phases, and later turns stay o
     const orientation = JSON.parse(first.phases[0].requestBody);
     const response = JSON.parse(first.phases[1].requestBody);
     assert.equal(orientation.messages.at(-1).content, 'first exact user');
-    assert.equal(response.messages[1].content, 'first exact user');
-    assert.deepEqual(response.messages[2], JSON.parse(first.events.find(event => event.eventKind === 'state' && event.actorKind === 'resident').content));
-    assert.equal(response.messages[3].role, 'tool');
-    assert.equal(response.messages[3].content, first.hearth.scrollMarkdown);
-    assert.match(response.messages[3].content, /^# Hearth Scroll/);
-    assert.doesNotMatch(response.messages[3].content, /schema_version|return_json|raw_return/i);
+    assert.equal(response.messages.some(message => message.content === 'first exact user'), true);
+    const hearthAction = JSON.parse(first.events.find(event => event.eventKind === 'state' && event.actorKind === 'resident').content);
+    assert.equal(response.messages.some(message => JSON.stringify(message) === JSON.stringify(hearthAction)), true);
+    const hearthReturn = response.messages.find(message => message.role === 'tool' && message.content === first.hearth.scrollMarkdown);
+    assert.ok(hearthReturn);
+    assert.match(hearthReturn.content, /^# Wake inheritance/);
+    assert.doesNotMatch(hearthReturn.content, /schema_version|return_json|raw_return|Longshore Current/i);
     const later = await f.hub.wake('second exact user');
     assert.deepEqual(later.phases.map(phase => phase.phase), ['ordinary']);
+    const laterMessages = JSON.parse(later.phases[0].requestBody).messages;
+    assert.equal(laterMessages.some(message => message.role === 'tool' && message.content.startsWith('# Wake inheritance')), false);
+    assert.equal(laterMessages.some(message => message.tool_calls?.some(call => call.function?.name === 'tend_hearth')), false);
     assert.equal(f.hub.provider.calls.length, 3);
     assert.equal(later.events.filter(event => event.actorKind === 'user').length, 1);
     assert.equal(f.hub.db.getActiveSession().wakeStatus, 'complete');
@@ -77,12 +81,11 @@ test('restart closes the prior lifespan, opens exactly one new lifespan, and car
     assert.equal(sessions.find(session => session.id === priorSessionId).closeReason, 'server_restart');
     const current = await second.wake('after restart');
     const hearth = JSON.parse(current.hearth.returnJson);
-    assert.equal(hearth.prior_session.session_id, priorSessionId);
-    assert.ok(hearth.closing_tail.some(item => item.content === 'prior exact text'));
-    assert.ok(hearth.closing_tail.some(item => item.content.includes('FAKE MODE')));
-    assert.equal(hearth.environment.implemented, true);
-    assert.equal(hearth.environment.location, 'room.center');
-    assert.doesNotMatch(current.hearth.returnJson, /"summary"\s*:|embedding|room_id/i);
+    assert.equal(hearth.priorHorizon.sourceSessionId, priorSessionId);
+    assert.ok(hearth.atoms.some(item => item.excerpt === 'prior exact text'));
+    assert.ok(hearth.atoms.some(item => item.excerpt.includes('FAKE MODE')));
+    assert.equal(hearth.selection.policy, 'deterministic_prior_session_recency');
+    assert.doesNotMatch(current.hearth.returnJson, /"summary"\s*:|embedding|room_id|Longshore Current/i);
   } finally { second.close(); await rm(dir, { recursive: true, force: true }); }
 });
 

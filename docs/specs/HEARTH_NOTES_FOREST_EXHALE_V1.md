@@ -1,6 +1,6 @@
 # Hearth Notes and Forest Exhale v1
 
-> **Status: Adopted design; not implemented.** This document records the accepted contract, but it does not install Hearth-note storage/rendering, a Forest selector, exhale presentation, or tests. See [`../STATUS.md`](../STATUS.md).
+> **Status: Adopted downstream direction; revision required; not implemented.** Glass Casting v1 now owns provider-presentation anatomy. This document preserves the accepted Hearth-note and exact-exhale intent, but it is not the next implementation slice and must be revised to fit Glass bands and receipts before code is authorized. It does not install Hearth-note storage/rendering, a Forest selector, exhale presentation, or tests. See [`GLASS_CASTING_V1.md`](GLASS_CASTING_V1.md) and [`../STATUS.md`](../STATUS.md).
 
 This slice adds two small resident-facing crossings without turning memory into narration:
 

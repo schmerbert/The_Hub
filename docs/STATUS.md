@@ -6,7 +6,7 @@ This page is the canonical map of the current runtime. Specifications under `doc
 
 - One process-lived resident lifespan per server start, with Session Zero ancestry and a native two-breath `tend_hearth` handshake on the first human turn.
 - Exact Source Ledger, provider-presentation and provider-return Scrub receipts, hash-linked Spine custody, and optional verified Forest Home/Wild intake.
-- Hearth Scroll v2 with exact recency-selected source excerpts. Hearth Notes and Forest Exhale are not implemented.
+- Glass Casting v1 is the implemented provider presentation: stable clinical Glass, validated five-band anatomy, deterministic source-exact wake inheritance, declared causal promotion, exact provider-presentation Scrub projection, exact Spine binding, and stripped append-only cast manifests. Hearth Scroll v2 remains implementation ancestry; Hearth Notes and Forest Exhale remain unimplemented downstream designs requiring revision against Glass.
 - A persistent World Graph with Center and Workshop, per-lifespan location, five engageable Workshop fixtures, a complete Ceiling catalog, and room-based Patch Bay mounting. Fixture engagement is orientation, not authority.
 - Bounded repository exploration and mutation, local Git operations, work briefs, timers, approvals, and deterministic Corner Step Slips.
 - Result Rack custody for ordinary Gateway success, refusal, pending approval, and approval-completion crossings. Exact machine-result bytes/manifests are retained in SQLite and resident tool returns use deterministic `result_rack_projection_v1` host-return Scrub projections. Asynchronous recipe completion is also captured.
@@ -26,6 +26,7 @@ Later adopted slices supersede only the named parts of earlier slices; remaining
 
 | Current authority | Supersedes |
 | --- | --- |
+| `GLASS_CASTING_V1.md` | The active provider-presentation shape and the Longshore Current continuity-name / wake-blessing roles in Wake Ritual, Session/Hearth, and Hearth Scroll. Historical records and custody remain unchanged. |
 | `SESSION_HEARTH_V1.md` and `HEARTH_SCROLL_V2.md` | First Breath / Orientation Receipt / Wake Ritual presentation timing and the original large Hearth return |
 | `WORLD_GRAPH_WORKSHOP_V1.md` | Earlier claims that no rooms or movement exist |
 | `WORKSHOP_TOOL_CEILING_V1.md` | Station-to-tool mounting and the read-only Workshop capability ceiling |
@@ -38,7 +39,7 @@ Later adopted slices supersede only the named parts of earlier slices; remaining
 | `WAKE_STREAM_V1.md` | Polling-only active-wake presentation and non-streaming provider-return assumptions |
 | `CORNER_DESKTOP_V1.md` | The web-only wrapper boundary in `CORNER_SURFACE.md` section 2 |
 
-`WORKSHOP_CONTROL_PANEL_V1.md` and `WORKSHOP_STATIONS_V1.md` remain implementation ancestry. Use them only where a later Workshop specification has not superseded their claims.
+The Glass row describes the current runtime presentation. Session/Hearth v1 and Hearth Scroll v2 remain implementation ancestry and custody law where Glass does not supersede them. `WORKSHOP_CONTROL_PANEL_V1.md` and `WORKSHOP_STATIONS_V1.md` likewise remain implementation ancestry. Use them only where a later Workshop specification has not superseded their claims.
 
 ## Implemented core, broader design still partial
 
@@ -60,8 +61,7 @@ Fake mode is different by design: it retains the legacy direct-host RecipeRunner
 For a confirm-class call, the initial action receipt may be `committed` because creation of the pending approval was the immediate committed result. The later decision and mutation have their own append-only action and approval receipts linked to the pending phase.
 
 ## Adopted design, not implemented
-
-- `HEARTH_NOTES_FOREST_EXHALE_V1.md`: ten-slot Hearth-note custody, Slot One, lexical Forest selection, exact sentence atoms, and exhale presentation.
+- `HEARTH_NOTES_FOREST_EXHALE_V1.md`: adopted downstream direction, revision required before implementation so its note/exhale crossings fit Glass anatomy and custody. It is not the next implementation slice.
 - `VAULT_V1.md`: the Vault room, door, document graph, wings, bin/slot crossing, principle documents, and Forest-to-Vault pointers.
 
 ## Current streaming and desktop boundaries
@@ -75,4 +75,4 @@ For a confirm-class call, the initial action receipt may be `committed` because 
 
 ## Deferred
 
-The partial Sandbox Bay and Result Rack items named above; Vault runtime; Hearth Notes; Forest exhale/retrieval and synthesis; embeddings and semantic ranking; reset UI; context-limit lifespan closure; free-form shell; companion/delegation bridges; multi-root workspaces; browser/web tools; autonomous model wakes; user cancellation; streaming backpressure; per-chunk Spine custody; desktop packaging/installers; general file/artifact opening and highlighting; authentication; external publishing, deployment, and network Git operations.
+The partial Sandbox Bay and Result Rack items named above; Glass fold generation and prior-horizon walk-back; revision and implementation of Hearth Notes and Forest Exhale; Vault runtime; House and Garden structures; embeddings and semantic ranking; reset UI; context-limit lifespan closure; free-form shell; companion/delegation bridges; multi-root workspaces; browser/web tools; autonomous model wakes; user cancellation; streaming backpressure; per-chunk Spine custody; desktop packaging/installers; general file/artifact opening and highlighting; authentication; external publishing, deployment, and network Git operations.

@@ -3,11 +3,13 @@ import { canonicalize, sha256 } from '../core/hash.js';
 const BRAND = Symbol('ScrubbedHostReturn');
 const IDENTITY_POLICY = 'host_return_identity';
 const HEARTH_MARKDOWN_POLICY = 'hearth_scroll_markdown_v1';
+const GLASS_WAKE_INHERITANCE_POLICY = 'glass_wake_inheritance_markdown_v1';
 const RESULT_RACK_POLICY = 'result_rack_projection_v1';
 function invalid(message) { throw Object.assign(new Error(message), { code: 'host_return_scrub_invalid' }); }
 function render(policy, result, projection) {
-  if (policy === HEARTH_MARKDOWN_POLICY) {
-    if (typeof result?.markdown !== 'string') invalid('Hearth Markdown rendering requires a markdown result field.');
+  if (policy === HEARTH_MARKDOWN_POLICY || policy === GLASS_WAKE_INHERITANCE_POLICY) {
+    if (typeof result?.markdown !== 'string') invalid('Wake inheritance Markdown rendering requires a markdown result field.');
+    if (policy === GLASS_WAKE_INHERITANCE_POLICY && (!result.markdown.startsWith('# Wake inheritance') || result?.glassInheritance?.kind !== 'glass_wake_inheritance')) invalid('Glass wake inheritance rendering requires its versioned exact inheritance receipt.');
     return result.markdown;
   }
   if (policy === RESULT_RACK_POLICY) {

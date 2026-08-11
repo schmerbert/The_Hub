@@ -1,6 +1,6 @@
 # Hearth Scroll v2 — Lighter Without Being Thinner
 
-> **Status: Implemented.** The Scroll remains deterministic and recency-only; Hearth Notes and Forest Exhale are adopted designs but are not installed.
+> **Status: Implemented runtime ancestry; active presentation superseded by Glass Casting v1.** Its deterministic, source-exact recency law is ported into Glass continuity anchors. Historical Scroll custody and compatibility remain valid; Hearth Notes and Forest Exhale remain downstream, revision-required designs and are not installed.
 
 ## Status and ancestry
 

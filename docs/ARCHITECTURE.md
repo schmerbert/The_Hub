@@ -130,7 +130,7 @@ Relevant keys in `src/core/config.js` are:
 
 - A process start closes any open lifespan as `server_restart` and opens a new lifespan. The first turn has orientation and response phases; later turns have ordinary phases.
 - Active session history remains authoritative even when provider presentation omits eligible older completed tool exchanges.
-- Hearth Notes, Forest Exhale, summaries, reset controls, context-limit closure, embeddings, and semantic retrieval are not implemented.
+- Glass fold generation and farther walk-back, Hearth Notes, Forest Exhale, summaries, reset controls, context-limit closure, embeddings, and semantic retrieval are not implemented. Glass anatomy, receipts, exact inheritance, and causal promotion are installed.
 - Docker behavior has focused adapter/backend tests but is intentionally not exercised by the normal suite; operators must supply a working Docker CLI/daemon and a locally available image.
 - User cancellation is not installed. Renderer SSE clients neither backpressure nor cancel provider work. Hub shutdown does cancel the active provider crossing with a bounded custody grace period. Raw SSE custody is appended at termination rather than per received byte chunk.
 - The process bus is bounded and may require resynchronization from the durable journal. Desktop installer/packaging and native GUI/tray smoke verification remain pending.

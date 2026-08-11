@@ -2,7 +2,7 @@
 
 ## Status
 
-**Implemented ancestry; current for lifespan and two-breath timing.** This specification replaced the runtime fiction that every provider request is a wake. It introduced one process-lived resident session and one native tool-shaped Hearth handshake at the beginning of that session. World Graph Workshop v1 later superseded its claims that rooms, movement, and environmental state were absent; the Hearth receipt now carries a truthful room projection.
+**Implemented ancestry; current for lifespan and two-breath timing.** This specification replaced the runtime fiction that every provider request is a wake. It introduced one process-lived resident session and one native tool-shaped Hearth handshake at the beginning of that session. World Graph Workshop v1 later superseded its claims that rooms, movement, and environmental state were absent. Glass Casting v1 now owns active provider presentation while preserving this two-breath causal Hearth path and its historical receipts; the Longshore blessing role is retired from active material without rewriting ancestry.
 
 This slice does not add rooms, spatial state, a reset button, context-limit handling, embeddings, Forest exhale, autonomous wakes, summaries, or a final resident-authored Hearth collection.
 

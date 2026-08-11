@@ -10,10 +10,11 @@ import {
   wrapBlessingV1,
 } from '../resident/charter.js';
 import { validateBlessingSourceEvent } from '../context/assemble.js';
-import { id, sha256 } from '../core/hash.js';
+import { canonicalize, id, sha256 } from '../core/hash.js';
 import { SESSION_ZERO_ID, SESSION_ZERO_LABEL, buildClinicalBootstrap } from '../session/lifespan.js';
 import { assertScrubbedProviderReturn } from '../scrub/provider-return.js';
 import { assertScrubbedHostReturn } from '../scrub/host-return.js';
+import { STABLE_GLASS_TEXT } from '../context/glass-cast.js';
 import { WakeStreamJournal } from './wake-stream.js';
 
 const SCHEMA = `
@@ -129,6 +130,28 @@ CREATE TABLE IF NOT EXISTS provider_requests (
   UNIQUE(wake_id, ordinal)
 );
 CREATE INDEX IF NOT EXISTS provider_requests_wake_order ON provider_requests(wake_id, ordinal);
+CREATE TABLE IF NOT EXISTS glass_cast_receipts (
+  id TEXT PRIMARY KEY,
+  provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id),
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  wake_id TEXT NOT NULL REFERENCES wakes(id),
+  phase TEXT NOT NULL CHECK(phase IN ('orientation','response','ordinary')),
+  schema_version INTEGER NOT NULL CHECK(schema_version=1),
+  receipt_json TEXT NOT NULL,
+  receipt_hash TEXT NOT NULL,
+  cast_hash TEXT NOT NULL,
+  presentation_scrub_hash TEXT NOT NULL,
+  presented_messages_utf8_bytes INTEGER NOT NULL,
+  presented_messages_sha256 TEXT NOT NULL,
+  request_body_utf8_bytes INTEGER NOT NULL,
+  request_body_sha256 TEXT NOT NULL,
+  spine_record_id TEXT NOT NULL,
+  spine_record_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS glass_cast_receipts_wake_order ON glass_cast_receipts(wake_id, created_at, id);
+CREATE TRIGGER IF NOT EXISTS glass_cast_receipts_append_only_update BEFORE UPDATE ON glass_cast_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS glass_cast_receipts_append_only_delete BEFORE DELETE ON glass_cast_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TABLE IF NOT EXISTS attention_receipts (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -461,9 +484,8 @@ export class HubDatabase {
       this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?)`).run(historyId, session.id, wakeId, historyOrdinal, JSON.stringify(message), 'user', 'user', eventId, sha256(content), timestamp);
       this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
-      const bootstrap = buildClinicalBootstrap({ provider, model });
       for (const item of [
-        { ordinal: 1, itemKind: 'clinical_anchor', actorRole: 'system', content: bootstrap, sourceDescription: 'Minimal clinical bootstrap v1', authority: 'host_receipt', included: true },
+        { ordinal: 1, itemKind: 'clinical_anchor', actorRole: 'system', content: STABLE_GLASS_TEXT, sourceDescription: 'Stable clinical Glass v1', authority: 'host_receipt', included: true },
         { ordinal: 2, itemKind: 'utterance', actorRole: 'user', content, sourceEventId: eventId, sourceDescription: 'Current session human message', authority: 'ground', included: true },
       ]) {
         this.sqlite.prepare(`INSERT INTO wake_context_items
@@ -472,7 +494,7 @@ export class HubDatabase {
           item.sourceEventId || null, item.sourceDescription, item.authority, 1, null, sha256(item.content));
       }
     });
-    return { wakeId, eventId, sessionId: session.id, turnOrdinal, context: [{ role: 'system', content: buildClinicalBootstrap({ provider, model }) }, message] };
+    return { wakeId, eventId, sessionId: session.id, turnOrdinal, context: [{ role: 'system', content: STABLE_GLASS_TEXT }, message] };
   }
 
   getSessionHistory(sessionId = this.session.id) {
@@ -532,6 +554,39 @@ export class HubDatabase {
     this.sqlite.prepare('INSERT INTO attention_receipts(id,session_id,wake_id,phase,status,receipt_json,receipt_hash,created_at) VALUES(?,?,?,?,?,?,?,?)')
       .run(receiptId, sessionId, wakeId, phase, attention.status, receiptJson, sha256(receiptJson), now());
     return { receiptId, receiptHash: sha256(receiptJson), status: attention.status };
+  }
+
+  recordGlassCastReceipt({ sessionId, wakeId, providerRequestId, receipt }) {
+    const request = this.sqlite.prepare(`SELECT p.session_id AS sessionId, p.wake_id AS wakeId, p.phase, p.request_body AS requestBody, p.spine_record_id AS spineRecordId,
+      w.provider, w.requested_model AS requestedModel FROM provider_requests p JOIN wakes w ON w.id=p.wake_id WHERE p.id=?`).get(providerRequestId);
+    let presentedMessagesJson = null;
+    try { presentedMessagesJson = JSON.stringify(JSON.parse(request?.requestBody).messages); } catch {}
+    if (!request || request.sessionId !== sessionId || request.wakeId !== wakeId || request.phase !== receipt?.phase || receipt?.schemaVersion !== 1 ||
+      receipt.crossing?.sessionId !== sessionId || receipt.crossing?.wakeId !== wakeId || receipt.crossing?.provider !== request.provider || receipt.crossing?.requestedModel !== request.requestedModel ||
+      request.spineRecordId !== receipt.spineRecordId || typeof receipt.spineRecordHash !== 'string' || !receipt.spineRecordHash ||
+      Buffer.byteLength(request.requestBody, 'utf8') !== receipt.requestBodyUtf8Bytes || sha256(request.requestBody) !== receipt.requestBodySha256 ||
+      !receipt.cast || receipt.cast.schemaVersion !== 1 || !Array.isArray(receipt.cast.bandOrder) || receipt.cast.bandOrder.join('|') !== 'glass|continuity_anchors|prior_horizon|capped_rolling_fold|living_edge' ||
+      receipt.castSha256 !== sha256(canonicalize(receipt.cast)) || receipt.presentationScrubSha256 !== sha256(canonicalize(receipt.presentationScrub)) ||
+      typeof presentedMessagesJson !== 'string' || Buffer.byteLength(presentedMessagesJson, 'utf8') !== receipt.presentedMessagesUtf8Bytes || sha256(presentedMessagesJson) !== receipt.presentedMessagesSha256) {
+      throw Object.assign(new Error('Glass cast receipt does not match its provider request boundary.'), { code: 'glass_cast_invalid' });
+    }
+    const receiptJson = JSON.stringify(receipt);
+    const receiptId = id('glass_cast');
+    const receiptHash = sha256(receiptJson);
+    this.sqlite.prepare(`INSERT INTO glass_cast_receipts(id,provider_request_id,session_id,wake_id,phase,schema_version,receipt_json,receipt_hash,cast_hash,presentation_scrub_hash,presented_messages_utf8_bytes,presented_messages_sha256,request_body_utf8_bytes,request_body_sha256,spine_record_id,spine_record_hash,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(receiptId, providerRequestId, sessionId, wakeId, receipt.phase, receipt.schemaVersion, receiptJson, receiptHash,
+      receipt.castSha256, receipt.presentationScrubSha256, receipt.presentedMessagesUtf8Bytes, receipt.presentedMessagesSha256,
+      receipt.requestBodyUtf8Bytes, receipt.requestBodySha256, receipt.spineRecordId, receipt.spineRecordHash, now());
+    return { receiptId, receiptHash };
+  }
+
+  getSessionGlassInheritance(sessionId = this.session.id) {
+    const row = this.sqlite.prepare(`SELECT return_json AS returnJson FROM hearth_receipts WHERE session_id=? ORDER BY created_at,id LIMIT 1`).get(sessionId);
+    if (!row) return null;
+    let receipt;
+    try { receipt = JSON.parse(row.returnJson); } catch { return null; }
+    if (receipt?.kind !== 'glass_wake_inheritance' || receipt?.schemaVersion !== 1 || receipt?.wakeAnchor?.text === undefined || !Array.isArray(receipt.atoms) || !receipt.priorHorizon) return null;
+    return { wakeAnchor: receipt.wakeAnchor, atoms: receipt.atoms, priorHorizon: receipt.priorHorizon };
   }
 
   completeProviderRequest(requestId, result, outcome = null, returnScrub = null) {
@@ -691,6 +746,11 @@ export class HubDatabase {
       outcome: phase.outcome ? JSON.parse(phase.outcome) : null,
       returnScrubReceipt: phase.returnScrubReceiptJson ? JSON.parse(phase.returnScrubReceiptJson) : null,
     }));
+    const glassCasts = this.sqlite.prepare(`SELECT id AS receiptId, provider_request_id AS providerRequestId, phase, receipt_json AS receiptJson, receipt_hash AS receiptHash, created_at AS createdAt
+      FROM glass_cast_receipts WHERE wake_id=? ORDER BY created_at,id`).all(wakeId).map(row => ({ ...row, receipt: JSON.parse(row.receiptJson) }));
+    const glassByRequest = new Map(glassCasts.map(item => [item.providerRequestId, item]));
+    normalized.phases = normalized.phases.map(phase => ({ ...phase, glassCast: glassByRequest.get(phase.id) || null }));
+    normalized.glassCasts = glassCasts;
     normalized.attentionReceipts = this.sqlite.prepare('SELECT id, phase, status, receipt_json AS receiptJson, receipt_hash AS receiptHash, created_at AS createdAt FROM attention_receipts WHERE wake_id=? ORDER BY created_at,id').all(wakeId)
       .map(receipt => ({ ...receipt, receipt: JSON.parse(receipt.receiptJson) }));
     normalized.hearth = this.sqlite.prepare(`SELECT tool_call_id AS toolCallId, return_json AS returnJson, return_hash AS returnHash, scroll_markdown AS scrollMarkdown, scroll_hash AS scrollHash,

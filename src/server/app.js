@@ -9,8 +9,6 @@ import { createProvider } from '../providers/index.js';
 import { ForestStore } from '../forest/store.js';
 import { verifyForest } from '../forest/verify.js';
 import { SpineStore } from '../spine/store.js';
-import { BLESSING_SOURCE_EVENT_ID } from '../resident/charter.js';
-import { validateBlessingSourceEvent } from '../context/assemble.js';
 import { WorldGraphStore } from '../world/graph.js';
 import { WorkshopAdapter } from '../world/workshop.js';
 import { WorldActionGateway } from '../world/gateway.js';
@@ -79,7 +77,6 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
   let forest = null; let spine = null; let world = null; let results = null;
   try {
     if (config.forestActive && !forestOverride) {
-      if (config.mode === 'live') validateBlessingSourceEvent(db.getEvent(BLESSING_SOURCE_EVENT_ID), db.threadId);
       verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
       forest = new ForestStore(config.forestPath, { mode: 'requireExisting' });
     } else forest = forestOverride || null;
@@ -87,7 +84,6 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     world = worldOverride || new WorldGraphStore(config.worldPath);
     results = new ResultRackStore(config.resultPath, { projectionMaxBytes: config.resultProjectionMaxBytes, projectionMaxLines: config.resultProjectionMaxLines });
     world.ensureLifespan(db.session.id);
-    if (config.mode === 'live' && forest && spine) validateBlessingSourceEvent(db.getEvent(BLESSING_SOURCE_EVENT_ID), db.threadId);
   } catch (error) {
     forest?.close(); spine?.close(); world?.close(); results?.close(); db.close(); throw { code: error?.code === 'wake_ritual_invalid' ? 'wake_ritual_invalid' : 'forest_activation_refused', message: error?.code === 'wake_ritual_invalid' ? error.message : error?.code === 'forest_activation_refused' ? error.message : 'Existing Forest validation failed.' };
   }
