@@ -4,6 +4,7 @@ import { createDesktopController } from './desktop-controller.js';
 import { startDesktopHost } from './desktop-host.js';
 
 const preloadPath = fileURLToPath(new URL('./preload.cjs', import.meta.url));
+export const DESKTOP_QUIT_EXISTING_FLAG = '--quit-existing';
 
 function configuredAlwaysOnTop(env = process.env) {
   return !['0', 'false', 'off', 'no'].includes(String(env.HUB_CORNER_ALWAYS_ON_TOP || 'true').toLowerCase());
@@ -30,6 +31,18 @@ export function createDesktopExpansionQueue() {
     clear() { controller = null; },
     pending: () => pending,
   };
+}
+
+export function desktopLaunchIntent(commandLine) {
+  return Array.isArray(commandLine) && commandLine.includes(DESKTOP_QUIT_EXISTING_FLAG) ? 'quit-existing' : 'start';
+}
+
+export function routeDesktopSecondInstance(commandLine, { requestQuit, requestExpand } = {}) {
+  if (typeof requestQuit !== 'function' || typeof requestExpand !== 'function') throw new TypeError('Desktop second-instance routing requires quit and expand handlers.');
+  const intent = desktopLaunchIntent(commandLine);
+  if (intent === 'quit-existing') requestQuit();
+  else requestExpand();
+  return intent;
 }
 
 if (process.versions.electron) {
@@ -71,10 +84,15 @@ if (process.versions.electron) {
     await desktop.create();
   }
 
-  if (!hasInstanceLock) app.quit();
+  if (!hasInstanceLock || desktopLaunchIntent(process.argv) === 'quit-existing') app.quit();
   else {
     app.setName('The Hub — Corner');
-    app.on('second-instance', () => { expansionQueue.request(); });
+    app.on('second-instance', (_event, commandLine) => {
+      routeDesktopSecondInstance(commandLine, {
+        requestQuit: () => { void quit(); },
+        requestExpand: () => { expansionQueue.request(); },
+      });
+    });
     app.on('activate', () => { expansionQueue.request(); });
     app.on('before-quit', event => {
       if (shutdownComplete) return;

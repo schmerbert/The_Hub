@@ -36,6 +36,12 @@ const waveCompact = new window.CornerWave(document.querySelector('#wave-compact'
 const waveMain = new window.CornerWave(document.querySelector('#wave-main'), { amp: .3 });
 const desktopShell = window.cornerDesktop || null;
 document.documentElement.dataset.shell = desktopShell ? 'desktop' : 'browser';
+let conversationScroller = log;
+if (desktopShell) {
+  conversationScroller = node('div', 'conversation-scroll');
+  log.before(conversationScroller);
+  conversationScroller.append(log, liveConversation, liveGap, gap);
+}
 
 let busy = false;
 let currentWake = null;
@@ -73,7 +79,7 @@ function applyMode(next) {
   chip.setAttribute('aria-expanded', String(next === 'expanded'));
   if (next === 'expanded') {
     waveMain.start();
-    requestAnimationFrame(() => input.focus());
+    requestAnimationFrame(() => input.focus({ preventScroll: true }));
   }
   return next;
 }
@@ -209,7 +215,7 @@ function renderLive() {
     machinery.push(row);
   }
   liveGap.replaceChildren(...machinery);
-  log.scrollTop = log.scrollHeight;
+  conversationScroller.scrollTop = conversationScroller.scrollHeight;
 }
 
 function reconcileOptimisticUser(thread) {
@@ -275,7 +281,7 @@ function renderThread(data) {
     wakeElement.append(actionRow);
     log.append(wakeElement);
   }
-  log.scrollTop = log.scrollHeight;
+  conversationScroller.scrollTop = conversationScroller.scrollHeight;
   renderLive();
 }
 
@@ -387,7 +393,7 @@ function renderApprovals(approvals) {
 }
 
 async function inspectWorld() {
-  try { const world = await request('/api/world'); tray.hidden = false; trayTabs.replaceChildren(); panelHost.replaceChildren(renderWorld(world)); panelHost.focus(); }
+  try { const world = await request('/api/world'); tray.hidden = false; trayTabs.replaceChildren(); panelHost.replaceChildren(renderWorld(world)); panelHost.focus({ preventScroll: true }); }
   catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
 }
 
@@ -398,7 +404,7 @@ async function inspectApprovals() {
     tray.hidden = false;
     trayTabs.replaceChildren();
     panelHost.replaceChildren(renderApprovals(currentApprovals));
-    panelHost.focus();
+    panelHost.focus({ preventScroll: true });
   } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
 }
 
@@ -416,7 +422,7 @@ function renderInspection() {
 async function inspectWake(wakeId) {
   try {
     currentWake = await request(`/api/wakes/${encodeURIComponent(wakeId)}`);
-    currentInspectionTab = 'summary'; tray.hidden = false; renderInspection(); panelHost.focus();
+    currentInspectionTab = 'summary'; tray.hidden = false; renderInspection(); panelHost.focus({ preventScroll: true });
   } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
 }
 
@@ -614,7 +620,7 @@ async function submitWake(event) {
   } finally {
     stopSlipPoll();
     gap.replaceChildren();
-    busy = false; input.disabled = false; sendButton.disabled = false; input.focus();
+    busy = false; input.disabled = false; sendButton.disabled = false; input.focus({ preventScroll: true });
   }
 }
 

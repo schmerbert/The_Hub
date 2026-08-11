@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { createDesktopController, DESKTOP_IPC } from '../src/corner/desktop-controller.js';
-import { createDesktopExpansionQueue } from '../src/corner/electron-main.js';
+import {
+  createDesktopExpansionQueue,
+  desktopLaunchIntent,
+  DESKTOP_QUIT_EXISTING_FLAG,
+  routeDesktopSecondInstance,
+} from '../src/corner/electron-main.js';
 
 function fixture({ alwaysOnTop = true } = {}) {
   const windows = [];
@@ -148,6 +153,35 @@ test('desktop expansion requests queue until asynchronous startup attaches the c
   assert.deepEqual(calls, ['expand', 'expand']);
 });
 
+test('desktop command-line routing preserves expansion and privately requests graceful quit', () => {
+  const calls = [];
+  const handlers = {
+    requestQuit: () => calls.push('quit'),
+    requestExpand: () => calls.push('expand'),
+  };
+  assert.equal(desktopLaunchIntent(['electron.exe', '.']), 'start');
+  assert.equal(routeDesktopSecondInstance(['electron.exe', '.'], handlers), 'start');
+  assert.equal(desktopLaunchIntent(['electron.exe', '.', DESKTOP_QUIT_EXISTING_FLAG]), 'quit-existing');
+  assert.equal(routeDesktopSecondInstance(['electron.exe', '.', DESKTOP_QUIT_EXISTING_FLAG], handlers), 'quit-existing');
+  assert.deepEqual(calls, ['expand', 'quit']);
+  assert.throws(() => routeDesktopSecondInstance([], {}), /quit and expand handlers/);
+});
+
+test('double-click scripts use the pinned Electron binary and graceful single-instance stop path', async () => {
+  const [startScript, stopScript] = await Promise.all([
+    readFile(new URL('../start-hub.bat', import.meta.url), 'utf8'),
+    readFile(new URL('../stop-hub.bat', import.meta.url), 'utf8'),
+  ]);
+  for (const script of [startScript, stopScript]) {
+    assert.match(script, /cd \/d "%~dp0"/i);
+    assert.match(script, /node_modules\\electron\\dist\\electron\.exe/i);
+    assert.match(script, /Run npm install/i);
+    assert.doesNotMatch(script, /taskkill/i);
+  }
+  assert.match(startScript, /start "" "%HUB_ELECTRON%" "\."/i);
+  assert.match(stopScript, /"%HUB_ELECTRON%" "\." "--quit-existing"/i);
+});
+
 test('preload and renderer expose only window mode IPC while preserving narrow-browser behavior', async () => {
   const [preload, app, css, html] = await Promise.all([
     readFile(new URL('../src/corner/preload.cjs', import.meta.url), 'utf8'),
@@ -158,7 +192,17 @@ test('preload and renderer expose only window mode IPC while preserving narrow-b
   assert.match(preload, /getMode/); assert.match(preload, /setMode/); assert.match(preload, /onMode/);
   assert.doesNotMatch(preload, /provider|sqlite|vault:|api\/wakes|filesystem|readFile/);
   assert.match(app, /!desktopShell && window\.matchMedia/);
+  assert.match(app, /if \(desktopShell\) \{\s*conversationScroller = node\('div', 'conversation-scroll'\)/);
+  assert.match(app, /input\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(app, /panelHost\.focus\(\{ preventScroll: true \}\)/);
   assert.match(css, /html\[data-shell="desktop"\] #app\[data-mode="compact"\] \.chip/);
+  assert.match(css, /#app\[data-mode="compact"\] \.chip \{[\s\S]*?width: 100%;[\s\S]*?height: 100%;/);
+  assert.match(css, /#app\[data-mode="expanded"\] \.bench \{[\s\S]*?height: 100%;[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.tray\[hidden\] \+ \.rail \{ grid-column: 1 \/ -1; \}/);
+  assert.match(css, /\.workspace \{ display: grid; grid-template-columns: minmax\(250px, \.9fr\) 1\.1fr;/);
+  assert.match(css, /\.conversation-scroll \{[\s\S]*?overflow-y: scroll;[\s\S]*?scrollbar-gutter: stable;/);
+  assert.match(css, /html\[data-shell="desktop"\] \.conversation-scroll \{ -webkit-app-region: no-drag; \}/);
+  assert.match(css, /\.panel-host \{[\s\S]*?overflow-y: scroll;[\s\S]*?scrollbar-gutter: stable;/);
   assert.match(css, /@media \(max-width: 700px\)/);
   assert.match(html, /Content-Security-Policy/);
   assert.match(html, /connect-src 'self'/);

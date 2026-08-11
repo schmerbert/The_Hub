@@ -31,8 +31,9 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid var(--amber); 
 .bench { width: min(100% - 1.5rem, 1040px); min-height: min(740px, calc(100vh - 1.5rem)); margin: .75rem auto; display: grid; grid-template-rows: auto 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: radial-gradient(80% 60% at 100% 0%, rgba(126, 184, 160, .08), transparent 50%), linear-gradient(165deg, #15201b, var(--ink) 55%, #0a0f0d); box-shadow: var(--shadow); }
 .titlebar, .tray-heading, .rail-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .titlebar { padding: .8rem 1rem; border-bottom: 1px solid var(--line); }
+.title-actions { display: flex; flex: 0 0 auto; align-items: center; }
 html[data-shell="desktop"] .titlebar { -webkit-app-region: drag; }
-html[data-shell="desktop"] button, html[data-shell="desktop"] textarea, html[data-shell="desktop"] .tray, html[data-shell="desktop"] .log { -webkit-app-region: no-drag; }
+html[data-shell="desktop"] button, html[data-shell="desktop"] textarea, html[data-shell="desktop"] .tray, html[data-shell="desktop"] .log, html[data-shell="desktop"] .conversation-scroll { -webkit-app-region: no-drag; }
 .identity { display: flex; align-items: center; gap: .65rem; min-width: 0; }
 .identity canvas { width: 72px; height: 36px; border-radius: 10px; background: rgba(0, 0, 0, .25); }
 .identity-text { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
@@ -126,6 +127,68 @@ h2 { margin: 0; font-size: .86rem; font-weight: 600; letter-spacing: .02em; }
   .log { min-height: 240px; }
 }
 html[data-shell="desktop"], html[data-shell="desktop"] body { min-width: 0; width: 100%; height: 100%; overflow: hidden; }
+html[data-shell="desktop"] #app { width: 100%; height: 100%; min-height: 0; overflow: hidden; }
+html[data-shell="desktop"] #app[data-mode="compact"] { display: grid; place-items: stretch; }
+html[data-shell="desktop"] #app[data-mode="compact"] .chip {
+  position: static;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+html[data-shell="desktop"] #app[data-mode="compact"] .chip:hover { transform: none; }
+html[data-shell="desktop"] #app[data-mode="expanded"] .bench {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  border-radius: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+html[data-shell="desktop"] .workspace { min-height: 0; overflow: hidden; }
+html[data-shell="desktop"] .tray:not([hidden]) {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+html[data-shell="desktop"] .tray[hidden] + .rail { grid-column: 1 / -1; }
+html[data-shell="desktop"] .panel-host {
+  min-height: 0;
+  max-height: none;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+html[data-shell="desktop"] .rail {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+html[data-shell="desktop"] .conversation-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+html[data-shell="desktop"] .conversation-scroll .log { min-height: 0; overflow: visible; }
+html[data-shell="desktop"] .conversation-scroll,
+html[data-shell="desktop"] .panel-host {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(212, 164, 90, .72) rgba(255, 255, 255, .055);
+}
+html[data-shell="desktop"] .conversation-scroll::-webkit-scrollbar,
+html[data-shell="desktop"] .panel-host::-webkit-scrollbar { width: 12px; }
+html[data-shell="desktop"] .conversation-scroll::-webkit-scrollbar-track,
+html[data-shell="desktop"] .panel-host::-webkit-scrollbar-track { background: rgba(255, 255, 255, .055); }
+html[data-shell="desktop"] .conversation-scroll::-webkit-scrollbar-thumb,
+html[data-shell="desktop"] .panel-host::-webkit-scrollbar-thumb {
+  min-height: 34px;
+  border: 3px solid rgba(11, 17, 14, .85);
+  border-radius: 999px;
+  background: rgba(212, 164, 90, .72);
+}
 @media (max-width: 700px) {
   html[data-shell="desktop"] #app[data-mode="compact"] .chip { display: block; }
   html[data-shell="desktop"] #app[data-mode="compact"] .bench { display: none; }
