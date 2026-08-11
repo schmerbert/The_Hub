@@ -36,7 +36,7 @@ function statusFor(code) {
   if (code?.startsWith('wake_stream_')) return 400;
   if (code === 'sandbox_backend_unavailable' || code === 'sandbox_workspace_not_writable') return 503;
   if (code?.startsWith('sandbox_')) return 400;
-  if (['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json', 'attention_ceiling_exceeded', 'world_invalid_argument', 'world_tool_invalid', 'world_tool_unknown', 'world_wrong_room', 'world_wrong_station', 'world_not_engaged', 'world_station_unknown', 'world_station_unreachable', 'workshop_path_invalid', 'workshop_path_forbidden', 'workshop_not_found', 'workshop_not_file', 'workshop_not_directory', 'workshop_range', 'workshop_limit', 'workshop_oversized', 'workshop_binary', 'workshop_invalid_argument', 'workshop_patch_missing', 'workshop_patch_ambiguous', 'workshop_patch_stale', 'workshop_recipe_unknown', 'workshop_approval_not_found', 'workshop_approval_not_pending', 'workshop_git_failed', 'workshop_git_unavailable'].includes(code)) return 400;
+  if (['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json', 'attention_ceiling_exceeded', 'world_invalid_argument', 'world_tool_invalid', 'world_tool_unknown', 'world_wrong_room', 'world_wrong_station', 'world_not_engaged', 'world_station_unknown', 'world_station_unreachable', 'world_fixture_unknown', 'world_fixture_unreachable', 'world_fixture_not_turnable', 'world_wrong_location_or_passage', 'world_passage_closed', 'world_passage_operation_invalid', 'world_passage_operation_refused', 'workshop_path_invalid', 'workshop_path_forbidden', 'workshop_not_found', 'workshop_not_file', 'workshop_not_directory', 'workshop_range', 'workshop_limit', 'workshop_oversized', 'workshop_binary', 'workshop_invalid_argument', 'workshop_patch_missing', 'workshop_patch_ambiguous', 'workshop_patch_stale', 'workshop_recipe_unknown', 'workshop_approval_not_found', 'workshop_approval_not_pending', 'workshop_git_failed', 'workshop_git_unavailable'].includes(code)) return 400;
   if (['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'wake_ritual_invalid'].includes(code)) return 503;
   if (code === 'hearth_orientation_invalid' || code?.startsWith('provider_')) return 502;
   return 500;
@@ -153,12 +153,20 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
         const edges = safeCollection('world_edges', verification.verified
           ? 'SELECT * FROM world_edges ORDER BY id LIMIT ?'
           : `SELECT ${['id', 'edge_type', 'from_node_id', 'to_node_id', 'door_identity', 'label', 'created_at'].map(cap).join(',')},last_event_sequence,${cap('last_event_hash')} FROM world_edges ORDER BY id LIMIT ?`);
+        const passageRows = safeCollection('world_passages',
+          `SELECT ${['edge_id', 'passage_id', 'passage_kind', 'from_node_id', 'to_node_id', 'governed_object_id'].map(cap).join(',')},last_event_sequence,${cap('last_event_hash')} FROM world_passages ORDER BY edge_id LIMIT ?`);
+        const objectStateRows = safeCollection('world_object_states',
+          `SELECT ${cap('object_id')},${cap('state_json')},revision,${cap('updated_at')},last_event_sequence,${cap('last_event_hash')} FROM world_object_states ORDER BY object_id LIMIT ?`);
         const approvalRows = safeCollection('world_approvals',
           `SELECT ${['approval_id', 'session_id', 'wake_id', 'kind', 'status', 'payload_json', 'preview_json', 'application_json', 'outcome_json', 'created_at', 'decided_at'].map(cap).join(',')},revision,last_event_sequence,${cap('last_event_hash')} FROM world_approvals WHERE session_id=? ORDER BY created_at,approval_id LIMIT ?`, [db.session.id]);
         const diagnosticText = value => value === null ? null : { value: value.slice(0, cellCharacterLimit), truncated: value.length > cellCharacterLimit, charactersObserved: value.length };
         const diagnosticRow = row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' ? diagnosticText(value) : value]));
+        const boundedVerifiedRow = row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' && value.length > cellCharacterLimit ? diagnosticText(value) : value]));
         if (!verification.verified) {
           nodes.rows = nodes.rows.map(diagnosticRow); edges.rows = edges.rows.map(diagnosticRow); approvalRows.rows = approvalRows.rows.map(diagnosticRow);
+          passageRows.rows = passageRows.rows.map(diagnosticRow); objectStateRows.rows = objectStateRows.rows.map(diagnosticRow);
+        } else {
+          passageRows.rows = passageRows.rows.map(boundedVerifiedRow); objectStateRows.rows = objectStateRows.rows.map(boundedVerifiedRow);
         }
         const approvals = approvalRows.rows.map(row => {
           if (!verification.verified) return row;
@@ -178,13 +186,15 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
           } catch { return { approvalId: row.approval_id ?? null, status: row.status ?? null, malformed: true }; }
         });
         const builder = {
-          graph: { nodes: nodes.rows, edges: edges.rows }, verification, ceiling: ceilingCatalog(), approvals,
+          graph: { nodes: nodes.rows, edges: edges.rows, passages: passageRows.rows, objectStates: objectStateRows.rows }, verification, ceiling: ceilingCatalog(), approvals,
           collectionBounds: {
             limit: collectionLimit,
             diagnosticCellCharacterLimit: cellCharacterLimit,
             approvalFieldCharacterLimit: cellCharacterLimit,
             nodes: { total: nodes.total, totalAtLeast: nodes.totalAtLeast, returned: nodes.returned, truncated: nodes.truncated, available: nodes.available },
             edges: { total: edges.total, totalAtLeast: edges.totalAtLeast, returned: edges.returned, truncated: edges.truncated, available: edges.available },
+            passages: { total: passageRows.total, totalAtLeast: passageRows.totalAtLeast, returned: passageRows.returned, truncated: passageRows.truncated, available: passageRows.available },
+            objectStates: { total: objectStateRows.total, totalAtLeast: objectStateRows.totalAtLeast, returned: objectStateRows.returned, truncated: objectStateRows.truncated, available: objectStateRows.available },
             approvals: { total: approvalRows.total, totalAtLeast: approvalRows.totalAtLeast, returned: approvalRows.returned, truncated: approvalRows.truncated, available: approvalRows.available },
           },
         };

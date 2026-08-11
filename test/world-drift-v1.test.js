@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, sha256 } from '../src/core/hash.js';
 import { createHub } from '../src/server/app.js';
 import { WorldGraphStore } from '../src/world/graph.js';
-import { computeWorldEventHash, reduceWorldEvent, verifyWorldDatabase, WORLD_EVENT_KINDS, WORLD_INTEGRITY_TRIGGER_SQL } from '../src/world/events.js';
+import { computeWorldEventHash, reduceWorldEvent, verifyWorldDatabase, WORLD_A2_PROJECTION_TABLE_SQL, WORLD_EVENT_KINDS, WORLD_INTEGRITY_TRIGGER_SQL } from '../src/world/events.js';
 import { INSTALLED_WORLD_EDGES, installedTopologyHash } from '../src/world/topology.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
@@ -22,7 +22,7 @@ async function fixture(options) {
 test('fresh topology, lifespan, movement, inspection, engagement, and leave clearing replay exactly', async () => {
   const f = await fixture();
   try {
-    assert.deepEqual(f.world.sqlite.prepare('SELECT event_kind FROM world_event_journal ORDER BY sequence').all().map(row => row.event_kind), ['topology.installed/v1']);
+    assert.deepEqual(f.world.sqlite.prepare('SELECT event_kind FROM world_event_journal ORDER BY sequence').all().map(row => row.event_kind), ['topology.installed/v1', 'topology.extended/v1']);
     f.world.ensureLifespan('life');
     f.world.move({ sessionId: 'life', wakeId: 'wake-1', doorId: 'door.workshop' });
     f.world.inspect('life', 'src/world/graph.js');
@@ -45,11 +45,11 @@ test('fresh topology, lifespan, movement, inspection, engagement, and leave clea
 test('journal rejects update, delete, and non-contiguous insertion', async () => {
   const f = await fixture();
   try {
-    const head = f.world.sqlite.prepare('SELECT * FROM world_event_journal').get();
+    const head = f.world.sqlite.prepare('SELECT * FROM world_event_journal ORDER BY sequence DESC LIMIT 1').get();
     assert.throws(() => f.world.sqlite.prepare("UPDATE world_event_journal SET actor='tamper' WHERE sequence=1").run(), /append-only/);
     assert.throws(() => f.world.sqlite.prepare('DELETE FROM world_event_journal WHERE sequence=1').run(), /append-only/);
     assert.throws(() => f.world.sqlite.prepare(`INSERT INTO world_event_journal(sequence,event_id,event_schema_version,event_kind,aggregate_kind,aggregate_id,aggregate_revision,session_id,wake_id,actor,command_id,causation_json,payload_json,payload_sha256,previous_event_hash,event_hash,occurred_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      3, 'gap', 1, 'lifespan.started/v1', 'lifespan', 'gap', 1, 'gap', null, 'test', null, '{}', '{}', sha256('{}'), head.event_hash, '1'.repeat(64), new Date().toISOString(),
+      head.sequence + 2, 'gap', 1, 'lifespan.started/v1', 'lifespan', 'gap', 1, 'gap', null, 'test', null, '{}', '{}', sha256('{}'), head.event_hash, '1'.repeat(64), new Date().toISOString(),
     ), /contiguous/);
   } finally { await f.close(); }
 });
@@ -131,13 +131,26 @@ test('journal-less material state receives one exact legacy boundary without fab
   const ancestryCount = f.world.listLocationEvents('legacy-life').length;
   f.world.close();
   const sqlite = new DatabaseSync(f.path);
-  sqlite.exec(`DROP TRIGGER world_event_journal_contiguous_insert;
+  sqlite.exec(`PRAGMA foreign_keys=OFF;
+    DROP TRIGGER world_nodes_append_only_delete;
+    DROP TRIGGER world_edges_append_only_delete;
+    DROP TRIGGER world_passages_append_only_delete;
+    DELETE FROM world_edges WHERE last_event_sequence=2;
+    DELETE FROM world_nodes WHERE last_event_sequence=2;
+    DROP TABLE world_passages;
+    DROP TABLE world_object_states;
+    DROP TRIGGER world_event_journal_contiguous_insert;
     DROP TRIGGER world_event_journal_append_only_update;
     DROP TRIGGER world_event_journal_append_only_delete;
     DROP TABLE world_event_journal;
     DROP TRIGGER world_nodes_append_only_update;
+    DROP TRIGGER world_edges_append_only_update;
+    CREATE TABLE world_nodes_a2 (id TEXT PRIMARY KEY, node_type TEXT NOT NULL CHECK(node_type IN ('room','fixture','object','station')), resident_text TEXT NOT NULL, state_json TEXT NOT NULL, lifecycle TEXT NOT NULL CHECK(lifecycle IN ('standing','retired')), revision INTEGER NOT NULL CHECK(revision>0), created_at TEXT NOT NULL, last_event_sequence INTEGER, last_event_hash TEXT);
+    INSERT INTO world_nodes_a2 SELECT * FROM world_nodes;
+    CREATE TABLE world_edges_a2 (id TEXT PRIMARY KEY, edge_type TEXT NOT NULL CHECK(edge_type IN ('door','contains')), from_node_id TEXT NOT NULL REFERENCES world_nodes_a2(id), to_node_id TEXT NOT NULL REFERENCES world_nodes_a2(id), door_identity TEXT, label TEXT, created_at TEXT NOT NULL, last_event_sequence INTEGER, last_event_hash TEXT, UNIQUE(edge_type, from_node_id, to_node_id));
+    INSERT INTO world_edges_a2 SELECT * FROM world_edges;
+    DROP TABLE world_edges; DROP TABLE world_nodes; ALTER TABLE world_nodes_a2 RENAME TO world_nodes; ALTER TABLE world_edges_a2 RENAME TO world_edges;
     UPDATE world_nodes SET revision=4 WHERE id='room.workshop';
-    PRAGMA foreign_keys=OFF;
     CREATE TABLE world_locations_historical (session_id TEXT PRIMARY KEY, room_node_id TEXT NOT NULL REFERENCES world_nodes(id), inspected_source TEXT, revision INTEGER NOT NULL CHECK(revision>0), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, engaged_fixture_id TEXT REFERENCES world_nodes(id));
     INSERT INTO world_locations_historical(session_id,room_node_id,inspected_source,revision,started_at,updated_at,engaged_fixture_id) SELECT session_id,room_node_id,inspected_source,revision,started_at,updated_at,engaged_fixture_id FROM world_locations;
     DROP TABLE world_locations;
@@ -147,7 +160,7 @@ test('journal-less material state receives one exact legacy boundary without fab
   const migrated = new WorldGraphStore(f.path);
   try {
     const rows = migrated.sqlite.prepare('SELECT event_kind,payload_json FROM world_event_journal ORDER BY sequence').all();
-    assert.equal(rows.length, 1);
+    assert.equal(rows.length, 3);
     assert.equal(rows[0].event_kind, 'legacy_snapshot.imported/v1');
     const payload = JSON.parse(rows[0].payload_json);
     assert.equal(payload.locations[0].room_node_id, 'room.workshop');
@@ -391,13 +404,13 @@ test('canonical rehashed movement clearing and causation lies fail replay', asyn
     const f = await fixture();
     try {
       f.world.ensureLifespan('life'); f.world.move({ sessionId: 'life', doorId: 'door.workshop' });
-      const event = f.world.sqlite.prepare('SELECT * FROM world_event_journal WHERE sequence=3').get();
+      const event = f.world.sqlite.prepare("SELECT * FROM world_event_journal WHERE event_kind='location.moved/v1'").get();
       if (mutation === 'clearing') {
         const payload = JSON.parse(event.payload_json); payload.clearedFixtureId = 'fixture.never-cleared'; event.payload_json = canonicalize(payload); event.payload_sha256 = sha256(event.payload_json);
       } else event.causation_json = canonicalize({ doorIdentity: 'door.counterfeit', edgeId: JSON.parse(event.payload_json).edgeId });
       event.event_hash = computeWorldEventHash(event);
       f.world.sqlite.exec('DROP TRIGGER world_event_journal_append_only_update;');
-      f.world.sqlite.prepare('UPDATE world_event_journal SET causation_json=?,payload_json=?,payload_sha256=?,event_hash=? WHERE sequence=3').run(event.causation_json, event.payload_json, event.payload_sha256, event.event_hash);
+      f.world.sqlite.prepare('UPDATE world_event_journal SET causation_json=?,payload_json=?,payload_sha256=?,event_hash=? WHERE sequence=?').run(event.causation_json, event.payload_json, event.payload_sha256, event.event_hash, event.sequence);
       f.world.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL.world_event_journal_append_only_update);
       f.world.sqlite.prepare("UPDATE world_locations SET last_event_hash=? WHERE session_id='life'").run(event.event_hash);
       const verification = f.world.verification();

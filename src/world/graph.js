@@ -4,11 +4,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, id, sha256 } from '../core/hash.js';
 import { mountProfile, mountedToolNames, profilePresenceLine } from './ceiling.js';
 import { INSTALLED_WORLD_EDGES, INSTALLED_WORLD_NODES, topologyEventPayload } from './topology.js';
+import { topologyExtensionEventPayload } from './topology-b1.js';
 import {
   ACTION_RECEIPT_COLUMNS, APPROVAL_COLUMNS, APPROVAL_RECEIPT_COLUMNS, BRIEF_COLUMNS, EDGE_COLUMNS, FIXTURE_RUNTIME_COLUMNS,
-  LOCATION_COLUMNS, NODE_COLUMNS, TIMER_COLUMNS, assertWorldVerified, createWorldEvent, custodyRowHash, emptyWorldState,
-  insertWorldEvent, installWorldEventSchema, readWorldPhysicalProjection, readWorldProjection, reduceWorldEvent, replayWorldEvents, verifyWorldA1Sqlite, verifyWorldSqlite,
-  WORLD_CUSTODY_TABLE_SQL, WORLD_INTEGRITY_TRIGGER_SQL, WORLD_PROJECTION_TABLE_SQL,
+  LOCATION_COLUMNS, NODE_COLUMNS, OBJECT_STATE_COLUMNS, PASSAGE_COLUMNS, TIMER_COLUMNS, assertWorldVerified, createWorldEvent, custodyRowHash, emptyWorldState,
+  insertWorldEvent, installWorldEventSchema, readWorldPhysicalProjection, readWorldProjection, reduceWorldEvent, replayWorldEvents, verifyWorldA1Sqlite, verifyWorldA2Sqlite, verifyWorldSqlite,
+  WORLD_A2_PROJECTION_TABLE_SQL, WORLD_CUSTODY_TABLE_SQL, WORLD_INTEGRITY_TRIGGER_SQL, WORLD_PROJECTION_TABLE_SQL,
 } from './events.js';
 
 const NOW = () => new Date().toISOString();
@@ -91,7 +92,8 @@ export class WorldGraphStore {
       if (hadWorldSchema) {
         this.seed();
         this.bootstrapLegacyBoundary();
-        this._migrateA2Boundary();
+        this._migrateA2Boundary({ requireBoundary: true });
+        this.#migrateB1Boundary({ admittedLegacy: true });
       } else this.bootstrapFreshTopology();
     } catch (error) {
       this.sqlite.close();
@@ -285,6 +287,16 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       if (!existing) this.sqlite.prepare(`INSERT INTO world_approvals(${APPROVAL_COLUMNS.join(',')}) VALUES(${APPROVAL_COLUMNS.map(() => '?').join(',')})`).run(...APPROVAL_COLUMNS.map(column => row[column]));
       else this.sqlite.prepare(`UPDATE world_approvals SET ${APPROVAL_COLUMNS.slice(1).map(column => `${column}=?`).join(',')} WHERE approval_id=?`).run(...APPROVAL_COLUMNS.slice(1).map(column => row[column]), row.approval_id);
     }
+    const hasB1Projection = Boolean(this.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='world_passages'").get());
+    for (const row of hasB1Projection ? (state.passages || []) : []) {
+      const existing = this.sqlite.prepare('SELECT 1 AS ok FROM world_passages WHERE edge_id=?').get(row.edge_id);
+      if (!existing) this.sqlite.prepare(`INSERT INTO world_passages(${PASSAGE_COLUMNS.join(',')}) VALUES(${PASSAGE_COLUMNS.map(() => '?').join(',')})`).run(...PASSAGE_COLUMNS.map(column => row[column]));
+    }
+    for (const row of hasB1Projection ? (state.objectStates || []) : []) {
+      const existing = this.sqlite.prepare('SELECT 1 AS ok FROM world_object_states WHERE object_id=?').get(row.object_id);
+      if (!existing) this.sqlite.prepare(`INSERT INTO world_object_states(${OBJECT_STATE_COLUMNS.join(',')}) VALUES(${OBJECT_STATE_COLUMNS.map(() => '?').join(',')})`).run(...OBJECT_STATE_COLUMNS.map(column => row[column]));
+      else this.sqlite.prepare(`UPDATE world_object_states SET ${OBJECT_STATE_COLUMNS.slice(1).map(column => `${column}=?`).join(',')} WHERE object_id=?`).run(...OBJECT_STATE_COLUMNS.slice(1).map(column => row[column]), row.object_id);
+    }
   }
   _appendPhysicalEvent({ eventKind, aggregateKind, aggregateId, aggregateRevision, sessionId = null, wakeId = null, actor, commandId = null, causation = {}, payload, occurredAt = null, skipVerification = false, replayPrior = null, afterProjection = null }) {
     if (!skipVerification) this.assertVerified();
@@ -304,9 +316,22 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     return event;
   }
   bootstrapFreshTopology() {
+    this.sqlite.exec(WORLD_PROJECTION_TABLE_SQL.world_passages);
+    this.sqlite.exec(WORLD_PROJECTION_TABLE_SQL.world_object_states);
+    this.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL.world_passages_append_only_update);
+    this.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL.world_passages_append_only_delete);
     this._appendPhysicalEvent({
       eventKind: 'topology.installed/v1', aggregateKind: 'topology', aggregateId: 'installed', aggregateRevision: 1,
-      actor: 'world_bootstrap', causation: { boundary: 'fresh_database' }, payload: topologyEventPayload(), skipVerification: true, replayPrior: { nodes: [], edges: [], locations: [] },
+      actor: 'world_bootstrap', causation: { boundary: 'fresh_database' }, payload: topologyEventPayload(), skipVerification: true, replayPrior: emptyWorldState(),
+    });
+    this.#bootstrapB1Extension('world_bootstrap');
+  }
+  #bootstrapB1Extension(actor = 'world_migration') {
+    const head = this.eventHead();
+    return this._appendPhysicalEvent({
+      eventKind: 'topology.extended/v1', aggregateKind: 'topology_extension', aggregateId: 'installed', aggregateRevision: 1,
+      actor, causation: { boundary: 'b1_topology_extension', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: topologyExtensionEventPayload(), skipVerification: true,
+      replayPrior: replayWorldEvents(this.sqlite),
     });
   }
   bootstrapLegacyBoundary() {
@@ -338,7 +363,9 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     });
   }
   inspectA2Upgrade() {
-    const current = this.verification({ mismatchLimit: 50 });
+    const installedB1 = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+    if (installedB1.verified) return { status: 'current', upgradeRequired: false, verification: installedB1, supersededBy: 'B1' };
+    const current = verifyWorldA2Sqlite(this.sqlite, { mismatchLimit: 50 });
     if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
     const boundary = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='operational_snapshot.imported/v1' ORDER BY sequence LIMIT 1").get();
     const a1 = verifyWorldA1Sqlite(this.sqlite, { mismatchLimit: 50 });
@@ -350,7 +377,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     };
   }
   migrateA2({ backupConfirmed = false } = {}) {
-    if (!backupConfirmed) throw Object.assign(new Error('A2 migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_a2_backup_required' });
+    if (backupConfirmed !== true) throw Object.assign(new Error('A2 migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_a2_backup_required' });
     return this._migrateA2Boundary();
   }
   _tableRows(table) {
@@ -416,15 +443,38 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     };
     return { fixtureRuntimes, timers, briefs, approvals, legacyCustody };
   }
-  _migrateA2Boundary() {
-    const inspection = this.inspectA2Upgrade();
+  _captureExactA2OperationalBoundary() {
+    for (const [table, expected] of Object.entries({ ...WORLD_A2_PROJECTION_TABLE_SQL, ...WORLD_CUSTODY_TABLE_SQL }).filter(([table]) => !['world_nodes', 'world_edges', 'world_locations'].includes(table))) {
+      const actual = this.sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)?.sql;
+      if (normalizeSchemaSql(actual) !== normalizeSchemaSql(expected)) throw Object.assign(new Error(`Unsupported exact A2 schema for ${table}.`), { code: 'world_a2_schema_invalid', table });
+    }
+    const fixtureRuntimes = this._tableRows('world_fixture_runtime').map(row => Object.fromEntries(FIXTURE_RUNTIME_COLUMNS.slice(0, -2).map(column => [column, row[column]])));
+    const timers = this._tableRows('world_timers').map(row => Object.fromEntries(TIMER_COLUMNS.slice(0, -2).map(column => [column, row[column]])));
+    const briefs = this._tableRows('world_work_briefs').map(row => Object.fromEntries(BRIEF_COLUMNS.slice(0, -2).map(column => [column, row[column]])));
+    const approvals = this._tableRows('world_approvals').map(row => Object.fromEntries(APPROVAL_COLUMNS.slice(0, -2).map(column => [column, row[column]])));
+    const actionReceipts = this._tableRows('world_action_receipts'); const approvalReceipts = this._tableRows('world_approval_receipts');
+    if ([...actionReceipts, ...approvalReceipts].some(row => row.world_event_sequence !== null || row.world_event_hash !== null)) throw Object.assign(new Error('Journal-less exact A2 custody cannot contain World event pointers.'), { code: 'world_a2_legacy_relation_invalid' });
+    this._validateLegacyOperationalRelations({ fixtureRuntimes, timers, briefs, approvals, actionReceipts, approvalReceipts });
+    const legacyCustody = {
+      actionReceipts: actionReceipts.map(row => ({ receiptId: row.receipt_id, rowSha256: custodyRowHash(row, 'action') })).sort((a, b) => a.receiptId.localeCompare(b.receiptId)),
+      approvalReceipts: approvalReceipts.map(row => ({ receiptId: row.receipt_id, rowSha256: custodyRowHash(row, 'approval') })).sort((a, b) => a.receiptId.localeCompare(b.receiptId)),
+    };
+    return { fixtureRuntimes, timers, briefs, approvals, legacyCustody };
+  }
+  _migrateA2Boundary({ requireBoundary = false } = {}) {
+    let inspection = this.inspectA2Upgrade(); let captured = null;
+    const boundary = this.sqlite.prepare("SELECT 1 AS ok FROM world_event_journal WHERE event_kind='operational_snapshot.imported/v1' LIMIT 1").get();
+    if (requireBoundary && inspection.status === 'current' && !inspection.supersededBy && !boundary) {
+      captured = this._captureExactA2OperationalBoundary();
+      inspection = { status: 'upgrade_required', upgradeRequired: true, verification: inspection.verification };
+    }
     if (!inspection.upgradeRequired) {
       if (inspection.status === 'current') return inspection;
       throw Object.assign(new Error('World A2 migration refused because the A1 journal is corrupt or an incomplete A2 boundary already exists.'), { code: 'world_a2_migration_refused', inspection });
     }
     this.sqlite.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;');
     try {
-      const imported = this._rebuildOperationalTablesForBoundary();
+      const imported = captured || this._rebuildOperationalTablesForBoundary();
       const prior = replayWorldEvents(this.sqlite); const head = this.eventHead();
       const exact = { ...imported };
       const event = createWorldEvent({
@@ -437,10 +487,74 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
       const foreignKeyViolations = this.sqlite.prepare('PRAGMA foreign_key_check').all();
       if (foreignKeyViolations.length) throw Object.assign(new Error('World A2 migration produced foreign-key violations.'), { code: 'world_a2_migration_foreign_key_failed', violations: foreignKeyViolations });
-      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+      const verification = verifyWorldA2Sqlite(this.sqlite, { mismatchLimit: 50 });
       if (!verification.verified) throw Object.assign(new Error('World A2 migration did not produce a verified projection.'), { code: 'world_a2_migration_verification_failed', verification });
       this.sqlite.exec('COMMIT;');
       return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
+    } catch (error) {
+      try { this.sqlite.exec('ROLLBACK;'); } catch {}
+      throw error;
+    } finally { this.sqlite.exec('PRAGMA foreign_keys=ON;'); }
+  }
+  inspectB1Upgrade() {
+    const current = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+    if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
+    const extension = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.extended/v1' ORDER BY sequence LIMIT 1").get();
+    const partialArtifacts = ['world_passages', 'world_object_states', 'world_passages_append_only_update', 'world_passages_append_only_delete']
+      .filter(name => this.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE name=? AND type IN ('table','trigger')").get(name));
+    if (extension || partialArtifacts.length) return { status: 'corrupt_or_incomplete_b1', upgradeRequired: false, extension: extension || null, partialArtifacts, verification: current };
+    const a2 = verifyWorldA2Sqlite(this.sqlite, { mismatchLimit: 50 });
+    if (!a2.verified) return { status: 'corrupt_a2', upgradeRequired: false, verification: a2 };
+    return {
+      status: 'upgrade_required', upgradeRequired: true, verification: a2,
+      backupExpectation: 'Create and verify a byte-for-byte backup of the World database before applying the B1 migration.',
+    };
+  }
+  migrateB1({ backupConfirmed = false } = {}) {
+    if (backupConfirmed !== true) throw Object.assign(new Error('B1 migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_b1_backup_required' });
+    return this.#migrateB1Boundary({ admittedLegacy: false });
+  }
+  #rebuildTopologySchemaForB1() {
+    const nodes = this.sqlite.prepare(`SELECT ${NODE_COLUMNS.join(',')} FROM world_nodes ORDER BY id`).all();
+    const edges = this.sqlite.prepare(`SELECT ${EDGE_COLUMNS.join(',')} FROM world_edges ORDER BY id`).all();
+    for (const trigger of ['world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) this.sqlite.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
+    const nodeCreate = WORLD_PROJECTION_TABLE_SQL.world_nodes.replace('CREATE TABLE IF NOT EXISTS world_nodes', 'CREATE TABLE world_nodes_b1');
+    const edgeCreate = WORLD_PROJECTION_TABLE_SQL.world_edges.replace('CREATE TABLE IF NOT EXISTS world_edges', 'CREATE TABLE world_edges_b1');
+    this.sqlite.exec(nodeCreate);
+    for (const row of nodes) this.sqlite.prepare(`INSERT INTO world_nodes_b1(${NODE_COLUMNS.join(',')}) VALUES(${NODE_COLUMNS.map(() => '?').join(',')})`).run(...NODE_COLUMNS.map(column => row[column]));
+    this.sqlite.exec(edgeCreate);
+    for (const row of edges) this.sqlite.prepare(`INSERT INTO world_edges_b1(${EDGE_COLUMNS.join(',')}) VALUES(${EDGE_COLUMNS.map(() => '?').join(',')})`).run(...EDGE_COLUMNS.map(column => row[column]));
+    this.sqlite.exec('DROP TABLE world_edges; DROP TABLE world_nodes; ALTER TABLE world_nodes_b1 RENAME TO world_nodes; ALTER TABLE world_edges_b1 RENAME TO world_edges;');
+    for (const trigger of ['world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) this.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL[trigger]);
+    this.sqlite.exec(WORLD_PROJECTION_TABLE_SQL.world_passages);
+    this.sqlite.exec(WORLD_PROJECTION_TABLE_SQL.world_object_states);
+    this.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL.world_passages_append_only_update);
+    this.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL.world_passages_append_only_delete);
+  }
+  #migrateB1Boundary({ admittedLegacy = false } = {}) {
+    const inspection = this.inspectB1Upgrade();
+    if (!inspection.upgradeRequired) {
+      if (inspection.status === 'current') return inspection;
+      throw Object.assign(new Error('World B1 migration refused because the A2 journal is corrupt or a partial B1 extension exists.'), { code: 'world_b1_migration_refused', inspection });
+    }
+    this.sqlite.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;');
+    try {
+      this.#rebuildTopologySchemaForB1();
+      const prior = replayWorldEvents(this.sqlite); const head = this.eventHead();
+      const event = createWorldEvent({
+        head, eventKind: 'topology.extended/v1', aggregateKind: 'topology_extension', aggregateId: 'installed', aggregateRevision: 1,
+        actor: 'world_migration', causation: { boundary: 'b1_topology_extension', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence },
+        payload: topologyExtensionEventPayload(), occurredAt: new Date(this.nowMs()).toISOString(),
+      });
+      const next = reduceWorldEvent(prior, event); insertWorldEvent(this.sqlite, event);
+      this.eventFailureInjector?.({ phase: 'after_event_append', event }); this._materializeProjection(next, prior);
+      this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
+      const foreignKeyViolations = this.sqlite.prepare('PRAGMA foreign_key_check').all();
+      if (foreignKeyViolations.length) throw Object.assign(new Error('World B1 migration produced foreign-key violations.'), { code: 'world_b1_migration_foreign_key_failed', violations: foreignKeyViolations });
+      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+      if (!verification.verified) throw Object.assign(new Error('World B1 migration did not produce a verified projection.'), { code: 'world_b1_migration_verification_failed', verification });
+      this.sqlite.exec('COMMIT;');
+      return { status: 'migrated', upgradeRequired: false, admittedLegacy, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
     } catch (error) {
       try { this.sqlite.exec('ROLLBACK;'); } catch {}
       throw error;
@@ -489,6 +603,11 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
   current(sessionId) { const row = this.sqlite.prepare('SELECT * FROM world_locations WHERE session_id=?').get(sessionId); if (row) { this.assertVerified(); return row; } return this.ensureLifespan(sessionId); }
   node(nodeId) { return this.sqlite.prepare('SELECT * FROM world_nodes WHERE id=?').get(nodeId); }
   exits(roomId) { return this.sqlite.prepare("SELECT * FROM world_edges WHERE edge_type='door' AND from_node_id=? ORDER BY id").all(roomId); }
+  passages(locationId) {
+    this.assertVerified();
+    return this.sqlite.prepare('SELECT p.*,e.label FROM world_passages p JOIN world_edges e ON e.id=p.edge_id WHERE p.from_node_id=? ORDER BY p.edge_id').all(locationId);
+  }
+  boundaries(locationId) { this.assertVerified(); return this.sqlite.prepare("SELECT * FROM world_edges WHERE edge_type='boundary' AND from_node_id=? ORDER BY id").all(locationId); }
   fixtures(roomId) {
     return this.sqlite.prepare("SELECT n.* FROM world_nodes n JOIN world_edges e ON e.to_node_id=n.id WHERE e.edge_type='contains' AND e.from_node_id=? AND n.lifecycle='standing' ORDER BY n.id").all(roomId);
   }
@@ -496,6 +615,11 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     this.assertVerified();
     const row = this.sqlite.prepare('SELECT * FROM world_fixture_runtime WHERE fixture_id=?').get(fixtureId);
     return row ? JSON.parse(row.state_json) : null;
+  }
+  getObjectState(objectId) {
+    this.assertVerified();
+    const row = this.sqlite.prepare('SELECT * FROM world_object_states WHERE object_id=?').get(objectId);
+    return row ? { ...JSON.parse(row.state_json), revision: row.revision, worldEventSequence: row.last_event_sequence, worldEventHash: row.last_event_hash } : null;
   }
   setFixtureRuntime(fixtureId, state, { sessionId = null, wakeId = null, commandId = null, actor = null, action = null } = {}) {
     this.assertVerified();
@@ -579,7 +703,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const contained = this.fixtures(room.id).map(item => {
       const base = JSON.parse(item.state_json);
       const runtime = this.getFixtureRuntime(item.id);
-      const state = runtime ? { ...base, ...runtime } : base;
+      const objectState = this.getObjectState(item.id);
+      const state = runtime ? { ...base, ...runtime } : objectState ? { ...base, ...objectState } : base;
       return {
         id: item.id,
         type: item.node_type,
@@ -588,6 +713,12 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       };
     });
     const heartbeat = this.heartbeat(sessionId);
+    const passages = this.passages(room.id).map(route => ({
+      edgeId: route.edge_id, passageId: route.passage_id, passageKind: route.passage_kind, label: route.label,
+      to: route.to_node_id, governedObjectId: route.governed_object_id,
+      state: route.governed_object_id ? this.getObjectState(route.governed_object_id) : null,
+    }));
+    const boundaries = this.boundaries(room.id).map(edge => ({ edgeId: edge.id, label: edge.label, to: edge.to_node_id, text: this.node(edge.to_node_id)?.resident_text || '' }));
     return {
       revision: location.revision,
       roomId: room.id,
@@ -596,6 +727,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       fixtures: contained.filter(item => item.type === 'fixture' || item.type === 'object'),
       engagedFixtureId: engagedColumn(location),
       exits: this.exits(room.id).map(edge => ({ edgeId: edge.id, doorId: edge.door_identity, label: edge.label, to: edge.to_node_id })),
+      passages,
+      boundaries,
       inspectedSource: location.inspected_source || null,
       pendingApprovals,
       heartbeat,
@@ -623,7 +756,12 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const beat = projection.heartbeat?.line ? ` Heartbeat: ${projection.heartbeat.line}.` : '';
     const workshopHonesty = projection.roomId === 'room.workshop' ? ' Workshop tools are mounted without engaging; engage is orientation only.' : '';
     const patched = ` ${profilePresenceLine(projection.roomId)}`;
-    return `Current room: ${projection.roomId}. ${projection.text} Fixtures: ${fixtures}. Engageable: ${engageable}. Engaged: ${engaged}. Exits: ${exits}.${workshopHonesty}${patched}${pending}${beat}`;
+    const passages = projection.passages.length ? projection.passages.map(item => {
+      const state = item.state && item.governedObjectId === 'object.front_door' ? ` [${item.state.open ? 'open' : 'closed'}, ${item.state.locked ? 'locked' : 'unlocked'}]` : '';
+      return `${item.label} (${item.passageId})${state}`;
+    }).join(', ') : 'none';
+    const boundaries = projection.boundaries.length ? projection.boundaries.map(item => `${item.label}: ${item.text}`).join(' ') : 'none';
+    return `Current location: ${projection.roomId}. ${projection.text} Fixtures: ${fixtures}. Engageable: ${engageable}. Engaged: ${engaged}. Exits: ${exits}. Passages: ${passages}. Boundaries: ${boundaries}.${workshopHonesty}${patched}${pending}${beat}`;
   }
   move({ sessionId, wakeId, commandId = null, doorId, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     if (typeof doorId !== 'string' || !doorId) throw Object.assign(new Error('A door identity is required.'), { code: 'world_invalid_argument' });
@@ -640,6 +778,59 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       },
     });
     return { eventId: event.event_id, worldEventSequence: event.sequence, worldEventHash: event.event_hash, edgeId: edge.id, doorId, fromRoom: current.room_node_id, toRoom: edge.to_node_id, clearedFixtureId: clearedFixture || null, projection: this.projection(sessionId) };
+  }
+  moveThroughPassage({ sessionId, wakeId, commandId, passageId }) {
+    if (typeof passageId !== 'string' || !passageId) throw Object.assign(new Error('A passage identity is required.'), { code: 'world_invalid_argument' });
+    if (typeof commandId !== 'string' || !commandId) throw Object.assign(new Error('Passage traversal requires a causal resident command.'), { code: 'world_command_required' });
+    const current = this.current(sessionId);
+    const passage = this.sqlite.prepare('SELECT p.*,e.label FROM world_passages p JOIN world_edges e ON e.id=p.edge_id WHERE p.from_node_id=? AND p.passage_id=?').get(current.room_node_id, passageId);
+    if (!passage) throw Object.assign(new Error('That passage is not reachable from the current location.'), { code: 'world_wrong_location_or_passage' });
+    if (passage.passage_kind === 'door') {
+      const door = this.getObjectState(passage.governed_object_id);
+      if (!door?.open) throw Object.assign(new Error('The front door is closed.'), { code: 'world_passage_closed' });
+    }
+    const leavingWorkshop = current.room_node_id === 'room.workshop' && passage.to_node_id !== 'room.workshop';
+    const clearedFixture = leavingWorkshop ? engagedColumn(current) : null;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'location.crossed/v1', aggregateKind: 'lifespan', aggregateId: sessionId, aggregateRevision: current.revision + 1,
+      sessionId, wakeId: wakeId || null, actor: 'resident_tool', commandId, causation: { action: 'move_through_passage', passageId },
+      payload: { fromLocationId: current.room_node_id, toLocationId: passage.to_node_id, edgeId: passage.edge_id, passageId, passageKind: passage.passage_kind, governedObjectId: passage.governed_object_id, clearedFixtureId: clearedFixture || null },
+      afterProjection: journalEvent => this.sqlite.prepare('INSERT INTO world_location_events VALUES(?,?,?,?,?,?,?,?,?,?)').run(journalEvent.event_id, sessionId, wakeId || null, 'resident_tool', current.room_node_id, passage.to_node_id, passage.edge_id, null, journalEvent.occurred_at, canonicalize({ actor: 'resident_tool', wakeId: wakeId || null, action: 'move_through_passage', passageId })),
+    });
+    return { eventId: event.event_id, worldEventSequence: event.sequence, worldEventHash: event.event_hash, edgeId: passage.edge_id, passageId, passageKind: passage.passage_kind, fromLocationId: current.room_node_id, toLocationId: passage.to_node_id, projection: this.projection(sessionId) };
+  }
+  operatePassage({ sessionId, wakeId, commandId, passageId, action }) {
+    if (typeof commandId !== 'string' || !commandId) throw Object.assign(new Error('Passage operation requires a causal resident command.'), { code: 'world_command_required' });
+    if (passageId !== 'passage.garden_house' || !['open', 'close', 'lock', 'unlock'].includes(action)) throw Object.assign(new Error('That passage operation is not installed.'), { code: 'world_passage_operation_invalid' });
+    const current = this.current(sessionId);
+    const route = this.sqlite.prepare('SELECT * FROM world_passages WHERE passage_id=? AND from_node_id=?').get(passageId, current.room_node_id);
+    if (!route || route.governed_object_id !== 'object.front_door') throw Object.assign(new Error('The front door is not operable from the current location.'), { code: 'world_wrong_location_or_passage' });
+    const stored = this.sqlite.prepare('SELECT * FROM world_object_states WHERE object_id=?').get(route.governed_object_id); const prior = JSON.parse(stored.state_json);
+    let next;
+    if (action === 'open' && !prior.open && !prior.locked) next = { locked: false, open: true };
+    else if (action === 'close' && prior.open) next = { locked: false, open: false };
+    else if (action === 'lock' && current.room_node_id === 'place.house' && !prior.open && !prior.locked) next = { locked: true, open: false };
+    else if (action === 'unlock' && current.room_node_id === 'place.house' && !prior.open && prior.locked) next = { locked: false, open: false };
+    else throw Object.assign(new Error('That front-door transition is not lawful from the current side and state.'), { code: 'world_passage_operation_refused' });
+    const event = this._appendPhysicalEvent({
+      eventKind: 'passage.operated/v1', aggregateKind: 'world_object', aggregateId: route.governed_object_id, aggregateRevision: stored.revision + 1,
+      sessionId, wakeId: wakeId || null, actor: 'resident_tool', commandId, causation: { action: 'operate_passage', passageId },
+      payload: { passageId, objectId: route.governed_object_id, fromLocationId: current.room_node_id, operation: action, priorState: prior, nextState: next },
+    });
+    return { eventId: event.event_id, worldEventSequence: event.sequence, worldEventHash: event.event_hash, passageId, action, objectId: route.governed_object_id, state: next };
+  }
+  turnFixture({ sessionId, wakeId, commandId, fixtureId }) {
+    if (typeof commandId !== 'string' || !commandId) throw Object.assign(new Error('Fixture turning requires a causal resident command.'), { code: 'world_command_required' });
+    if (fixtureId !== 'fixture.garden_turning_stone') throw Object.assign(new Error('That fixture is not turnable.'), { code: 'world_fixture_not_turnable' });
+    const current = this.current(sessionId);
+    if (current.room_node_id !== 'place.garden') throw Object.assign(new Error('The turning stone is only reachable in the Garden.'), { code: 'world_wrong_room' });
+    const stored = this.sqlite.prepare('SELECT * FROM world_object_states WHERE object_id=?').get(fixtureId); const prior = JSON.parse(stored.state_json); const nextTurnCount = prior.turnCount + 1;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'fixture.turned/v1', aggregateKind: 'world_object', aggregateId: fixtureId, aggregateRevision: stored.revision + 1,
+      sessionId, wakeId: wakeId || null, actor: 'resident_tool', commandId, causation: { action: 'turn_fixture' },
+      payload: { fixtureId, fromLocationId: current.room_node_id, priorTurnCount: prior.turnCount, nextTurnCount },
+    });
+    return { eventId: event.event_id, worldEventSequence: event.sequence, worldEventHash: event.event_hash, fixtureId, turnCount: nextTurnCount };
   }
   engageFixture({ sessionId, wakeId, commandId = null, fixtureId, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     if (typeof fixtureId !== 'string' || !fixtureId) throw Object.assign(new Error('A fixture identity is required.'), { code: 'world_invalid_argument' });
@@ -664,14 +855,14 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
   inspectFixture({ sessionId, fixtureId }) {
     if (typeof fixtureId !== 'string' || !fixtureId) throw Object.assign(new Error('A fixture identity is required.'), { code: 'world_invalid_argument' });
     const current = this.current(sessionId);
-    if (current.room_node_id !== 'room.workshop') throw Object.assign(new Error('Fixtures are only inspectable inside the Workshop.'), { code: 'world_wrong_room' });
     const fixture = this.node(fixtureId);
-    if (!fixture || fixture.node_type !== 'fixture' || fixture.lifecycle !== 'standing') throw Object.assign(new Error('That fixture is not installed.'), { code: 'world_fixture_unknown' });
-    const contained = this.sqlite.prepare("SELECT 1 AS ok FROM world_edges WHERE edge_type='contains' AND from_node_id='room.workshop' AND to_node_id=?").get(fixtureId);
-    if (!contained) throw Object.assign(new Error('That fixture is not contained by the Workshop.'), { code: 'world_fixture_unreachable' });
+    if (!fixture || !['fixture', 'object'].includes(fixture.node_type) || fixture.lifecycle !== 'standing') throw Object.assign(new Error('That fixture or object is not installed.'), { code: 'world_fixture_unknown' });
+    const contained = this.sqlite.prepare("SELECT 1 AS ok FROM world_edges WHERE edge_type='contains' AND from_node_id=? AND to_node_id=?").get(current.room_node_id, fixtureId);
+    if (!contained) throw Object.assign(new Error('That fixture or object is not contained by the current location.'), { code: 'world_fixture_unreachable' });
     const base = JSON.parse(fixture.state_json);
     const runtime = this.getFixtureRuntime(fixtureId);
-    const state = runtime ? { ...base, ...runtime } : base;
+    const objectState = this.getObjectState(fixtureId);
+    const state = runtime ? { ...base, ...runtime } : objectState ? { ...base, ...objectState } : base;
     return {
       kind: 'fixture_inspect',
       fixtureId,

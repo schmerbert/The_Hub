@@ -56,7 +56,7 @@ test('leave Workshop keeps kiln firing; disengage does not cancel', async () => 
     assert.equal(world.getFixtureRuntime(KILN_FIXTURE_ID).status, 'running');
     await gateway.execute({ sessionId: 'life', wakeId: 'w3', intent: { id: '3', type: 'function', function: { name: 'move_through_door', arguments: JSON.stringify({ door_id: 'door.workshop' }) } } });
     assert.equal(world.current('life').room_node_id, 'room.center');
-    assert.deepEqual(world.availableTools('life'), ['move_through_door']);
+    assert.deepEqual(world.availableTools('life'), ['move_through_door', 'move_through_passage', 'inspect_fixture']);
     assert.ok(gateway.recipes.active);
     assert.equal(world.getFixtureRuntime(KILN_FIXTURE_ID).status, 'running');
     assert.match(world.presenceMessage('life'), /Heartbeat: kiln running:node_test/);

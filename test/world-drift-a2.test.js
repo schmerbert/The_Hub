@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { WorldGraphStore, KILN_FIXTURE_ID } from '../src/world/graph.js';
 import { canonicalize, sha256 } from '../src/core/hash.js';
-import { computeWorldEventHash, WORLD_INTEGRITY_TRIGGER_SQL } from '../src/world/events.js';
+import { computeWorldEventHash, verifyWorldA2Sqlite, WORLD_A2_PROJECTION_TABLE_SQL, WORLD_INTEGRITY_TRIGGER_SQL } from '../src/world/events.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 
@@ -18,6 +18,34 @@ async function fixture(options) {
 }
 
 function downgradeOperationalTablesToA1(sqlite) {
+  sqlite.exec(`PRAGMA foreign_keys=OFF;
+    DROP TRIGGER IF EXISTS world_event_journal_append_only_update;
+    DROP TRIGGER IF EXISTS world_event_journal_append_only_delete;
+    DROP TRIGGER IF EXISTS world_nodes_append_only_update;
+    DROP TRIGGER IF EXISTS world_nodes_append_only_delete;
+    DROP TRIGGER IF EXISTS world_edges_append_only_update;
+    DROP TRIGGER IF EXISTS world_edges_append_only_delete;
+    DROP TRIGGER IF EXISTS world_passages_append_only_update;
+    DROP TRIGGER IF EXISTS world_passages_append_only_delete;`);
+  const extension = sqlite.prepare("SELECT * FROM world_event_journal WHERE event_kind='topology.extended/v1'").get();
+  if (extension) {
+    sqlite.prepare('DELETE FROM world_event_journal WHERE sequence=?').run(extension.sequence);
+    let previous = sqlite.prepare('SELECT event_hash FROM world_event_journal WHERE sequence=?').get(extension.sequence - 1).event_hash;
+    for (const original of sqlite.prepare('SELECT * FROM world_event_journal WHERE sequence>? ORDER BY sequence').all(extension.sequence)) {
+      const event = { ...original, sequence: original.sequence - 1, previous_event_hash: previous }; event.event_hash = computeWorldEventHash(event);
+      sqlite.prepare('UPDATE world_event_journal SET sequence=?,previous_event_hash=?,event_hash=? WHERE sequence=?').run(event.sequence, event.previous_event_hash, event.event_hash, original.sequence);
+      for (const table of ['world_locations', 'world_fixture_runtime', 'world_timers', 'world_work_briefs', 'world_approvals']) {
+        if (sqlite.prepare("SELECT 1 ok FROM sqlite_master WHERE type='table' AND name=?").get(table)) sqlite.prepare(`UPDATE ${table} SET last_event_sequence=?,last_event_hash=? WHERE last_event_sequence=? AND last_event_hash=?`).run(event.sequence, event.event_hash, original.sequence, original.event_hash);
+      }
+      previous = event.event_hash;
+    }
+    sqlite.exec("DELETE FROM world_edges WHERE edge_type IN ('passage','boundary') OR from_node_id='place.hub'; DELETE FROM world_edges WHERE last_event_sequence=2; DELETE FROM world_nodes WHERE last_event_sequence=2; DROP TABLE world_passages; DROP TABLE world_object_states;");
+    const nodeSql = WORLD_A2_PROJECTION_TABLE_SQL.world_nodes.replace('CREATE TABLE IF NOT EXISTS world_nodes', 'CREATE TABLE world_nodes_a2');
+    const edgeSql = WORLD_A2_PROJECTION_TABLE_SQL.world_edges.replace('CREATE TABLE IF NOT EXISTS world_edges', 'CREATE TABLE world_edges_a2');
+    sqlite.exec(nodeSql); sqlite.exec('INSERT INTO world_nodes_a2 SELECT * FROM world_nodes'); sqlite.exec(edgeSql); sqlite.exec('INSERT INTO world_edges_a2 SELECT * FROM world_edges');
+    sqlite.exec('DROP TABLE world_edges; DROP TABLE world_nodes; ALTER TABLE world_nodes_a2 RENAME TO world_nodes; ALTER TABLE world_edges_a2 RENAME TO world_edges;');
+  }
+  for (const trigger of ['world_event_journal_append_only_update', 'world_event_journal_append_only_delete', 'world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL[trigger]);
   sqlite.exec(`PRAGMA foreign_keys=OFF;
     DROP TRIGGER IF EXISTS world_action_receipts_append_only_update;
     DROP TRIGGER IF EXISTS world_action_receipts_append_only_delete;
@@ -87,7 +115,7 @@ test('A1 journal upgrade is explicit, backup-gated, transactional, and admits le
     assert.throws(() => upgrade.migrateA2(), error => error.code === 'world_a2_backup_required');
     const result = upgrade.migrateA2({ backupConfirmed: true });
     assert.equal(result.status, 'migrated');
-    assert.equal(upgrade.verification().verified, true);
+    assert.equal(verifyWorldA2Sqlite(upgrade.sqlite).verified, true);
     assert.equal(upgrade.sqlite.prepare("SELECT COUNT(*) AS count FROM world_event_journal WHERE event_kind='operational_snapshot.imported/v1'").get().count, 1);
     const receipt = upgrade.sqlite.prepare('SELECT world_event_sequence,world_event_hash FROM world_action_receipts').get();
     assert.equal(receipt.world_event_sequence, null); assert.equal(receipt.world_event_hash, null);
@@ -359,16 +387,18 @@ test('restart reconciliation gives an imported legacy-running kiln one determini
   const upgrade = new WorldGraphStore(f.path); const root = join(f.dir, 'repo'); await mkdir(root);
   try {
     upgrade.migrateA2({ backupConfirmed: true });
+    upgrade.migrateB1({ backupConfirmed: true });
     const boundary = upgrade.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='operational_snapshot.imported/v1'").get();
     const imported = upgrade.getFixtureRuntime(KILN_FIXTURE_ID); assert.equal(imported.runId, undefined);
     const gateway = new WorldActionGateway({ world: upgrade, workshop: new WorkshopAdapter(root), recipeRunner: { active: null, status: () => ({ running: false }), cancel: async () => ({ cancelled: false }), close: async () => ({ cancelled: false }) } });
+    const headBeforeReconcile = upgrade.eventHead();
     const physical = upgrade.sqlite.prepare('SELECT state_json,last_event_hash FROM world_fixture_runtime WHERE fixture_id=?').get(KILN_FIXTURE_ID);
     const expectedRunId = `legacy_run_${sha256(canonicalize({ fixtureId: KILN_FIXTURE_ID, boundaryEventHash: physical.last_event_hash, stateSha256: sha256(physical.state_json) }))}`;
     gateway.reconcileStartup('life');
     const reconciled = upgrade.getFixtureRuntime(KILN_FIXTURE_ID);
     assert.equal(reconciled.status, 'cancelled'); assert.match(reconciled.runId, /^legacy_run_[a-f0-9]{64}$/);
     const event = upgrade.sqlite.prepare('SELECT previous_event_hash,causation_json FROM world_event_journal ORDER BY sequence DESC LIMIT 1').get();
-    assert.equal(event.previous_event_hash, boundary.event_hash); assert.equal(JSON.parse(event.causation_json).action, 'restart_reconciled');
+    assert.equal(event.previous_event_hash, headBeforeReconcile.event_hash); assert.equal(JSON.parse(event.causation_json).action, 'restart_reconciled');
     assert.equal(upgrade.verification().verified, true);
     await gateway.close();
   } finally { upgrade.close(); await rm(f.dir, { recursive: true, force: true }); }

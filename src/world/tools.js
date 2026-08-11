@@ -1,8 +1,13 @@
 import { CEILING_WIRES, mountedToolNames } from './ceiling.js';
 
 export const MOVE_TOOL = { type: 'function', function: { name: 'move_through_door', description: 'Move through a declared door from the current room.', parameters: { type: 'object', properties: { door_id: { type: 'string' } }, required: ['door_id'], additionalProperties: false } } };
+export const B1_TOOLS = [
+  { type: 'function', function: { name: 'move_through_passage', description: 'Cross a declared passage from the current location.', parameters: { type: 'object', properties: { passage_id: { type: 'string' } }, required: ['passage_id'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'operate_passage', description: 'Operate the installed front-door passage from the current side.', parameters: { type: 'object', properties: { passage_id: { type: 'string' }, action: { type: 'string', enum: ['open', 'close', 'lock', 'unlock'] } }, required: ['passage_id', 'action'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'turn_fixture', description: 'Turn the installed Garden turning stone once.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
+];
 export const FIXTURE_TOOLS = [
-  { type: 'function', function: { name: 'inspect_fixture', description: 'Look at a Workshop fixture without changing engagement or gating tools.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'inspect_fixture', description: 'Inspect a fixture or object contained by the current location without mutating it.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
   { type: 'function', function: { name: 'engage_fixture', description: 'Engage a Workshop fixture for orientation only; use inspect_fixture for looking. Does not gate tools.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
   { type: 'function', function: { name: 'disengage_fixture', description: 'Leave the currently engaged Workshop fixture.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
 ];
@@ -58,7 +63,7 @@ export const TOOL_APPROVAL_CLASS = Object.freeze({
   workshop_brief_upsert: 'auto', workshop_brief_get: 'auto', workshop_pending_diff: 'auto', workshop_approval_status: 'auto', workshop_approval_list: 'auto', workshop_tool_catalog: 'auto',
 });
 
-const BY_NAME = new Map([MOVE_TOOL, ...FIXTURE_TOOLS, ...WORKSHOP_TOOLS].map(tool => [tool.function.name, tool]));
+const BY_NAME = new Map([MOVE_TOOL, ...B1_TOOLS, ...FIXTURE_TOOLS, ...WORKSHOP_TOOLS].map(tool => [tool.function.name, tool]));
 export const TOOL_NAMES = new Set(BY_NAME.keys());
 export const WORKSHOP_TOOL_NAMES = WORKSHOP_TOOLS.map(tool => tool.function.name);
 

@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, id, sha256 } from '../core/hash.js';
 import { installedTopologyHash, installedTopologyManifest } from './topology.js';
+import { extendedTopologyHash, extendedTopologyManifest } from './topology-b1.js';
 
-export const WORLD_PROJECTOR_VERSION = 2;
+export const WORLD_PROJECTOR_VERSION = 3;
 export const WORLD_EVENT_GENESIS_HASH = '0'.repeat(64);
 
 function deepFreeze(value) {
@@ -31,6 +32,10 @@ export const WORLD_EVENT_KINDS = deepFreeze({
   'approval.resolved/v1': { schemaVersion: 1, stretch: 'A2' },
   'approval.cancelled/v1': { schemaVersion: 1, stretch: 'A2' },
   'approval.reconciliation_required/v1': { schemaVersion: 1, stretch: 'A2' },
+  'topology.extended/v1': { schemaVersion: 1, stretch: 'B1' },
+  'location.crossed/v1': { schemaVersion: 1, stretch: 'B1' },
+  'passage.operated/v1': { schemaVersion: 1, stretch: 'B1' },
+  'fixture.turned/v1': { schemaVersion: 1, stretch: 'B1' },
 });
 
 export const WORLD_INTEGRITY_TRIGGER_SQL = Object.freeze({
@@ -51,6 +56,10 @@ BEGIN SELECT RAISE(ABORT, 'standing world nodes are append-only'); END;`,
 BEGIN SELECT RAISE(ABORT, 'standing world edges are append-only'); END;`,
   world_edges_append_only_delete: `CREATE TRIGGER IF NOT EXISTS world_edges_append_only_delete BEFORE DELETE ON world_edges
 BEGIN SELECT RAISE(ABORT, 'standing world edges are append-only'); END;`,
+  world_passages_append_only_update: `CREATE TRIGGER IF NOT EXISTS world_passages_append_only_update BEFORE UPDATE ON world_passages
+BEGIN SELECT RAISE(ABORT, 'standing world passages are append-only'); END;`,
+  world_passages_append_only_delete: `CREATE TRIGGER IF NOT EXISTS world_passages_append_only_delete BEFORE DELETE ON world_passages
+BEGIN SELECT RAISE(ABORT, 'standing world passages are append-only'); END;`,
   world_action_receipts_append_only_update: `CREATE TRIGGER IF NOT EXISTS world_action_receipts_append_only_update BEFORE UPDATE ON world_action_receipts
 BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`,
   world_action_receipts_append_only_delete: `CREATE TRIGGER IF NOT EXISTS world_action_receipts_append_only_delete BEFORE DELETE ON world_action_receipts
@@ -61,7 +70,7 @@ BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`,
 BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`,
 });
 
-export const WORLD_PROJECTION_TABLE_SQL = Object.freeze({
+export const WORLD_A2_PROJECTION_TABLE_SQL = Object.freeze({
   world_nodes: "CREATE TABLE IF NOT EXISTS world_nodes (id TEXT PRIMARY KEY, node_type TEXT NOT NULL CHECK(node_type IN ('room','fixture','object','station')), resident_text TEXT NOT NULL, state_json TEXT NOT NULL, lifecycle TEXT NOT NULL CHECK(lifecycle IN ('standing','retired')), revision INTEGER NOT NULL CHECK(revision>0), created_at TEXT NOT NULL, last_event_sequence INTEGER, last_event_hash TEXT);",
   world_edges: "CREATE TABLE IF NOT EXISTS world_edges (id TEXT PRIMARY KEY, edge_type TEXT NOT NULL CHECK(edge_type IN ('door','contains')), from_node_id TEXT NOT NULL REFERENCES world_nodes(id), to_node_id TEXT NOT NULL REFERENCES world_nodes(id), door_identity TEXT, label TEXT, created_at TEXT NOT NULL, last_event_sequence INTEGER, last_event_hash TEXT, UNIQUE(edge_type, from_node_id, to_node_id));",
   world_locations: "CREATE TABLE IF NOT EXISTS world_locations (session_id TEXT PRIMARY KEY, room_node_id TEXT NOT NULL REFERENCES world_nodes(id), inspected_source TEXT, engaged_fixture_id TEXT REFERENCES world_nodes(id), revision INTEGER NOT NULL CHECK(revision>0), started_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_event_sequence INTEGER, last_event_hash TEXT);",
@@ -69,6 +78,14 @@ export const WORLD_PROJECTION_TABLE_SQL = Object.freeze({
   world_timers: "CREATE TABLE IF NOT EXISTS world_timers (session_id TEXT PRIMARY KEY REFERENCES world_locations(session_id), seconds INTEGER NOT NULL CHECK(seconds>=1 AND seconds<=3600), due_at TEXT NOT NULL, created_at TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), last_event_sequence INTEGER NOT NULL, last_event_hash TEXT NOT NULL);",
   world_work_briefs: "CREATE TABLE IF NOT EXISTS world_work_briefs (brief_id TEXT NOT NULL, session_id TEXT NOT NULL REFERENCES world_locations(session_id), revision INTEGER NOT NULL CHECK(revision>0), objective TEXT NOT NULL, scope_paths_json TEXT NOT NULL, acceptance_json TEXT NOT NULL, non_goals_json TEXT NOT NULL, field_hashes_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_event_sequence INTEGER NOT NULL, last_event_hash TEXT NOT NULL, PRIMARY KEY(session_id,revision));",
   world_approvals: "CREATE TABLE IF NOT EXISTS world_approvals (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES world_locations(session_id), wake_id TEXT, kind TEXT NOT NULL CHECK(kind IN ('patch','unified_diff','write_file','create_path','delete_path','rename_path','git_add','commit','git_checkout','sandbox_promotion')), status TEXT NOT NULL CHECK(status IN ('pending','applying','reconciliation_required','confirmed','rejected','cancelled')), payload_json TEXT NOT NULL, preview_json TEXT NOT NULL, application_json TEXT, outcome_json TEXT, created_at TEXT NOT NULL, decided_at TEXT, revision INTEGER NOT NULL CHECK(revision>0), last_event_sequence INTEGER NOT NULL, last_event_hash TEXT NOT NULL);",
+});
+
+export const WORLD_PROJECTION_TABLE_SQL = Object.freeze({
+  ...WORLD_A2_PROJECTION_TABLE_SQL,
+  world_nodes: "CREATE TABLE IF NOT EXISTS world_nodes (id TEXT PRIMARY KEY, node_type TEXT NOT NULL CHECK(node_type IN ('room','fixture','object','station','place','boundary')), resident_text TEXT NOT NULL, state_json TEXT NOT NULL, lifecycle TEXT NOT NULL CHECK(lifecycle IN ('standing','retired')), revision INTEGER NOT NULL CHECK(revision>0), created_at TEXT NOT NULL, last_event_sequence INTEGER, last_event_hash TEXT);",
+  world_edges: "CREATE TABLE IF NOT EXISTS world_edges (id TEXT PRIMARY KEY, edge_type TEXT NOT NULL CHECK(edge_type IN ('door','contains','passage','boundary')), from_node_id TEXT NOT NULL REFERENCES world_nodes(id), to_node_id TEXT NOT NULL REFERENCES world_nodes(id), door_identity TEXT, label TEXT, created_at TEXT NOT NULL, last_event_sequence INTEGER, last_event_hash TEXT, UNIQUE(edge_type, from_node_id, to_node_id));",
+  world_passages: "CREATE TABLE IF NOT EXISTS world_passages (edge_id TEXT PRIMARY KEY REFERENCES world_edges(id), passage_id TEXT NOT NULL, passage_kind TEXT NOT NULL CHECK(passage_kind IN ('opening','door','threshold')), from_node_id TEXT NOT NULL REFERENCES world_nodes(id), to_node_id TEXT NOT NULL REFERENCES world_nodes(id), governed_object_id TEXT REFERENCES world_nodes(id), last_event_sequence INTEGER NOT NULL, last_event_hash TEXT NOT NULL, UNIQUE(passage_id,from_node_id,to_node_id));",
+  world_object_states: "CREATE TABLE IF NOT EXISTS world_object_states (object_id TEXT PRIMARY KEY REFERENCES world_nodes(id), state_json TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), updated_at TEXT NOT NULL, last_event_sequence INTEGER NOT NULL, last_event_hash TEXT NOT NULL);",
 });
 
 export const WORLD_CUSTODY_TABLE_SQL = Object.freeze({
@@ -112,6 +129,8 @@ export const BRIEF_COLUMNS = Object.freeze(['brief_id', 'session_id', 'revision'
 export const APPROVAL_COLUMNS = Object.freeze(['approval_id', 'session_id', 'wake_id', 'kind', 'status', 'payload_json', 'preview_json', 'application_json', 'outcome_json', 'created_at', 'decided_at', 'revision', 'last_event_sequence', 'last_event_hash']);
 export const ACTION_RECEIPT_COLUMNS = Object.freeze(['receipt_id', 'session_id', 'wake_id', 'room_node_id', 'tool_name', 'arguments_json', 'result_json', 'outcome', 'request_record_id', 'spine_record_id', 'world_event_sequence', 'world_event_hash', 'created_at']);
 export const APPROVAL_RECEIPT_COLUMNS = Object.freeze(['receipt_id', 'approval_id', 'session_id', 'wake_id', 'phase', 'action_receipt_id', 'result_json', 'host_return_scrub_json', 'world_event_sequence', 'world_event_hash', 'created_at']);
+export const PASSAGE_COLUMNS = Object.freeze(['edge_id', 'passage_id', 'passage_kind', 'from_node_id', 'to_node_id', 'governed_object_id', 'last_event_sequence', 'last_event_hash']);
+export const OBJECT_STATE_COLUMNS = Object.freeze(['object_id', 'state_json', 'revision', 'updated_at', 'last_event_sequence', 'last_event_hash']);
 
 export function installWorldEventSchema(sqlite) {
   sqlite.exec(WORLD_EVENT_SCHEMA);
@@ -125,13 +144,16 @@ export function installWorldEventSchema(sqlite) {
   }
 }
 
-export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, operationalBoundary: null }; }
+export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], passages: [], objectStates: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, rootBoundary: null, operationalBoundary: null, topologyExtension: null }; }
 function copyState(state) {
   return {
     nodes: state.nodes.map(row => ({ ...row })), edges: state.edges.map(row => ({ ...row })), locations: state.locations.map(row => ({ ...row })),
     fixtureRuntimes: state.fixtureRuntimes.map(row => ({ ...row })), timers: state.timers.map(row => ({ ...row })), briefs: state.briefs.map(row => ({ ...row })), approvals: state.approvals.map(row => ({ ...row })),
+    passages: (state.passages || []).map(row => ({ ...row })), objectStates: (state.objectStates || []).map(row => ({ ...row })),
     legacyCustody: { actionReceipts: state.legacyCustody.actionReceipts.map(row => ({ ...row })), approvalReceipts: state.legacyCustody.approvalReceipts.map(row => ({ ...row })) },
     operationalBoundary: state.operationalBoundary ? { ...state.operationalBoundary } : null,
+    topologyExtension: state.topologyExtension ? { ...state.topologyExtension } : null,
+    rootBoundary: state.rootBoundary || null,
   };
 }
 function canonicalObject(value, label) {
@@ -174,6 +196,49 @@ function topologyRows(payload, event) {
   const ids = new Set(nodes.map(row => row.id));
   if (edges.some(row => !ids.has(row.from_node_id) || !ids.has(row.to_node_id))) throw new Error('Topology edge references an absent node.');
   return { nodes: nodes.sort((a, b) => a.id.localeCompare(b.id)), edges: edges.sort((a, b) => a.id.localeCompare(b.id)) };
+}
+
+function topologyExtensionRows(payload, event, priorState) {
+  exactKeys(payload, ['manifestSha256', 'nodes', 'edges', 'passages', 'objectStates'], 'topology extension payload');
+  if (!Array.isArray(payload.nodes) || !Array.isArray(payload.edges) || !Array.isArray(payload.passages) || !Array.isArray(payload.objectStates)) throw new Error('Topology extension payload rows are invalid.');
+  const manifest = { nodes: payload.nodes, edges: payload.edges, passages: payload.passages, objectStates: payload.objectStates };
+  if (payload.manifestSha256 !== sha256(canonicalize(manifest)) || payload.manifestSha256 !== extendedTopologyHash()) throw new Error('Topology extension does not match the code-owned manifest.');
+  if (canonicalize(manifest) !== canonicalize(extendedTopologyManifest())) throw new Error('Topology extension manifest bytes are not installed.');
+  const installedIds = new Set(priorState.nodes.map(row => row.id));
+  const nodes = payload.nodes.map(node => {
+    exactKeys(node, ['id', 'nodeType', 'residentText', 'state', 'lifecycle', 'revision'], 'extension node');
+    requiredString(node.id, 'extension node id'); requiredString(node.nodeType, 'extension node type'); requiredString(node.residentText, 'extension resident text'); canonicalObject(node.state, 'extension node state');
+    if (!['place', 'boundary', 'fixture', 'object'].includes(node.nodeType) || node.lifecycle !== 'standing' || node.revision !== 1 || installedIds.has(node.id)) throw new Error('Extension node identity, kind, lifecycle, or revision is invalid.');
+    installedIds.add(node.id);
+    return { id: node.id, node_type: node.nodeType, resident_text: node.residentText, state_json: canonicalize(node.state), lifecycle: node.lifecycle, revision: 1, created_at: event.occurred_at, ...pointer(event) };
+  });
+  const edgeIds = new Set(priorState.edges.map(row => row.id));
+  const edges = payload.edges.map(edge => {
+    exactKeys(edge, ['id', 'edgeType', 'fromNodeId', 'toNodeId', 'doorIdentity', 'label'], 'extension edge');
+    requiredString(edge.id, 'extension edge id'); requiredString(edge.edgeType, 'extension edge type'); requiredString(edge.fromNodeId, 'extension edge source'); requiredString(edge.toNodeId, 'extension edge target');
+    if (!['contains', 'passage', 'boundary'].includes(edge.edgeType) || edgeIds.has(edge.id) || !installedIds.has(edge.fromNodeId) || !installedIds.has(edge.toNodeId)) throw new Error('Extension edge identity, kind, or endpoint is invalid.');
+    if (edge.doorIdentity !== null) requiredString(edge.doorIdentity, 'extension door identity');
+    if (edge.label !== null) requiredString(edge.label, 'extension edge label');
+    edgeIds.add(edge.id);
+    return { id: edge.id, edge_type: edge.edgeType, from_node_id: edge.fromNodeId, to_node_id: edge.toNodeId, door_identity: edge.doorIdentity, label: edge.label, created_at: event.occurred_at, ...pointer(event) };
+  });
+  const edgeById = new Map(edges.map(row => [row.id, row]));
+  const passages = payload.passages.map(row => {
+    exactKeys(row, ['edgeId', 'passageId', 'passageKind', 'fromNodeId', 'toNodeId', 'governedObjectId'], 'extension passage');
+    requiredString(row.edgeId, 'passage edge'); requiredString(row.passageId, 'passage identity'); requiredString(row.passageKind, 'passage kind'); requiredString(row.fromNodeId, 'passage source'); requiredString(row.toNodeId, 'passage target');
+    if (row.governedObjectId !== null) requiredString(row.governedObjectId, 'passage governed object');
+    const edge = edgeById.get(row.edgeId);
+    if (!edge || edge.edge_type !== 'passage' || edge.from_node_id !== row.fromNodeId || edge.to_node_id !== row.toNodeId || !['opening', 'door', 'threshold'].includes(row.passageKind) || (row.governedObjectId !== null && !installedIds.has(row.governedObjectId))) throw new Error('Passage definition does not match its installed edge.');
+    return { edge_id: row.edgeId, passage_id: row.passageId, passage_kind: row.passageKind, from_node_id: row.fromNodeId, to_node_id: row.toNodeId, governed_object_id: row.governedObjectId, ...pointer(event) };
+  });
+  if (new Set(passages.map(row => row.edge_id)).size !== passages.length) throw new Error('Topology extension contains duplicate passage routes.');
+  const objectStates = payload.objectStates.map(row => {
+    exactKeys(row, ['objectId', 'state', 'revision'], 'extension object state'); requiredString(row.objectId, 'object state identity'); canonicalObject(row.state, 'object state');
+    if (row.revision !== 1 || !installedIds.has(row.objectId)) throw new Error('Extension object state identity or revision is invalid.');
+    return { object_id: row.objectId, state_json: canonicalize(row.state), revision: 1, updated_at: event.occurred_at, ...pointer(event) };
+  });
+  if (new Set(objectStates.map(row => row.object_id)).size !== objectStates.length) throw new Error('Topology extension contains duplicate object states.');
+  return { nodes, edges, passages, objectStates };
 }
 
 function legacyRows(payload, event) {
@@ -293,21 +358,32 @@ export function reduceWorldEvent(priorState, event) {
     if (causation.boundary !== 'fresh_database') throw new Error('Topology causation boundary is invalid.');
     if (event.aggregate_kind !== 'topology' || event.aggregate_id !== 'installed' || event.aggregate_revision !== 1 || event.session_id !== null) throw new Error('Topology event aggregate envelope is invalid.');
     if (priorState.nodes.length || priorState.edges.length || priorState.locations.length) throw new Error('Topology can only be installed into an empty projection.');
-    return { ...emptyWorldState(), ...topologyRows(payload, event) };
+    return { ...emptyWorldState(), ...topologyRows(payload, event), rootBoundary: 'fresh' };
   }
   if (event.event_kind === 'legacy_snapshot.imported/v1') {
     exactKeys(causation, ['boundary'], 'legacy causation');
     if (causation.boundary !== 'pre_journal_projection') throw new Error('Legacy causation boundary is invalid.');
     if (event.aggregate_kind !== 'world_snapshot' || event.aggregate_id !== 'legacy_boundary' || event.aggregate_revision !== 1 || event.session_id !== null) throw new Error('Legacy boundary aggregate envelope is invalid.');
     if (priorState.nodes.length || priorState.edges.length || priorState.locations.length) throw new Error('A legacy boundary can only be imported into an empty replay.');
-    return { ...emptyWorldState(), ...legacyRows(payload, event) };
+    return { ...emptyWorldState(), ...legacyRows(payload, event), rootBoundary: 'legacy' };
   }
   const state = copyState(priorState);
-  if (event.event_kind === 'operational_snapshot.imported/v1') {
+  if (event.event_kind === 'topology.extended/v1') {
+    exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'topology extension causation');
+    if (causation.boundary !== 'b1_topology_extension' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Topology extension boundary causation is invalid.');
+    if (event.aggregate_kind !== 'topology_extension' || event.aggregate_id !== 'installed' || event.aggregate_revision !== 1 || event.session_id !== null || event.wake_id !== null || event.command_id !== null || !['world_bootstrap', 'world_migration'].includes(event.actor)) throw new Error('Topology extension aggregate envelope is invalid.');
+    if (state.topologyExtension) throw new Error('Topology extension can only be installed once.');
+    if (state.rootBoundary === 'legacy' && !state.operationalBoundary) throw new Error('A legacy topology requires its A2 operational boundary before extension.');
+    const installed = installedTopologyManifest();
+    if (state.nodes.length !== installed.nodes.length || state.edges.length !== installed.edges.length) throw new Error('Topology extension requires the exact A1 topology projection.');
+    const extension = topologyExtensionRows(payload, event, state);
+    state.nodes.push(...extension.nodes); state.edges.push(...extension.edges); state.passages = extension.passages; state.objectStates = extension.objectStates;
+    state.topologyExtension = { sequence: event.sequence, eventHash: event.event_hash };
+  } else if (event.event_kind === 'operational_snapshot.imported/v1') {
     exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'operational snapshot causation');
     if (causation.boundary !== 'pre_a2_operational_projection' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Operational snapshot boundary causation is invalid.');
     if (event.aggregate_kind !== 'operational_snapshot' || event.aggregate_id !== 'installed' || event.aggregate_revision !== 1 || event.session_id !== null) throw new Error('Operational snapshot aggregate envelope is invalid.');
-    if (state.operationalBoundary || state.fixtureRuntimes.length || state.timers.length || state.briefs.length || state.approvals.length || state.legacyCustody.actionReceipts.length || state.legacyCustody.approvalReceipts.length) throw new Error('Operational snapshot can only be imported once.');
+    if (state.topologyExtension || state.operationalBoundary || state.fixtureRuntimes.length || state.timers.length || state.briefs.length || state.approvals.length || state.legacyCustody.actionReceipts.length || state.legacyCustody.approvalReceipts.length) throw new Error('Operational snapshot can only be imported before the topology extension and only once.');
     Object.assign(state, operationalRows(payload, event, state));
   } else if (event.event_kind === 'lifespan.started/v1') {
     exactKeys(causation, ['reason'], 'lifespan causation');
@@ -367,6 +443,60 @@ export function reduceWorldEvent(priorState, event) {
       next = { ...current, engaged_fixture_id: null, revision: event.aggregate_revision, updated_at: event.occurred_at, ...pointer(event) };
     }
     state.locations = replaceBy(state.locations, 'session_id', event.session_id, next);
+  } else if (event.event_kind === 'location.crossed/v1') {
+    exactKeys(causation, ['action', 'passageId'], 'passage crossing causation');
+    if (causation.action !== 'move_through_passage') throw new Error('Passage crossing causation action is invalid.');
+    exactKeys(payload, ['fromLocationId', 'toLocationId', 'edgeId', 'passageId', 'passageKind', 'governedObjectId', 'clearedFixtureId'], 'passage crossing payload');
+    requiredString(event.session_id, 'passage crossing session'); requiredString(payload.fromLocationId, 'passage source'); requiredString(payload.toLocationId, 'passage target'); requiredString(payload.edgeId, 'passage edge'); requiredString(payload.passageId, 'passage identity'); requiredString(payload.passageKind, 'passage kind');
+    if (payload.governedObjectId !== null) requiredString(payload.governedObjectId, 'passage governed object');
+    if (event.aggregate_kind !== 'lifespan' || event.aggregate_id !== event.session_id || causation.passageId !== payload.passageId || event.command_id === null || event.actor !== 'resident_tool') throw new Error('Passage crossing aggregate, causation, or command envelope is invalid.');
+    const current = findBy(state.locations, 'session_id', event.session_id);
+    if (!current || current.revision + 1 !== event.aggregate_revision || current.room_node_id !== payload.fromLocationId) throw new Error('Passage crossing does not continue the current lifespan location.');
+    const occupiable = node => node?.lifecycle === 'standing' && (node.node_type === 'room' || node.node_type === 'place' && JSON.parse(node.state_json).occupiable === true);
+    if (!occupiable(findBy(state.nodes, 'id', payload.fromLocationId)) || !occupiable(findBy(state.nodes, 'id', payload.toLocationId))) throw new Error('Passage crossing endpoints are not occupiable installed locations.');
+    const passage = findBy(state.passages, 'edge_id', payload.edgeId);
+    if (!passage || passage.passage_id !== payload.passageId || passage.passage_kind !== payload.passageKind || passage.from_node_id !== payload.fromLocationId || passage.to_node_id !== payload.toLocationId || passage.governed_object_id !== payload.governedObjectId) throw new Error('Passage crossing does not follow an installed route.');
+    if (passage.passage_kind === 'door') {
+      const objectState = findBy(state.objectStates, 'object_id', passage.governed_object_id);
+      if (!objectState || JSON.parse(objectState.state_json).open !== true) throw new Error('Passage door is not open.');
+    }
+    const leavingWorkshop = current.room_node_id === 'room.workshop' && payload.toLocationId !== 'room.workshop';
+    const expectedCleared = leavingWorkshop ? (current.engaged_fixture_id ?? null) : null;
+    if (payload.clearedFixtureId !== expectedCleared) throw new Error('Passage crossing fixture clearing is not exact.');
+    state.locations = replaceBy(state.locations, 'session_id', event.session_id, { ...current, room_node_id: payload.toLocationId, inspected_source: null, engaged_fixture_id: leavingWorkshop ? null : current.engaged_fixture_id, revision: event.aggregate_revision, updated_at: event.occurred_at, ...pointer(event) });
+  } else if (event.event_kind === 'passage.operated/v1') {
+    exactKeys(causation, ['action', 'passageId'], 'passage operation causation');
+    if (causation.action !== 'operate_passage') throw new Error('Passage operation causation action is invalid.');
+    exactKeys(payload, ['passageId', 'objectId', 'fromLocationId', 'operation', 'priorState', 'nextState'], 'passage operation payload');
+    requiredString(event.session_id, 'passage operation session'); requiredString(payload.passageId, 'passage identity'); requiredString(payload.objectId, 'passage object'); requiredString(payload.fromLocationId, 'passage operation location'); requiredString(payload.operation, 'passage operation');
+    canonicalObject(payload.priorState, 'prior passage state'); canonicalObject(payload.nextState, 'next passage state');
+    if (event.aggregate_kind !== 'world_object' || event.aggregate_id !== payload.objectId || causation.passageId !== payload.passageId || event.command_id === null || event.actor !== 'resident_tool') throw new Error('Passage operation aggregate, causation, or command envelope is invalid.');
+    const location = findBy(state.locations, 'session_id', event.session_id);
+    if (!location || location.room_node_id !== payload.fromLocationId) throw new Error('Passage operation location is not current.');
+    const routes = state.passages.filter(row => row.passage_id === payload.passageId && row.governed_object_id === payload.objectId);
+    if (!routes.some(row => row.from_node_id === payload.fromLocationId) || payload.objectId !== 'object.front_door') throw new Error('Passage operation is not available from this side.');
+    const current = findBy(state.objectStates, 'object_id', payload.objectId);
+    if (!current || current.revision + 1 !== event.aggregate_revision || canonicalize(payload.priorState) !== current.state_json) throw new Error('Passage operation prior state or revision is invalid.');
+    exactKeys(payload.priorState, ['locked', 'open'], 'front door prior state'); exactKeys(payload.nextState, ['locked', 'open'], 'front door next state');
+    if (typeof payload.priorState.locked !== 'boolean' || typeof payload.priorState.open !== 'boolean' || typeof payload.nextState.locked !== 'boolean' || typeof payload.nextState.open !== 'boolean') throw new Error('Front door state is invalid.');
+    const transitions = {
+      open: { allowed: !payload.priorState.open && !payload.priorState.locked, next: { locked: false, open: true } },
+      close: { allowed: payload.priorState.open, next: { locked: false, open: false } },
+      lock: { allowed: payload.fromLocationId === 'place.house' && !payload.priorState.open && !payload.priorState.locked, next: { locked: true, open: false } },
+      unlock: { allowed: payload.fromLocationId === 'place.house' && !payload.priorState.open && payload.priorState.locked, next: { locked: false, open: false } },
+    }[payload.operation];
+    if (!transitions || !transitions.allowed || canonicalize(payload.nextState) !== canonicalize(transitions.next)) throw new Error('Front door transition is not installed.');
+    state.objectStates = replaceBy(state.objectStates, 'object_id', payload.objectId, { object_id: payload.objectId, state_json: canonicalize(payload.nextState), revision: event.aggregate_revision, updated_at: event.occurred_at, ...pointer(event) });
+  } else if (event.event_kind === 'fixture.turned/v1') {
+    exactKeys(causation, ['action'], 'fixture turn causation'); if (causation.action !== 'turn_fixture') throw new Error('Fixture turn causation action is invalid.');
+    exactKeys(payload, ['fixtureId', 'fromLocationId', 'priorTurnCount', 'nextTurnCount'], 'fixture turn payload');
+    requiredString(event.session_id, 'fixture turn session'); requiredString(payload.fixtureId, 'turned fixture'); requiredString(payload.fromLocationId, 'fixture turn location');
+    if (event.aggregate_kind !== 'world_object' || event.aggregate_id !== payload.fixtureId || payload.fixtureId !== 'fixture.garden_turning_stone' || payload.fromLocationId !== 'place.garden' || event.command_id === null || event.actor !== 'resident_tool') throw new Error('Fixture turn aggregate, target, or command envelope is invalid.');
+    const location = findBy(state.locations, 'session_id', event.session_id); const current = findBy(state.objectStates, 'object_id', payload.fixtureId);
+    if (!location || location.room_node_id !== payload.fromLocationId || !current || current.revision + 1 !== event.aggregate_revision) throw new Error('Fixture turn location or revision is invalid.');
+    const prior = JSON.parse(current.state_json); exactKeys(prior, ['turnCount'], 'turning stone state');
+    if (!Number.isInteger(payload.priorTurnCount) || payload.priorTurnCount < 0 || payload.priorTurnCount !== prior.turnCount || payload.nextTurnCount !== payload.priorTurnCount + 1) throw new Error('Fixture turn count is not an exact increment.');
+    state.objectStates = replaceBy(state.objectStates, 'object_id', payload.fixtureId, { object_id: payload.fixtureId, state_json: canonicalize({ turnCount: payload.nextTurnCount }), revision: event.aggregate_revision, updated_at: event.occurred_at, ...pointer(event) });
   } else if (event.event_kind === 'fixture_runtime.replaced/v1') {
     exactKeys(causation, ['action'], 'fixture runtime causation'); requiredString(causation.action, 'fixture runtime action');
     exactKeys(payload, ['fixtureId', 'state'], 'fixture runtime payload'); requiredString(payload.fixtureId, 'fixture runtime identity'); validateRuntimeState(payload.state);
@@ -474,6 +604,7 @@ export function reduceWorldEvent(priorState, event) {
   state.locations.sort((a, b) => a.session_id.localeCompare(b.session_id));
   state.fixtureRuntimes.sort((a, b) => a.fixture_id.localeCompare(b.fixture_id)); state.timers.sort((a, b) => a.session_id.localeCompare(b.session_id));
   state.briefs.sort((a, b) => a.session_id.localeCompare(b.session_id) || a.revision - b.revision); state.approvals.sort((a, b) => a.approval_id.localeCompare(b.approval_id));
+  state.nodes.sort((a, b) => a.id.localeCompare(b.id)); state.edges.sort((a, b) => a.id.localeCompare(b.id)); state.passages.sort((a, b) => a.edge_id.localeCompare(b.edge_id)); state.objectStates.sort((a, b) => a.object_id.localeCompare(b.object_id));
   return state;
 }
 
@@ -522,7 +653,7 @@ export function readWorldPhysicalProjection(sqlite) {
   };
 }
 
-export function readWorldProjection(sqlite) {
+export function readWorldA2Projection(sqlite) {
   const operationalBoundary = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='operational_snapshot.imported/v1' ORDER BY sequence LIMIT 1").get();
   return {
     ...readWorldPhysicalProjection(sqlite),
@@ -530,8 +661,21 @@ export function readWorldProjection(sqlite) {
     timers: sqlite.prepare(`SELECT ${TIMER_COLUMNS.join(',')} FROM world_timers ORDER BY session_id`).all(),
     briefs: sqlite.prepare(`SELECT ${BRIEF_COLUMNS.join(',')} FROM world_work_briefs ORDER BY session_id,revision`).all(),
     approvals: sqlite.prepare(`SELECT ${APPROVAL_COLUMNS.join(',')} FROM world_approvals ORDER BY approval_id`).all(),
+    passages: [], objectStates: [],
     legacyCustody: { actionReceipts: [], approvalReceipts: [] },
     operationalBoundary: operationalBoundary ? { sequence: operationalBoundary.sequence, eventHash: operationalBoundary.event_hash } : null,
+    topologyExtension: null,
+  };
+}
+
+export function readWorldProjection(sqlite) {
+  const projection = readWorldA2Projection(sqlite);
+  const topologyExtension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.extended/v1' ORDER BY sequence LIMIT 1").get();
+  return {
+    ...projection,
+    passages: sqlite.prepare(`SELECT ${PASSAGE_COLUMNS.join(',')} FROM world_passages ORDER BY edge_id`).all(),
+    objectStates: sqlite.prepare(`SELECT ${OBJECT_STATE_COLUMNS.join(',')} FROM world_object_states ORDER BY object_id`).all(),
+    topologyExtension: topologyExtension ? { sequence: topologyExtension.sequence, eventHash: topologyExtension.event_hash } : null,
   };
 }
 
@@ -572,6 +716,7 @@ function compareRows(actual, expected, columns, table, mismatches, limit, identi
 
 const ACTION_EVENT_COMPATIBILITY = Object.freeze({
   move_through_door: ['location.moved/v1'], engage_fixture: ['fixture.engaged/v1'], disengage_fixture: ['fixture.disengaged/v1'],
+  move_through_passage: ['location.crossed/v1'], operate_passage: ['passage.operated/v1'], turn_fixture: ['fixture.turned/v1'],
   workshop_read: ['source.inspected/v1'], workshop_search: ['source.inspected/v1'], workshop_search_regex: ['source.inspected/v1'],
   workshop_timer_set: ['timer.set/v1'], workshop_timer_cancel: ['timer.cleared/v1'], workshop_brief_upsert: ['brief.revised/v1'],
   workshop_run_recipe: ['fixture_runtime.replaced/v1'], workshop_recipe_cancel: ['fixture_runtime.replaced/v1'],
@@ -594,6 +739,9 @@ function linkedEventForReceipt(row, eventBySequence, type, mismatches, limit) {
 function actionEventSemanticsMatch(row, event, args, result) {
   let payload; try { payload = JSON.parse(event.payload_json); } catch { return false; }
   if (row.tool_name === 'move_through_door') return payload.doorIdentity === args?.door_id && result?.edgeId === payload.edgeId;
+  if (row.tool_name === 'move_through_passage') return row.room_node_id === payload.toLocationId && payload.passageId === args?.passage_id && result?.edgeId === payload.edgeId && result?.toLocationId === payload.toLocationId;
+  if (row.tool_name === 'operate_passage') return row.room_node_id === payload.fromLocationId && payload.passageId === args?.passage_id && payload.operation === args?.action && canonicalize(result?.state) === canonicalize(payload.nextState);
+  if (row.tool_name === 'turn_fixture') return row.room_node_id === payload.fromLocationId && payload.fixtureId === args?.fixture_id && result?.turnCount === payload.nextTurnCount;
   if (row.tool_name === 'engage_fixture') return payload.fixtureId === args?.fixture_id;
   if (row.tool_name === 'disengage_fixture') return result?.previousFixtureId === payload.fixtureId;
   if (['workshop_read', 'workshop_search', 'workshop_search_regex'].includes(row.tool_name)) return (result?.source?.path || result?.path || null) === payload.source;
@@ -669,11 +817,25 @@ function verifyCustody(sqlite, events, state, mismatches, limit) {
   }
 }
 
-export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'a2' } = {}) {
+export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1' } = {}) {
+  if (scope === 'b1' && tableExists(sqlite, 'world_event_journal')) {
+    let extension = null;
+    try { extension = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.extended/v1' LIMIT 1").get(); } catch {}
+    if (!extension) {
+      const a2 = verifyWorldSqlite(sqlite, { mismatchLimit, scope: 'a2' });
+      const b1Artifacts = ['world_passages', 'world_object_states', 'world_passages_append_only_update', 'world_passages_append_only_delete']
+        .filter(name => sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE name=? AND type IN ('table','trigger')").get(name));
+      if (a2.verified && !b1Artifacts.length) return {
+        ...a2, verified: false, status: 'upgrade_required', upgradeRequired: true, projectorVersion: WORLD_PROJECTOR_VERSION,
+        mismatches: [{ code: 'b1_upgrade_required', message: 'The exact A2 World requires the explicit backup-confirmed B1 topology migration.' }],
+      };
+    }
+  }
   const mismatches = [];
   const a1ProjectionTables = ['world_nodes', 'world_edges', 'world_locations'];
   const a2ProjectionTables = ['world_fixture_runtime', 'world_timers', 'world_work_briefs', 'world_approvals'];
-  const requiredTables = ['world_event_journal', ...a1ProjectionTables, ...(scope === 'a2' ? [...a2ProjectionTables, ...Object.keys(WORLD_CUSTODY_TABLE_SQL)] : [])];
+  const b1ProjectionTables = ['world_passages', 'world_object_states'];
+  const requiredTables = ['world_event_journal', ...a1ProjectionTables, ...(['a2', 'b1'].includes(scope) ? [...a2ProjectionTables, ...Object.keys(WORLD_CUSTODY_TABLE_SQL)] : []), ...(scope === 'b1' ? b1ProjectionTables : [])];
   for (const table of requiredTables) if (!tableExists(sqlite, table)) addMismatch(mismatches, mismatchLimit, { code: 'schema_missing', table });
   if (mismatches.length) return { verified: false, eventCount: 0, journalHead: null, projectorVersion: WORLD_PROJECTOR_VERSION, mismatches };
   const journalTable = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='world_event_journal'").get();
@@ -683,17 +845,21 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'a2' } =
     let eventCount = 0; try { eventCount = sqlite.prepare('SELECT COUNT(*) AS count FROM world_event_journal').get().count; } catch {}
     return { verified: false, eventCount, journalHead: null, projectorVersion: WORLD_PROJECTOR_VERSION, mismatches };
   }
-  for (const [table, expectedDefinition] of Object.entries(WORLD_PROJECTION_TABLE_SQL).filter(([table]) => scope === 'a2' || a1ProjectionTables.includes(table))) {
+  const expectedProjectionDefinitions = scope === 'b1' ? WORLD_PROJECTION_TABLE_SQL : WORLD_A2_PROJECTION_TABLE_SQL;
+  for (const [table, expectedDefinition] of Object.entries(expectedProjectionDefinitions).filter(([table]) => scope !== 'a1' || a1ProjectionTables.includes(table))) {
     const row = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table);
     const actual = normalizeTableSql(row?.sql); const expected = normalizeTableSql(expectedDefinition);
     if (actual !== expected) addMismatch(mismatches, mismatchLimit, { code: 'schema_definition_invalid', table, expectedSha256: sha256(expected), actualSha256: sha256(actual) });
   }
-  if (scope === 'a2') for (const [table, expectedDefinition] of Object.entries(WORLD_CUSTODY_TABLE_SQL)) {
+  if (['a2', 'b1'].includes(scope)) for (const [table, expectedDefinition] of Object.entries(WORLD_CUSTODY_TABLE_SQL)) {
     const row = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table);
     const actual = normalizeTableSql(row?.sql); const expected = normalizeTableSql(expectedDefinition);
     if (actual !== expected) addMismatch(mismatches, mismatchLimit, { code: 'schema_definition_invalid', table, expectedSha256: sha256(expected), actualSha256: sha256(actual) });
   }
-  for (const [trigger, expectedDefinition] of Object.entries(WORLD_INTEGRITY_TRIGGER_SQL).filter(([trigger]) => scope === 'a2' || !trigger.includes('_receipts_'))) {
+  for (const [trigger, expectedDefinition] of Object.entries(WORLD_INTEGRITY_TRIGGER_SQL).filter(([trigger]) => {
+    if (scope !== 'b1' && trigger.startsWith('world_passages_')) return false;
+    return ['a2', 'b1'].includes(scope) || !trigger.includes('_receipts_');
+  })) {
     const row = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger);
     if (!row) addMismatch(mismatches, mismatchLimit, { code: trigger.startsWith('world_event_journal_') ? 'journal_trigger_missing' : 'projection_trigger_missing', trigger });
     else {
@@ -724,7 +890,8 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'a2' } =
     catch { addMismatch(mismatches, mismatchLimit, { code: 'event_hash_input_invalid', sequence: event.sequence }); }
     const registration = WORLD_EVENT_KINDS[event.event_kind];
     if (!registration || registration.installed === false) addMismatch(mismatches, mismatchLimit, { code: 'event_kind_unknown', sequence: event.sequence, eventKind: event.event_kind });
-    else if (scope === 'a1' && registration.stretch !== 'A1') addMismatch(mismatches, mismatchLimit, { code: 'a2_event_present', sequence: event.sequence, eventKind: event.event_kind });
+    else if (scope === 'a1' && registration.stretch !== 'A1') addMismatch(mismatches, mismatchLimit, { code: 'later_event_present', sequence: event.sequence, eventKind: event.event_kind });
+    else if (scope === 'a2' && registration.stretch === 'B1') addMismatch(mismatches, mismatchLimit, { code: 'b1_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (registration.schemaVersion !== event.event_schema_version) addMismatch(mismatches, mismatchLimit, { code: 'event_schema_version_unknown', sequence: event.sequence, eventKind: event.event_kind, version: event.event_schema_version });
     const aggregateKey = `${event.aggregate_kind}:${event.aggregate_id}`;
     const expectedRevision = (aggregateRevisions.get(aggregateKey) || 0) + 1;
@@ -739,16 +906,17 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'a2' } =
         for (const row of state.briefs) aggregateRevisions.set(`brief:${row.session_id}`, Math.max(aggregateRevisions.get(`brief:${row.session_id}`) || 0, row.revision));
         for (const row of state.approvals) aggregateRevisions.set(`approval:${row.approval_id}`, row.revision);
       }
+      if (event.event_kind === 'topology.extended/v1') for (const row of state.objectStates) aggregateRevisions.set(`world_object:${row.object_id}`, row.revision);
     } catch (error) { addMismatch(mismatches, mismatchLimit, { code: 'replay_error', sequence: event.sequence, message: error.message }); }
     previousHash = event.event_hash;
   }
   let actual = emptyWorldState();
-  try { actual = scope === 'a2' ? readWorldProjection(sqlite) : { ...emptyWorldState(), ...readWorldPhysicalProjection(sqlite) }; }
+  try { actual = scope === 'b1' ? readWorldProjection(sqlite) : scope === 'a2' ? readWorldA2Projection(sqlite) : { ...emptyWorldState(), ...readWorldPhysicalProjection(sqlite) }; }
   catch (error) { addMismatch(mismatches, mismatchLimit, { code: 'projection_schema_invalid', message: error.message }); }
   compareRows(actual.nodes, state.nodes, NODE_COLUMNS, 'world_nodes', mismatches, mismatchLimit);
   compareRows(actual.edges, state.edges, EDGE_COLUMNS, 'world_edges', mismatches, mismatchLimit);
   compareRows(actual.locations, state.locations, LOCATION_COLUMNS, 'world_locations', mismatches, mismatchLimit);
-  if (scope === 'a2') {
+  if (['a2', 'b1'].includes(scope)) {
     compareRows(actual.fixtureRuntimes, state.fixtureRuntimes, FIXTURE_RUNTIME_COLUMNS, 'world_fixture_runtime', mismatches, mismatchLimit);
     compareRows(actual.timers, state.timers, TIMER_COLUMNS, 'world_timers', mismatches, mismatchLimit);
     compareRows(actual.briefs, state.briefs, BRIEF_COLUMNS, 'world_work_briefs', mismatches, mismatchLimit, ['session_id', 'revision']);
@@ -756,15 +924,22 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'a2' } =
     const custodySchemasValid = Object.entries(WORLD_CUSTODY_TABLE_SQL).every(([table, expected]) => normalizeTableSql(sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)?.sql) === normalizeTableSql(expected));
     if (custodySchemasValid) verifyCustody(sqlite, events, state, mismatches, mismatchLimit);
   }
+  if (scope === 'b1') {
+    const extensionEvents = events.filter(event => event.event_kind === 'topology.extended/v1');
+    if (extensionEvents.length !== 1) addMismatch(mismatches, mismatchLimit, { code: extensionEvents.length ? 'b1_extension_duplicate' : 'b1_extension_missing', count: extensionEvents.length });
+    compareRows(actual.passages, state.passages, PASSAGE_COLUMNS, 'world_passages', mismatches, mismatchLimit);
+    compareRows(actual.objectStates, state.objectStates, OBJECT_STATE_COLUMNS, 'world_object_states', mismatches, mismatchLimit);
+  }
   const head = events.at(-1) || null;
   return {
     verified: mismatches.length === 0, eventCount: events.length,
     journalHead: head ? { sequence: head.sequence, eventId: boundedDiagnostic(head.event_id), eventHash: boundedDiagnostic(head.event_hash), occurredAt: boundedDiagnostic(head.occurred_at) } : null,
-    projectorVersion: scope === 'a1' ? 1 : WORLD_PROJECTOR_VERSION, mismatches,
+    projectorVersion: scope === 'a1' ? 1 : scope === 'a2' ? 2 : WORLD_PROJECTOR_VERSION, mismatches,
   };
 }
 
 export function verifyWorldA1Sqlite(sqlite, options = {}) { return verifyWorldSqlite(sqlite, { ...options, scope: 'a1' }); }
+export function verifyWorldA2Sqlite(sqlite, options = {}) { return verifyWorldSqlite(sqlite, { ...options, scope: 'a2' }); }
 
 export function replayWorldEvents(sqlite) {
   let state = emptyWorldState();
@@ -787,7 +962,9 @@ export function inspectWorldA2UpgradeDatabase(path, { mismatchLimit = 50 } = {})
       status: 'legacy_journal_migration_required', upgradeRequired: false,
       backupExpectation: 'Keep a verified byte-for-byte backup. Journal-less legacy migration is performed only by the normal explicit World legacy boundary path.',
     };
-    const current = verifyWorldSqlite(sqlite, { mismatchLimit });
+    const b1 = verifyWorldSqlite(sqlite, { mismatchLimit });
+    if (b1.verified) return { status: 'current', upgradeRequired: false, verification: b1, supersededBy: 'B1' };
+    const current = verifyWorldA2Sqlite(sqlite, { mismatchLimit });
     if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
     const boundary = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='operational_snapshot.imported/v1' ORDER BY sequence LIMIT 1").get();
     const a1 = verifyWorldA1Sqlite(sqlite, { mismatchLimit });
@@ -802,8 +979,36 @@ export function inspectWorldA2UpgradeDatabase(path, { mismatchLimit = 50 } = {})
   } finally { sqlite?.close(); }
 }
 
+export function inspectWorldB1UpgradeDatabase(path, { mismatchLimit = 50 } = {}) {
+  let sqlite;
+  try {
+    sqlite = new DatabaseSync(path, { readOnly: true });
+    if (!tableExists(sqlite, 'world_event_journal')) return {
+      status: 'legacy_journal_migration_required', upgradeRequired: false,
+      backupExpectation: 'Keep a verified byte-for-byte backup. Journal-less legacy admission occurs only on a disposable or intentionally maintained World database.',
+    };
+    const current = verifyWorldSqlite(sqlite, { mismatchLimit });
+    if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
+    const extension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.extended/v1' ORDER BY sequence LIMIT 1").get();
+    const partialArtifacts = ['world_passages', 'world_object_states', 'world_passages_append_only_update', 'world_passages_append_only_delete']
+      .filter(name => sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE name=? AND type IN ('table','trigger')").get(name));
+    if (extension || partialArtifacts.length) return { status: 'corrupt_or_incomplete_b1', upgradeRequired: false, extension: extension || null, partialArtifacts, verification: current };
+    const a2 = verifyWorldA2Sqlite(sqlite, { mismatchLimit });
+    if (!a2.verified) return { status: 'corrupt_a2', upgradeRequired: false, verification: a2 };
+    return {
+      status: 'upgrade_required', upgradeRequired: true, verification: a2,
+      backupExpectation: 'Create and verify a byte-for-byte backup of the World database before applying the B1 migration.',
+    };
+  } catch (error) {
+    return { status: 'database_open_failed', upgradeRequired: false, verification: { verified: false, mismatches: [{ code: 'database_open_failed', message: error.message }] } };
+  } finally { sqlite?.close(); }
+}
+
 export function assertWorldVerified(sqlite) {
   const verification = verifyWorldSqlite(sqlite);
-  if (!verification.verified) throw Object.assign(new Error('World event journal and physical projection have drifted.'), { code: 'world_projection_drift', verification });
+  if (!verification.verified) {
+    const upgrade = verification.status === 'upgrade_required';
+    throw Object.assign(new Error(upgrade ? 'World B1 topology migration is required.' : 'World event journal and physical projection have drifted.'), { code: upgrade ? 'world_b1_upgrade_required' : 'world_projection_drift', verification });
+  }
   return verification;
 }

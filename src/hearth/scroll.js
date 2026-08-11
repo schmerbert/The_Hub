@@ -51,7 +51,7 @@ export function buildHearthScroll({ hearth, prior, forest = null, budget = 3000,
     '',
     '## Place to stand',
     `Continuity: ${hearth.continuity}. Chamber: ${hearth.chamber}.`,
-    roomProjection ? `Current room: ${roomProjection.roomId}. ${roomProjection.text}` : 'The implemented ground has no spatial room, movement, or perception machinery.',
+    roomProjection ? `Current location: ${roomProjection.roomId}. ${roomProjection.text}` : 'The implemented ground has no spatial location, movement, or perception machinery.',
     ...(roomProjection ? [
       `Engageable: ${roomProjection.fixtures.filter(item => item.state?.engageable).map(item => `${item.id} — ${item.text}`).join(' | ') || 'none'}.`,
       `Fixtures: ${roomProjection.fixtures.filter(item => !item.state?.engageable).map(item => `${item.id} — ${item.text}`).join(' | ') || 'none'}.`,

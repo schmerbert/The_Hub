@@ -27,7 +27,7 @@ test('flat mount exposes full workshop catalog without station engagement', asyn
   const world = new WorldGraphStore(join(dir, 'world.sqlite'));
   try {
     world.ensureLifespan('life');
-    assert.deepEqual(world.availableTools('life'), ['move_through_door']);
+    assert.deepEqual(world.availableTools('life'), ['move_through_door', 'move_through_passage', 'inspect_fixture']);
     world.move({ sessionId: 'life', doorId: 'door.workshop' });
     const tools = world.availableTools('life');
     assert.ok(tools.includes('move_through_door'));
@@ -47,13 +47,13 @@ test('patch bay separates full ceiling catalog from room profiles and presence',
     assert.deepEqual(new Set(catalog.wires.map(wire => wire.name)), TOOL_NAMES);
     assert.ok(catalog.wires.some(wire => wire.name === 'workshop_apply_patch' && wire.groupId === 'workbench'));
     assert.equal(catalog.approvalAnchor, APPROVAL_ANCHOR);
-    assert.deepEqual(world.availableTools('life'), ['move_through_door']);
+    assert.deepEqual(world.availableTools('life'), ['move_through_door', 'move_through_passage', 'inspect_fixture']);
     assert.deepEqual(world.projection('life').mountProfile, mountProfile('room.center'));
-    assert.match(profilePresenceLine('room.center'), /^Patched: move \(through_door\)\.$/);
-    assert.match(world.presenceMessage('life'), /Patched: move \(through_door\)\./);
+    assert.match(profilePresenceLine('room.center'), /^Patched: move \(through_door, through_passage\); fixtures \(inspect\)\.$/);
+    assert.match(world.presenceMessage('life'), /Patched: move \(through_door, through_passage\); fixtures \(inspect\)\./);
 
     world.move({ sessionId: 'life', doorId: 'door.workshop' });
-    assert.deepEqual(world.availableTools('life'), CEILING_WIRES.map(wire => wire.name));
+    assert.deepEqual(world.availableTools('life'), CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture'].includes(name)));
     assert.deepEqual(world.projection('life').mountProfile, mountProfile('room.workshop'));
     const presence = world.presenceMessage('life');
     assert.match(presence, /Patched: .*fixtures \(inspect, engage, disengage\); explore \(list, read, search, …\)/);

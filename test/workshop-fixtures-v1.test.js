@@ -36,13 +36,13 @@ test('fixtures seed, engage, and presence omit tool scaffolding', async () => {
   const path = join(dir, 'world.sqlite');
   try {
     const world = new WorldGraphStore(path);
-    assert.equal(world.sqlite.prepare('SELECT COUNT(*) AS count FROM world_nodes').get().count, 12);
-    assert.equal(world.sqlite.prepare('SELECT COUNT(*) AS count FROM world_edges').get().count, 10);
+    assert.equal(world.sqlite.prepare('SELECT COUNT(*) AS count FROM world_nodes').get().count, 22);
+    assert.equal(world.sqlite.prepare('SELECT COUNT(*) AS count FROM world_edges').get().count, 25);
     assert.deepEqual(world.sqlite.prepare("SELECT id FROM world_nodes WHERE node_type='fixture' AND lifecycle='standing' AND id LIKE 'fixture.workshop_%' ORDER BY id").all().map(row => row.id), WORKSHOP_FIXTURES);
     assert.deepEqual(world.sqlite.prepare("SELECT id FROM world_nodes WHERE lifecycle='retired' ORDER BY id").all().map(row => row.id), ['station.control_panel', 'station.spec_table']);
     world.ensureLifespan('life');
     assert.equal(world.current('life').engaged_fixture_id, null);
-    assert.deepEqual(world.availableTools('life'), ['move_through_door']);
+    assert.deepEqual(world.availableTools('life'), ['move_through_door', 'move_through_passage', 'inspect_fixture']);
     const centerPresence = world.presenceMessage('life');
     assert.equal(centerPresence.includes('Available native tools'), false);
     assert.equal(centerPresence.includes('workshop_'), false);
@@ -173,7 +173,9 @@ test('fixture inspection is read-only and exposes bounded fixture truth', async 
   const gateway = new WorldActionGateway({ world, workshop, approvalMode: 'confirm' });
   const call = (id, name, args) => gateway.execute({ sessionId: 'life', wakeId: 'wake', intent: { id, type: 'function', function: { name, arguments: JSON.stringify(args) } } });
   try {
-    assert.equal(world.availableTools('life').includes('inspect_fixture'), false);
+    assert.equal(world.availableTools('life').includes('inspect_fixture'), true);
+    const marker = await call('inspect-marker', 'inspect_fixture', { fixture_id: 'object.marker' });
+    assert.equal(marker.result.fixtureId, 'object.marker');
     world.move({ sessionId: 'life', doorId: 'door.workshop' });
     assert.ok(world.availableTools('life').includes('inspect_fixture'));
     const beforeEvents = world.listLocationEvents('life').length;

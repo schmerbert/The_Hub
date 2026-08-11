@@ -17,6 +17,9 @@ export const WIRE_GROUPS = Object.freeze([
 
 const wires = [
   ['move_through_door', 'move'],
+  ['move_through_passage', 'move'],
+  ['operate_passage', 'fixtures'],
+  ['turn_fixture', 'fixtures'],
   ['inspect_fixture', 'fixtures'],
   ['engage_fixture', 'fixtures'],
   ['disengage_fixture', 'fixtures'],
@@ -61,10 +64,14 @@ const wires = [
 
 export const CEILING_WIRES = Object.freeze(wires.map(([name, groupId]) => Object.freeze({ name, groupId })));
 const WIRES_BY_GROUP = new Map(WIRE_GROUPS.map(group => [group.id, CEILING_WIRES.filter(wire => wire.groupId === group.id)]));
+const WORKSHOP_TOOL_NAMES = Object.freeze(CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture'].includes(name)));
 
 export const ROOM_PROFILES = Object.freeze({
-  'room.center': Object.freeze(['move_through_door']),
-  'room.workshop': Object.freeze(CEILING_WIRES.map(wire => wire.name)),
+  'room.center': Object.freeze(['move_through_door', 'move_through_passage', 'inspect_fixture']),
+  'room.workshop': WORKSHOP_TOOL_NAMES,
+  'place.garden': Object.freeze(['move_through_passage', 'operate_passage', 'inspect_fixture', 'turn_fixture']),
+  'place.house': Object.freeze(['move_through_passage', 'operate_passage', 'inspect_fixture']),
+  'place.threshold': Object.freeze(['move_through_passage']),
 });
 
 export function mountedToolNames(roomId) {
