@@ -148,8 +148,10 @@ export class RecipeRunner {
       shell,
       detached: process.platform !== 'win32',
     });
-    const job = { child, cancelled: null, recipeId, argv: [command, ...args], onComplete };
+    let resolveSettlement;
+    const job = { child, cancelled: null, recipeId, argv: [command, ...args], onComplete, promise: new Promise(resolve => { resolveSettlement = resolve; }), finished: false };
     this.active = job;
+    this.lastExecutionPromise = job.promise;
     let stdout = Buffer.alloc(0); let stderr = Buffer.alloc(0); let truncated = false;
     const append = (current, chunk) => {
       if (current.length >= this.maxOutputBytes) { truncated = true; return current; }
@@ -163,12 +165,15 @@ export class RecipeRunner {
       if (terminateProcessTree(child)) job.cancelled = 'cancelled_timeout';
     }, this.timeoutMs);
     const finish = (result) => {
+      if (job.finished) return;
+      job.finished = true;
       clearTimeout(timer);
       if (this.active === job) this.active = null;
       this.lastResult = result;
       if (typeof job.onComplete === 'function') {
         try { job.onComplete(result); } catch {}
       }
+      resolveSettlement(result);
     };
     child.on('error', error => {
       finish({
@@ -236,6 +241,14 @@ export class RecipeRunner {
     const job = this.active;
     const requested = terminateProcessTree(job.child);
     if (requested) job.cancelled = reason;
-    return { kind: 'workshop_recipe_cancel', cancelled: requested, reason: requested ? reason : 'termination_failed' };
+    if (!requested) return { kind: 'workshop_recipe_cancel', cancelled: false, reason: 'termination_failed' };
+    return { kind: 'workshop_recipe_cancel', cancelled: true, reason, settlement: job.promise };
+  }
+  async cancelAndWait(reason = 'cancelled_by_tool') {
+    const requested = this.cancel(reason);
+    if (!requested.cancelled) return requested;
+    const result = await requested.settlement;
+    const { settlement, ...receipt } = requested;
+    return { ...receipt, result };
   }
 }

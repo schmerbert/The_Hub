@@ -215,7 +215,7 @@ test('graceful Hub close cancels an active recipe and persists kiln cancellation
   assert.equal(started.result.status, 'started');
   assert.ok(hub.gateway.recipes.active);
   const runner = hub.gateway.recipes;
-  hub.close();
+  await hub.close();
 
   const reopened = new WorldGraphStore(env.HUB_WORLD_PATH);
   try {
@@ -314,7 +314,9 @@ test('confirmed delete is bound to approved identity, hash, and type', async () 
     await writeFile(target, 'changed after approval', 'utf8');
     assert.throws(() => gateway.confirmApproval(pending.result.approvalId, 'life'), error => error.code === 'workshop_patch_stale');
     assert.equal(await readFile(target, 'utf8'), 'changed after approval');
-    assert.equal(world.getApproval(pending.result.approvalId).status, 'pending');
+    const applying = world.getApproval(pending.result.approvalId);
+    assert.equal(applying.status, 'applying');
+    assert.match(applying.application.attemptId, /^approval_attempt_/);
 
     const identityPreview = workshop.previewDeletePath('target.txt');
     await rename(target, join(root, 'replaced.txt'));

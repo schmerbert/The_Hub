@@ -12,7 +12,8 @@
     "forest:apply": "node src/scripts/forest-apply.js",
     "forest:verify": "node src/scripts/forest-verify.js",
     "spine:verify": "node src/scripts/spine-verify.js",
-    "world:verify": "node src/scripts/world-verify.js"
+    "world:verify": "node src/scripts/world-verify.js",
+    "world:migrate-a2": "node src/scripts/world-migrate-a2.js"
   },
   "devDependencies": {
     "electron": "43.2.0"

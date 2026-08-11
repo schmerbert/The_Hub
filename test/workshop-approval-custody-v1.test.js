@@ -41,7 +41,7 @@ function actionRow(world, receiptId) {
   return world.sqlite.prepare('SELECT * FROM world_action_receipts WHERE receipt_id=?').get(receiptId);
 }
 
-test('pending delete and manual confirmation retain two linked append-only custody phases', async () => {
+test('pending delete and manual confirmation retain applying and terminal custody phases', async () => {
   const f = await fixture();
   const target = join(f.root, 'target.txt');
   await writeFile(target, 'remove once', 'utf8');
@@ -81,10 +81,10 @@ test('pending delete and manual confirmation retain two linked append-only custo
     assert.equal(JSON.parse(confirmedRow.host_return_scrub_json).receiptId, confirmed.scrub.receipt.receiptId);
 
     const receipts = f.world.listApprovalReceipts(approvalId);
-    assert.deepEqual(new Set(receipts.map(item => item.phase)), new Set(['pending', 'confirmed']));
-    assert.equal(receipts.length, 2);
+    assert.deepEqual(new Set(receipts.map(item => item.phase)), new Set(['pending', 'applying', 'confirmed']));
+    assert.equal(receipts.length, 3);
     assert.throws(() => f.gateway.confirmApproval(approvalId, 'life'), error => error.code === 'workshop_approval_not_pending');
-    assert.equal(f.world.listApprovalReceipts(approvalId).length, 2);
+    assert.equal(f.world.listApprovalReceipts(approvalId).length, 3);
     assert.equal(existsSync(target), false);
 
     assert.throws(
@@ -95,7 +95,7 @@ test('pending delete and manual confirmation retain two linked append-only custo
       () => f.world.sqlite.prepare('DELETE FROM world_approval_receipts WHERE receipt_id=?').run(confirmed.approvalReceipt.receiptId),
       /append-only table/,
     );
-    assert.deepEqual(new Set(f.world.listApprovalReceipts(approvalId).map(item => item.phase)), new Set(['pending', 'confirmed']));
+    assert.deepEqual(new Set(f.world.listApprovalReceipts(approvalId).map(item => item.phase)), new Set(['pending', 'applying', 'confirmed']));
   } finally {
     f.gateway.close();
     f.world.close();
@@ -118,7 +118,7 @@ test('rejection appends rejected completion custody and never mutates the target
     assert.equal(rejected.approvalReceipt.actionReceiptId, rejected.actionReceipt.receiptId);
     assert.equal(rejected.approvalReceipt.hostReturnScrubReceiptId, rejected.scrub.receipt.receiptId);
     assert.equal(actionRow(f.world, rejected.actionReceipt.receiptId).tool_name, 'workshop_approval_reject');
-    assert.equal(actionRow(f.world, rejected.actionReceipt.receiptId).outcome, 'refused');
+    assert.equal(actionRow(f.world, rejected.actionReceipt.receiptId).outcome, 'committed');
     assert.deepEqual(new Set(f.world.listApprovalReceipts(approvalId).map(item => item.phase)), new Set(['pending', 'rejected']));
     assert.throws(() => f.gateway.confirmApproval(approvalId, 'life'), error => error.code === 'workshop_approval_not_pending');
     assert.equal(await readFile(target, 'utf8'), 'keep me');
@@ -147,7 +147,7 @@ test('startup reconciliation appends cancelled completion custody for a prior li
     assert.equal(cancelled.approvalReceipt.actionReceiptId, cancelled.actionReceipt.receiptId);
     assert.equal(cancelled.approvalReceipt.hostReturnScrubReceiptId, cancelled.scrub.receipt.receiptId);
     assert.equal(actionRow(f.world, cancelled.actionReceipt.receiptId).tool_name, 'workshop_approval_cancel');
-    assert.equal(actionRow(f.world, cancelled.actionReceipt.receiptId).outcome, 'refused');
+    assert.equal(actionRow(f.world, cancelled.actionReceipt.receiptId).outcome, 'committed');
     assert.deepEqual(new Set(f.world.listApprovalReceipts(approvalId).map(item => item.phase)), new Set(['pending', 'cancelled']));
     assert.equal(await readFile(target, 'utf8'), 'still here');
     assert.throws(() => f.gateway.confirmApproval(approvalId, 'life'), error => error.code === 'workshop_approval_not_pending');
@@ -158,7 +158,7 @@ test('startup reconciliation appends cancelled completion custody for a prior li
   }
 });
 
-test('auto-class mutation records one confirmed linked receipt and no false pending phase', async () => {
+test('auto-class mutation records applying and confirmed receipts with no false pending phase', async () => {
   const f = await fixture('hub-approval-auto-');
   const target = join(f.root, 'created.txt');
   try {
@@ -180,11 +180,11 @@ test('auto-class mutation records one confirmed linked receipt and no false pend
     assert.equal(actionRow(f.world, applied.actionReceipt.receiptId).tool_name, 'workshop_write_file');
 
     const receipts = f.world.listApprovalReceipts(approvalId);
-    assert.equal(receipts.length, 1);
-    assert.equal(receipts[0].phase, 'confirmed');
+    assert.equal(receipts.length, 2);
+    assert.deepEqual(receipts.map(item => item.phase), ['applying', 'confirmed']);
     assert.equal(receipts.some(item => item.phase === 'pending'), false);
-    assert.equal(receipts[0].actionReceiptId, applied.actionReceipt.receiptId);
-    assert.equal(receipts[0].hostReturnScrub.receiptId, applied.scrub.receipt.receiptId);
+    assert.equal(receipts[1].actionReceiptId, applied.actionReceipt.receiptId);
+    assert.equal(receipts[1].hostReturnScrub.receiptId, applied.scrub.receipt.receiptId);
   } finally {
     f.gateway.close();
     f.world.close();
@@ -223,6 +223,46 @@ test('Result Rack failure after mutation is separate custody refusal and preserv
   } finally {
     f.gateway.close();
     f.world.close();
+    await rm(f.dir, { recursive: true, force: true });
+  }
+});
+
+test('post-effect custody failure leaves a durable non-retryable applying approval across restart', async () => {
+  const f = await fixture('hub-approval-applying-'); const target = join(f.root, 'applied-once.txt');
+  let reopenedWorld = null; let reopenedGateway = null; let originalClosed = false;
+  try {
+    const original = f.world.recordApprovalReceipt;
+    f.world.recordApprovalReceipt = function injected(args) {
+      if (args.phase === 'confirmed') throw new Error('injected resolved custody failure');
+      return original.call(this, args);
+    };
+    await assert.rejects(f.gateway.execute({
+      sessionId: 'life', wakeId: 'apply-failure',
+      intent: toolCall('call-apply-failure', 'workshop_write_file', { path: 'applied-once.txt', content: 'external effect\n' }),
+    }), /injected resolved custody failure/);
+    f.world.recordApprovalReceipt = original;
+    const approvalId = f.world.sqlite.prepare("SELECT approval_id FROM world_approvals WHERE status='applying'").get().approval_id;
+    assert.equal(await readFile(target, 'utf8'), 'external effect\n');
+    const applying = f.world.getApproval(approvalId);
+    assert.equal(applying.status, 'applying');
+    assert.match(applying.application.attemptId, /^approval_attempt_/);
+    assert.equal(applying.application.evidence.postcondition.contentSha256, (await import('../src/core/hash.js')).sha256('external effect\n'));
+    assert.equal(f.world.sqlite.prepare("SELECT COUNT(*) AS count FROM world_event_journal WHERE event_kind='approval.resolved/v1' AND aggregate_id=?").get(approvalId).count, 0);
+    assert.deepEqual(f.world.listApprovalReceipts(approvalId).map(row => row.phase), ['applying']);
+    assert.equal(f.world.verification().verified, true);
+
+    await f.gateway.close(); f.world.close(); originalClosed = true;
+    reopenedWorld = new WorldGraphStore(join(f.dir, 'world.sqlite'));
+    reopenedGateway = new WorldActionGateway({ world: reopenedWorld, workshop: new WorkshopAdapter(f.root), approvalMode: 'confirm' });
+    const reconciled = reopenedGateway.reconcileStartup('life-next');
+    assert.equal(reconciled.lifespan.cancelledApprovalIds.includes(approvalId), false);
+    assert.equal(reopenedWorld.getApproval(approvalId).status, 'applying');
+    assert.throws(() => reopenedGateway.confirmApproval(approvalId, 'life'), error => error.code === 'workshop_approval_not_pending');
+    assert.throws(() => reopenedGateway.rejectApproval(approvalId, 'life'), error => error.code === 'workshop_approval_not_pending');
+    assert.equal(await readFile(target, 'utf8'), 'external effect\n');
+  } finally {
+    await reopenedGateway?.close().catch(() => {}); reopenedWorld?.close();
+    if (!originalClosed) { await f.gateway.close().catch(() => {}); f.world.close(); }
     await rm(f.dir, { recursive: true, force: true });
   }
 });

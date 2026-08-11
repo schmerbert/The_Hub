@@ -19,7 +19,7 @@ No material enters resident attention, becomes resident speech, changes World re
 
 ## Circulation shape
 
-Most paths below are implemented. The World physical core now crosses the verified A1 event-journal/projector segment. Existing operational fixture state remains on its earlier mutable path until A2; the loose-wire register below remains the status authority.
+Most paths below are implemented. The existing World physical and operational core now crosses the verified A1/A2 event-journal/projector segment. Future House, Garden, Backpack, Journal, and mutable fixtures must reuse it; the loose-wire register below remains the status authority for other gaps.
 
 ```text
 Human HTTP input
@@ -138,11 +138,12 @@ Leaving a room removes its bundle on the next provider phase. Remembered schemas
 
 These are tracked architecture gaps, not implied capabilities:
 
-1. The A1 physical core—topology, lifespan, location, inspection, and engagement—is event-reconstructed and drift-checked. A2 still must move kiln runtime, timers, work briefs, and approvals onto that journal. [`WORLD_EVENT_PROJECTION_DRIFT_V1.md`](specs/WORLD_EVENT_PROJECTION_DRIFT_V1.md) governs both stretches.
-2. The exact tool bundle is visible in the Spine request, but a distinct persisted Ceiling/Patch Bay mount receipt is not yet stored beside each Glass cast.
-3. Forest utterance admission uses its own identity Scrub implementation rather than one central Scrub policy registry.
-4. Resident journal admission, the `home/journal` bucket, Backpack custody, and Silver Bullet forging are not implemented.
-5. Autonomous wakes, outside channels, browser/Web capability, MCP capability doors, and general connector ingress do not yet exist.
+1. The exact tool bundle is visible in the Spine request, but a distinct persisted Ceiling/Patch Bay mount receipt is not yet stored beside each Glass cast.
+2. Forest utterance admission uses its own identity Scrub implementation rather than one central Scrub policy registry.
+3. Resident journal admission, the `home/journal` bucket, Backpack custody, and Silver Bullet forging are not implemented.
+4. Automatic reconciliation of a durable `applying` approval after an uncertain external effect is not installed; the state remains visible and non-retryable for future Builder reconciliation.
+5. World verification produces bounded diagnostics but still scans and replays the complete store; adversarially enormous stores do not yet have a CPU/time preflight ceiling.
+6. Autonomous wakes, outside channels, browser/Web capability, MCP capability doors, and general connector ingress do not yet exist.
 
 Loose wires remain visible until a tested crossing removes them. Documentation must not smooth over them.
 

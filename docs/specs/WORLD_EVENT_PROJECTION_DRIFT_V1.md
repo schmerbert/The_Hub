@@ -1,6 +1,6 @@
 # World Event Projection and Drift v1
 
-> **Status: Stretch A1 implemented and verified; Stretch A2 pending.** A1 installs the World event journal, projector, and verification for topology, lifespan state, movement, inspection, and fixture engagement. A2 moves fixture runtime, timers, briefs, and approvals onto the same pipe. House, Garden, Backpack, Journal, and new mutable fixtures wait until both stretches verify cleanly.
+> **Status: Stretch A1 and Stretch A2 implemented and verified.** The World event journal and projector now cover topology, lifespan state, movement, inspection, fixture engagement, fixture runtime, timers, retained brief revisions, approvals, and their event-linked custody. House, Garden, Backpack, Journal, and new mutable fixtures may now build on this pipe but are not implemented by this specification.
 
 ## Purpose
 
@@ -29,7 +29,7 @@ No layer may silently repair another. Drift is exposed and the affected crossing
 - deterministic empty replay and comparison with materialized state;
 - fail-closed verification before World perception or room-derived tool authority.
 
-### Stretch A2 — existing operational state
+### Stretch A2 — existing operational state (implemented)
 
 - fixture runtime, including kiln transitions and restart reconciliation;
 - lifespan timers, including replacement and cancellation;
@@ -82,13 +82,16 @@ Initial installed event kinds are closed and versioned:
 - `source.inspected/v1`;
 - `fixture.engaged/v1`;
 - `fixture.disengaged/v1`;
+- `operational_snapshot.imported/v1`;
 - `fixture_runtime.replaced/v1`;
 - `timer.set/v1`;
 - `timer.cleared/v1`;
 - `brief.revised/v1`;
 - `approval.opened/v1`;
+- `approval.applying/v1`;
 - `approval.resolved/v1`;
-- `approval.cancelled/v1`.
+- `approval.cancelled/v1`;
+- `approval.reconciliation_required/v1`.
 
 Unknown kinds or schema versions refuse. A later migration adds a new reducer; it does not reinterpret an existing version.
 
@@ -107,6 +110,8 @@ A state-changing command follows one transaction:
 Injected failure at any point before commit leaves neither event nor projection mutation. A refused command may create a refusal/action receipt but appends no state-change event.
 
 External filesystem, Git, Docker, provider, and network effects cannot share the SQLite transaction. They remain explicit saga boundaries with preimages, idempotency identities, and fail-closed reconciliation. A World event must never claim an outside mutation succeeded merely because it was requested.
+
+An approval therefore enters durable `applying` state, with an attempt identity and available preimage/postcondition evidence, before its external effect begins. A caught or crashed completion seam remains non-retryable as `applying` or `reconciliation_required`; startup does not guess, retry, or falsely cancel it. Automatic reconciliation is deferred.
 
 ## Pure projector
 
@@ -182,6 +187,8 @@ An explicit future rebuild command may be designed separately. It is not install
 `GET /api/world` must expose a builder-only verification projection containing journal head, event count, projector version, verified status, and bounded mismatches. It does not move the resident or create a Source event.
 
 `npm run world:verify` verifies an existing configured World database without starting a provider or modifying state. Exit is nonzero on schema, journal, replay, projection, or custody mismatch.
+
+`npm run world:migrate-a2` inspects an A1 journal read-only by default. Applying the explicit operational boundary requires `--apply --backup-confirmed`; Hub startup never applies that upgrade to a journal-bearing A1 store. Journal-less legacy startup admits its exact physical and operational boundaries through the installed migration path.
 
 ## Acceptance
 

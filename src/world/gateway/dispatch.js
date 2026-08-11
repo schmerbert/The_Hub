@@ -32,12 +32,22 @@ export function parseWorldToolIntent(call) {
   return { call, name: call.function.name, args };
 }
 
-export async function dispatchWorldTool(name, context) {
-  const handler = HANDLERS.get(name);
-  if (!handler) fail('world_tool_unknown', 'The requested capability is not installed.');
-  const outcome = await handler(context);
+function validateOutcome(name, outcome) {
   if (!outcome || typeof outcome !== 'object' || !Object.hasOwn(outcome, 'result') || !Object.hasOwn(outcome, 'source') || typeof outcome.changedRoom !== 'boolean') {
     throw new Error(`World tool handler ${name} returned an invalid outcome.`);
   }
   return outcome;
+}
+
+export function dispatchWorldToolImmediate(name, context) {
+  const handler = HANDLERS.get(name);
+  if (!handler) fail('world_tool_unknown', 'The requested capability is not installed.');
+  const outcome = handler(context);
+  return outcome && typeof outcome.then === 'function'
+    ? outcome.then(value => validateOutcome(name, value))
+    : validateOutcome(name, outcome);
+}
+
+export async function dispatchWorldTool(name, context) {
+  return await dispatchWorldToolImmediate(name, context);
 }

@@ -291,6 +291,73 @@ test('missing required projection table remains a bounded builder mismatch', asy
   } finally { await new Promise(resolve => hub.server.close(resolve)); hub.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('builder World inspection bounds hostile extra graph and approval collections', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hub-world-bounded-builder-'));
+  const env = { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: join(dir, 'hub.sqlite'), HUB_SPINE_PATH: join(dir, 'spine.jsonl'), HUB_WORLD_PATH: join(dir, 'world.sqlite'), HUB_RESULT_PATH: join(dir, 'results.sqlite'), HUB_WORKSHOP_ROOT: process.cwd() };
+  const initial = createHub({ env }); const sessionId = initial.db.session.id; await initial.close();
+  const sqlite = new DatabaseSync(env.HUB_WORLD_PATH);
+  const node = sqlite.prepare('INSERT INTO world_nodes(id,node_type,resident_text,state_json,lifecycle,revision,created_at,last_event_sequence,last_event_hash) VALUES(?,?,?,?,?,?,?,?,?)');
+  const edge = sqlite.prepare('INSERT INTO world_edges(id,edge_type,from_node_id,to_node_id,door_identity,label,created_at,last_event_sequence,last_event_hash) VALUES(?,?,?,?,?,?,?,?,?)');
+  const approval = sqlite.prepare('INSERT INTO world_approvals(approval_id,session_id,wake_id,kind,status,payload_json,preview_json,application_json,outcome_json,created_at,decided_at,revision,last_event_sequence,last_event_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const now = '2026-08-11T12:00:00.000Z';
+  node.run('object.aaa_builder_huge', 'object', 'x'.repeat(300000), JSON.stringify({ huge: 'y'.repeat(300000) }), 'standing', 1, now, 1, 'hostile');
+  edge.run('edge.aaa_builder_huge', 'contains', 'room.center', 'object.aaa_builder_huge', null, 'z'.repeat(300000), now, 1, 'hostile');
+  approval.run('approval_aaa_builder_huge', sessionId, null, 'write_file', 'pending', JSON.stringify({ huge: 'p'.repeat(300000) }), JSON.stringify({ huge: 'q'.repeat(300000) }), null, null, now, null, 1, 1, 'hostile');
+  for (let index = 0; index < 150; index += 1) {
+    const suffix = String(index).padStart(3, '0'); const nodeId = `object.builder_extra_${suffix}`;
+    node.run(nodeId, 'object', 'Hostile extra builder row.', '{}', 'standing', 1, now, 1, 'hostile');
+    edge.run(`edge.builder_extra_${suffix}`, 'contains', 'room.center', nodeId, null, 'Hostile extra edge.', now, 1, 'hostile');
+    approval.run(`approval_builder_extra_${suffix}`, sessionId, null, 'write_file', 'pending', '{}', '{}', null, null, now, null, 1, 1, 'hostile');
+  }
+  sqlite.close();
+  const hub = createHub({ env });
+  const currentApproval = hub.world.sqlite.prepare('INSERT INTO world_approvals(approval_id,session_id,wake_id,kind,status,payload_json,preview_json,application_json,outcome_json,created_at,decided_at,revision,last_event_sequence,last_event_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  if (hub.db.session.id !== sessionId) {
+    hub.world.sqlite.exec('PRAGMA foreign_keys=OFF');
+    for (let index = 0; index < 150; index += 1) {
+      const suffix = String(index).padStart(3, '0');
+      const payload = index === 0 ? JSON.stringify({ huge: 'p'.repeat(300000) }) : '{}';
+      const preview = index === 0 ? JSON.stringify({ huge: 'q'.repeat(300000) }) : '{}';
+      currentApproval.run(`approval_builder_current_${suffix}`, hub.db.session.id, null, 'write_file', 'pending', payload, preview, null, null, now, null, 1, 1, 'hostile');
+    }
+    hub.world.sqlite.exec('PRAGMA foreign_keys=ON');
+  }
+  await new Promise(resolve => hub.server.listen(0, resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/world`); const builder = await response.json();
+    assert.equal(response.status, 200); assert.equal(builder.verification.verified, false); assert.ok(builder.verification.mismatches.length <= 50);
+    assert.equal(builder.graph.nodes.length, 100); assert.equal(builder.graph.edges.length, 100); assert.equal(builder.approvals.length, 100);
+    for (const key of ['nodes', 'edges', 'approvals']) {
+      assert.equal(builder.collectionBounds[key].returned, 100); assert.equal(builder.collectionBounds[key].truncated, true); assert.equal(builder.collectionBounds[key].total, null); assert.equal(builder.collectionBounds[key].totalAtLeast, 101);
+    }
+    assert.equal(builder.collectionBounds.diagnosticCellCharacterLimit, 2048); assert.equal(builder.collectionBounds.approvalFieldCharacterLimit, 2048);
+    const hugeNode = builder.graph.nodes.find(row => row.id.value === 'object.aaa_builder_huge');
+    const hugeEdge = builder.graph.edges.find(row => row.id.value === 'edge.aaa_builder_huge');
+    const hugeApproval = builder.approvals.find(row => row.approval_id.value.includes('_000') || row.approval_id.value === 'approval_aaa_builder_huge');
+    assert.equal(hugeNode.resident_text.truncated, true); assert.equal(hugeEdge.label.truncated, true);
+    assert.equal(hugeApproval.payload_json.truncated, true); assert.equal(hugeApproval.preview_json.truncated, true);
+    assert.ok(JSON.stringify(builder).length < 1_000_000);
+  } finally { await new Promise(resolve => hub.server.close(resolve)); await hub.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('verified builder inspection bounds oversized approval fields while ordinary fields retain shape', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hub-world-bounded-verified-'));
+  const env = { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: join(dir, 'hub.sqlite'), HUB_SPINE_PATH: join(dir, 'spine.jsonl'), HUB_WORLD_PATH: join(dir, 'world.sqlite'), HUB_RESULT_PATH: join(dir, 'results.sqlite'), HUB_WORKSHOP_ROOT: process.cwd() };
+  const hub = createHub({ env }); const sessionId = hub.db.session.id;
+  const huge = 'x'.repeat(300000);
+  hub.world.createApproval({ sessionId, kind: 'write_file', payload: { path: 'huge.txt', content: huge }, preview: { path: 'huge.txt', prior: huge } });
+  hub.world.createApproval({ sessionId, kind: 'write_file', payload: { path: 'small.txt', content: 'small' }, preview: { path: 'small.txt' } });
+  await new Promise(resolve => hub.server.listen(0, resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/world`); const builder = await response.json();
+    assert.equal(response.status, 200); assert.equal(builder.verification.verified, true);
+    const bounded = builder.approvals.find(row => row.payload?.bounded); const ordinary = builder.approvals.find(row => row.payload?.path === 'small.txt');
+    assert.equal(bounded.payload.truncated, true); assert.equal(bounded.preview.truncated, true); assert.equal(bounded.payload.charactersAtLeast, 2049);
+    assert.deepEqual(ordinary.payload, { content: 'small', path: 'small.txt' }); assert.deepEqual(ordinary.preview, { path: 'small.txt' });
+    assert.ok(JSON.stringify(builder).length < 100000);
+  } finally { await new Promise(resolve => hub.server.close(resolve)); await hub.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('installed topology exports are deeply immutable', () => {
   const before = installedTopologyHash();
   assert.throws(() => { INSTALLED_WORLD_EDGES[0][5] = 'Counterfeit mutable label'; }, TypeError);
@@ -299,9 +366,9 @@ test('installed topology exports are deeply immutable', () => {
 
 test('World event registrations are deeply immutable', () => {
   assert.throws(() => { WORLD_EVENT_KINDS['topology.installed/v1'].schemaVersion = 2; }, TypeError);
-  assert.throws(() => { WORLD_EVENT_KINDS['timer.set/v1'].installed = true; }, TypeError);
+  assert.throws(() => { WORLD_EVENT_KINDS['timer.set/v1'].schemaVersion = 2; }, TypeError);
   assert.equal(WORLD_EVENT_KINDS['topology.installed/v1'].schemaVersion, 1);
-  assert.equal(WORLD_EVENT_KINDS['timer.set/v1'].installed, false);
+  assert.equal(WORLD_EVENT_KINDS['timer.set/v1'].schemaVersion, 1);
 });
 
 test('legacy boundary refuses an altered or extra topology instead of blessing it', async () => {
@@ -352,7 +419,7 @@ test('approval decisions refuse drift before host mutation or approval change', 
     assert.throws(() => gateway.rejectApproval(approval.approvalId, 'life'), error => error.code === 'world_projection_drift');
     assert.throws(() => gateway.confirmSandboxPromotion({ approvalId: approval.approvalId, payload: { plan: {} } }, { recordCrossing: false }), error => error.code === 'world_projection_drift');
     assert.equal(await readFile(path, 'utf8'), 'before');
-    assert.equal(world.getApproval(approval.approvalId).status, 'pending');
+    assert.equal(world.sqlite.prepare('SELECT status FROM world_approvals WHERE approval_id=?').get(approval.approvalId).status, 'pending');
     assert.equal(world.sqlite.prepare('SELECT COUNT(*) AS count FROM world_action_receipts').get().count, 0);
   } finally { gateway.close(); world.close(); await rm(dir, { recursive: true, force: true }); }
 });

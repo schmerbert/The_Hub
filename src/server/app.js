@@ -138,17 +138,55 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
       if (request.method === 'GET' && url.pathname === '/api/session') return json(response, 200, { session: db.getActiveSession(), sessions: db.listSessions(), history: db.getSessionHistory(), world: world.projection(db.session.id), residentMode: config.mode, model: config.model });
       if (request.method === 'GET' && url.pathname === '/api/world') {
         const verification = world.verification({ mismatchLimit: 50 });
-        const safeRows = (table, sql) => {
-          if (!world.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?").get(table)) return [];
-          try { return world.sqlite.prepare(sql).all(); } catch { return []; }
+        const collectionLimit = 100; const sampleLimit = collectionLimit + 1; const cellCharacterLimit = 2048;
+        const safeCollection = (table, sql, parameters = []) => {
+          if (!world.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?").get(table)) return { rows: [], total: 0, totalAtLeast: 0, returned: 0, truncated: false, available: false };
+          try {
+            const sampled = world.sqlite.prepare(sql).all(...parameters, sampleLimit); const truncated = sampled.length > collectionLimit; const rows = sampled.slice(0, collectionLimit);
+            return { rows, total: truncated ? null : rows.length, totalAtLeast: sampled.length, returned: rows.length, truncated, available: true };
+          } catch { return { rows: [], total: 0, totalAtLeast: 0, returned: 0, truncated: false, available: false }; }
         };
-        let approvals = [];
-        if (world.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='world_approvals'").get()) {
-          try { approvals = world.listApprovals(db.session.id); } catch { approvals = []; }
+        const cap = column => `substr(${column},1,${cellCharacterLimit + 1}) AS ${column}`;
+        const nodes = safeCollection('world_nodes', verification.verified
+          ? 'SELECT * FROM world_nodes ORDER BY id LIMIT ?'
+          : `SELECT ${['id', 'node_type', 'resident_text', 'state_json', 'lifecycle'].map(cap).join(',')},revision,${cap('created_at')},last_event_sequence,${cap('last_event_hash')} FROM world_nodes ORDER BY id LIMIT ?`);
+        const edges = safeCollection('world_edges', verification.verified
+          ? 'SELECT * FROM world_edges ORDER BY id LIMIT ?'
+          : `SELECT ${['id', 'edge_type', 'from_node_id', 'to_node_id', 'door_identity', 'label', 'created_at'].map(cap).join(',')},last_event_sequence,${cap('last_event_hash')} FROM world_edges ORDER BY id LIMIT ?`);
+        const approvalRows = safeCollection('world_approvals',
+          `SELECT ${['approval_id', 'session_id', 'wake_id', 'kind', 'status', 'payload_json', 'preview_json', 'application_json', 'outcome_json', 'created_at', 'decided_at'].map(cap).join(',')},revision,last_event_sequence,${cap('last_event_hash')} FROM world_approvals WHERE session_id=? ORDER BY created_at,approval_id LIMIT ?`, [db.session.id]);
+        const diagnosticText = value => value === null ? null : { value: value.slice(0, cellCharacterLimit), truncated: value.length > cellCharacterLimit, charactersObserved: value.length };
+        const diagnosticRow = row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' ? diagnosticText(value) : value]));
+        if (!verification.verified) {
+          nodes.rows = nodes.rows.map(diagnosticRow); edges.rows = edges.rows.map(diagnosticRow); approvalRows.rows = approvalRows.rows.map(diagnosticRow);
         }
+        const approvals = approvalRows.rows.map(row => {
+          if (!verification.verified) return row;
+          const boundedString = value => typeof value === 'string' && value.length > cellCharacterLimit ? diagnosticText(value) : value;
+          const parsedField = value => {
+            if (value === null) return null;
+            if (value.length > cellCharacterLimit) return { bounded: true, truncated: true, charactersAtLeast: value.length, prefix: value.slice(0, cellCharacterLimit) };
+            return JSON.parse(value);
+          };
+          try {
+            return {
+              approvalId: boundedString(row.approval_id), sessionId: boundedString(row.session_id), wakeId: boundedString(row.wake_id), kind: boundedString(row.kind), status: boundedString(row.status),
+              payload: parsedField(row.payload_json), preview: parsedField(row.preview_json), application: parsedField(row.application_json),
+              outcome: parsedField(row.outcome_json), createdAt: boundedString(row.created_at), decidedAt: boundedString(row.decided_at),
+              revision: row.revision, worldEventSequence: row.last_event_sequence, worldEventHash: boundedString(row.last_event_hash),
+            };
+          } catch { return { approvalId: row.approval_id ?? null, status: row.status ?? null, malformed: true }; }
+        });
         const builder = {
-          graph: { nodes: safeRows('world_nodes', 'SELECT * FROM world_nodes ORDER BY id'), edges: safeRows('world_edges', 'SELECT * FROM world_edges ORDER BY id') },
-          verification, ceiling: ceilingCatalog(), approvals,
+          graph: { nodes: nodes.rows, edges: edges.rows }, verification, ceiling: ceilingCatalog(), approvals,
+          collectionBounds: {
+            limit: collectionLimit,
+            diagnosticCellCharacterLimit: cellCharacterLimit,
+            approvalFieldCharacterLimit: cellCharacterLimit,
+            nodes: { total: nodes.total, totalAtLeast: nodes.totalAtLeast, returned: nodes.returned, truncated: nodes.truncated, available: nodes.available },
+            edges: { total: edges.total, totalAtLeast: edges.totalAtLeast, returned: edges.returned, truncated: edges.truncated, available: edges.available },
+            approvals: { total: approvalRows.total, totalAtLeast: approvalRows.totalAtLeast, returned: approvalRows.returned, truncated: approvalRows.truncated, available: approvalRows.available },
+          },
         };
         if (!verification.verified) return json(response, 200, { ...builder, location: null, projection: null, tools: [] });
         try { return json(response, 200, { ...builder, location: world.current(db.session.id), projection: world.projection(db.session.id), tools: schemasForSession(world, db.session.id) }); }

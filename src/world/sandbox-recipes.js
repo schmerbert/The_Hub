@@ -166,7 +166,9 @@ export class SandboxRecipeRunner {
     token.cancelled = reason;
     const result = await this.sandboxBay.cancel(this.jobId);
     if (!result.cancelled) token.cancelled = null;
-    return { kind: 'workshop_recipe_cancel', cancelled: Boolean(result.cancelled), reason: result.cancelled ? reason : 'termination_failed', sandboxJobId: this.jobId };
+    if (!result.cancelled) return { kind: 'workshop_recipe_cancel', cancelled: false, reason: 'termination_failed', sandboxJobId: this.jobId };
+    const settlement = await token.promise;
+    return { kind: 'workshop_recipe_cancel', cancelled: true, reason, sandboxJobId: this.jobId, result: settlement };
   }
 
   async diff() {

@@ -5,9 +5,10 @@ import { canonicalize, id, sha256 } from '../core/hash.js';
 import { mountProfile, mountedToolNames, profilePresenceLine } from './ceiling.js';
 import { INSTALLED_WORLD_EDGES, INSTALLED_WORLD_NODES, topologyEventPayload } from './topology.js';
 import {
-  EDGE_COLUMNS, LOCATION_COLUMNS, NODE_COLUMNS, assertWorldVerified, createWorldEvent,
-  insertWorldEvent, installWorldEventSchema, readWorldProjection, reduceWorldEvent, verifyWorldSqlite,
-  WORLD_INTEGRITY_TRIGGER_SQL, WORLD_PROJECTION_TABLE_SQL,
+  ACTION_RECEIPT_COLUMNS, APPROVAL_COLUMNS, APPROVAL_RECEIPT_COLUMNS, BRIEF_COLUMNS, EDGE_COLUMNS, FIXTURE_RUNTIME_COLUMNS,
+  LOCATION_COLUMNS, NODE_COLUMNS, TIMER_COLUMNS, assertWorldVerified, createWorldEvent, custodyRowHash, emptyWorldState,
+  insertWorldEvent, installWorldEventSchema, readWorldPhysicalProjection, readWorldProjection, reduceWorldEvent, replayWorldEvents, verifyWorldA1Sqlite, verifyWorldSqlite,
+  WORLD_CUSTODY_TABLE_SQL, WORLD_INTEGRITY_TRIGGER_SQL, WORLD_PROJECTION_TABLE_SQL,
 } from './events.js';
 
 const NOW = () => new Date().toISOString();
@@ -20,17 +21,33 @@ const SEED_EDGES = INSTALLED_WORLD_EDGES;
 
 const RETIRED_STATION_IDS = ['station.spec_table', 'station.control_panel'];
 
+const LEGACY_A1_OPERATIONAL_TABLE_SQL = Object.freeze({
+  world_fixture_runtime: 'CREATE TABLE world_fixture_runtime (fixture_id TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL)',
+  world_timers: 'CREATE TABLE world_timers (session_id TEXT PRIMARY KEY, seconds INTEGER NOT NULL CHECK(seconds>=1 AND seconds<=3600), due_at TEXT NOT NULL, created_at TEXT NOT NULL)',
+  world_work_briefs: 'CREATE TABLE world_work_briefs (brief_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), objective TEXT NOT NULL, scope_paths_json TEXT NOT NULL, acceptance_json TEXT NOT NULL, non_goals_json TEXT NOT NULL, field_hashes_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
+  world_approvals: "CREATE TABLE world_approvals (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, kind TEXT NOT NULL CHECK(kind IN ('patch','unified_diff','write_file','create_path','delete_path','rename_path','git_add','commit','git_checkout','sandbox_promotion')), status TEXT NOT NULL CHECK(status IN ('pending','confirmed','rejected','cancelled')), payload_json TEXT NOT NULL, preview_json TEXT NOT NULL, outcome_json TEXT, created_at TEXT NOT NULL, decided_at TEXT)",
+  world_action_receipts: "CREATE TABLE world_action_receipts (receipt_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, room_node_id TEXT NOT NULL REFERENCES world_nodes(id), tool_name TEXT NOT NULL, arguments_json TEXT NOT NULL, result_json TEXT NOT NULL, outcome TEXT NOT NULL CHECK(outcome IN ('committed','refused')), request_record_id TEXT, spine_record_id TEXT, created_at TEXT NOT NULL)",
+  world_approval_receipts: "CREATE TABLE world_approval_receipts (receipt_id TEXT PRIMARY KEY, approval_id TEXT NOT NULL REFERENCES world_approvals(approval_id), session_id TEXT NOT NULL, wake_id TEXT, phase TEXT NOT NULL CHECK(phase IN ('pending','confirmed','rejected','cancelled')), action_receipt_id TEXT NOT NULL REFERENCES world_action_receipts(receipt_id), result_json TEXT NOT NULL, host_return_scrub_json TEXT NOT NULL, created_at TEXT NOT NULL)",
+});
+
+function normalizeSchemaSql(sql) {
+  return String(sql || '').toLowerCase().replace(/create\s+table\s+if\s+not\s+exists/, 'create table').replace(/["`\[\]]/g, '').replace(/\s+/g, '').replace(/;+$/g, '');
+}
+function normalizeTriggerSql(sql) {
+  return String(sql || '').toLowerCase().replace(/create\s+trigger\s+if\s+not\s+exists/, 'create trigger').replace(/\s+/g, '').replace(/;+$/g, '');
+}
+
 const SCHEMA = `
 ${WORLD_PROJECTION_TABLE_SQL.world_nodes}
 ${WORLD_PROJECTION_TABLE_SQL.world_edges}
 ${WORLD_PROJECTION_TABLE_SQL.world_locations}
 CREATE TABLE IF NOT EXISTS world_location_events (event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, actor TEXT NOT NULL, from_room TEXT REFERENCES world_nodes(id), to_room TEXT NOT NULL REFERENCES world_nodes(id), edge_id TEXT REFERENCES world_edges(id), door_identity TEXT, created_at TEXT NOT NULL, attribution_json TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS world_action_receipts (receipt_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, room_node_id TEXT NOT NULL REFERENCES world_nodes(id), tool_name TEXT NOT NULL, arguments_json TEXT NOT NULL, result_json TEXT NOT NULL, outcome TEXT NOT NULL CHECK(outcome IN ('committed','refused')), request_record_id TEXT, spine_record_id TEXT, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS world_work_briefs (brief_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), objective TEXT NOT NULL, scope_paths_json TEXT NOT NULL, acceptance_json TEXT NOT NULL, non_goals_json TEXT NOT NULL, field_hashes_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS world_approvals (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, wake_id TEXT, kind TEXT NOT NULL CHECK(kind IN ('patch','unified_diff','write_file','create_path','delete_path','rename_path','git_add','commit','git_checkout','sandbox_promotion')), status TEXT NOT NULL CHECK(status IN ('pending','confirmed','rejected','cancelled')), payload_json TEXT NOT NULL, preview_json TEXT NOT NULL, outcome_json TEXT, created_at TEXT NOT NULL, decided_at TEXT);
-CREATE TABLE IF NOT EXISTS world_approval_receipts (receipt_id TEXT PRIMARY KEY, approval_id TEXT NOT NULL REFERENCES world_approvals(approval_id), session_id TEXT NOT NULL, wake_id TEXT, phase TEXT NOT NULL CHECK(phase IN ('pending','confirmed','rejected','cancelled')), action_receipt_id TEXT NOT NULL REFERENCES world_action_receipts(receipt_id), result_json TEXT NOT NULL, host_return_scrub_json TEXT NOT NULL, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS world_fixture_runtime (fixture_id TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS world_timers (session_id TEXT PRIMARY KEY, seconds INTEGER NOT NULL CHECK(seconds>=1 AND seconds<=3600), due_at TEXT NOT NULL, created_at TEXT NOT NULL);
+${WORLD_CUSTODY_TABLE_SQL.world_action_receipts}
+${WORLD_PROJECTION_TABLE_SQL.world_work_briefs}
+${WORLD_PROJECTION_TABLE_SQL.world_approvals}
+${WORLD_CUSTODY_TABLE_SQL.world_approval_receipts}
+${WORLD_PROJECTION_TABLE_SQL.world_fixture_runtime}
+${WORLD_PROJECTION_TABLE_SQL.world_timers}
 CREATE INDEX IF NOT EXISTS world_location_events_session_order ON world_location_events(session_id, created_at, event_id);
 CREATE INDEX IF NOT EXISTS world_action_receipts_session_order ON world_action_receipts(session_id, created_at, receipt_id);
 CREATE INDEX IF NOT EXISTS world_approvals_session_order ON world_approvals(session_id, created_at, approval_id);
@@ -41,10 +58,10 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_edges_append_only_update}
 ${WORLD_INTEGRITY_TRIGGER_SQL.world_edges_append_only_delete}
 CREATE TRIGGER IF NOT EXISTS world_location_events_append_only_update BEFORE UPDATE ON world_location_events BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS world_location_events_append_only_delete BEFORE DELETE ON world_location_events BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS world_action_receipts_append_only_update BEFORE UPDATE ON world_action_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS world_action_receipts_append_only_delete BEFORE DELETE ON world_action_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS world_approval_receipts_append_only_update BEFORE UPDATE ON world_approval_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS world_approval_receipts_append_only_delete BEFORE DELETE ON world_approval_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+${WORLD_INTEGRITY_TRIGGER_SQL.world_action_receipts_append_only_update}
+${WORLD_INTEGRITY_TRIGGER_SQL.world_action_receipts_append_only_delete}
+${WORLD_INTEGRITY_TRIGGER_SQL.world_approval_receipts_append_only_update}
+${WORLD_INTEGRITY_TRIGGER_SQL.world_approval_receipts_append_only_delete}
 `;
 
 function engagedColumn(row) {
@@ -59,6 +76,8 @@ export class WorldGraphStore {
     this.path = path;
     this.nowMs = now;
     this.eventFailureInjector = eventFailureInjector;
+    this.transactionDepth = 0;
+    this.transactionNeedsVerification = false;
     this.sqlite = new DatabaseSync(path);
     this.sqlite.exec('PRAGMA foreign_keys=ON;');
     const hadWorldSchema = Boolean(this.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='world_nodes'").get());
@@ -72,6 +91,7 @@ export class WorldGraphStore {
       if (hadWorldSchema) {
         this.seed();
         this.bootstrapLegacyBoundary();
+        this._migrateA2Boundary();
       } else this.bootstrapFreshTopology();
     } catch (error) {
       this.sqlite.close();
@@ -182,10 +202,31 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       }
     }
   }
-  transaction(fn) { this.sqlite.exec('BEGIN IMMEDIATE'); try { const result = fn(); this.sqlite.exec('COMMIT'); return result; } catch (error) { try { this.sqlite.exec('ROLLBACK'); } catch {} throw error; } }
+  transaction(fn, { verify = false } = {}) {
+    if (this.transactionDepth > 0) {
+      if (verify) this.transactionNeedsVerification = true;
+      return fn();
+    }
+    if (verify) assertWorldVerified(this.sqlite);
+    this.sqlite.exec('BEGIN IMMEDIATE'); this.transactionDepth += 1;
+    this.transactionNeedsVerification = verify;
+    try {
+      const result = fn();
+      if (this.transactionNeedsVerification) assertWorldVerified(this.sqlite);
+      this.sqlite.exec('COMMIT');
+      return result;
+    } catch (error) {
+      try { this.sqlite.exec('ROLLBACK'); } catch {}
+      throw error;
+    } finally { this.transactionDepth -= 1; this.transactionNeedsVerification = false; }
+  }
   eventHead() { return this.sqlite.prepare('SELECT sequence,event_hash FROM world_event_journal ORDER BY sequence DESC LIMIT 1').get() || null; }
+  aggregateRevision(aggregateKind, aggregateId, projectionRevision = 0) {
+    const row = this.sqlite.prepare('SELECT MAX(aggregate_revision) AS revision FROM world_event_journal WHERE aggregate_kind=? AND aggregate_id=?').get(aggregateKind, aggregateId);
+    return Math.max(row?.revision || 0, projectionRevision || 0);
+  }
   verification(options) { return verifyWorldSqlite(this.sqlite, options); }
-  assertVerified() { return assertWorldVerified(this.sqlite); }
+  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite); }
   _withTopologyProjectionWrites(fn) {
     for (const trigger of ['world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) this.sqlite.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
     try { return fn(); }
@@ -196,7 +237,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       this.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL.world_edges_append_only_delete);
     }
   }
-  _materializeProjection(state) {
+  _materializeProjection(state, prior = emptyWorldState()) {
     const nodePointerUpdates = []; const edgePointerUpdates = [];
     for (const row of state.nodes) {
       const existing = this.sqlite.prepare(`SELECT ${NODE_COLUMNS.join(',')} FROM world_nodes WHERE id=?`).get(row.id);
@@ -223,22 +264,43 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       if (!existing) this.sqlite.prepare(`INSERT INTO world_locations(${LOCATION_COLUMNS.join(',')}) VALUES(${LOCATION_COLUMNS.map(() => '?').join(',')})`).run(...LOCATION_COLUMNS.map(column => row[column]));
       else this.sqlite.prepare(`UPDATE world_locations SET ${LOCATION_COLUMNS.slice(1).map(column => `${column}=?`).join(',')} WHERE session_id=?`).run(...LOCATION_COLUMNS.slice(1).map(column => row[column]), row.session_id);
     }
+    for (const row of state.fixtureRuntimes) {
+      const existing = this.sqlite.prepare('SELECT 1 AS ok FROM world_fixture_runtime WHERE fixture_id=?').get(row.fixture_id);
+      if (!existing) this.sqlite.prepare(`INSERT INTO world_fixture_runtime(${FIXTURE_RUNTIME_COLUMNS.join(',')}) VALUES(${FIXTURE_RUNTIME_COLUMNS.map(() => '?').join(',')})`).run(...FIXTURE_RUNTIME_COLUMNS.map(column => row[column]));
+      else this.sqlite.prepare(`UPDATE world_fixture_runtime SET ${FIXTURE_RUNTIME_COLUMNS.slice(1).map(column => `${column}=?`).join(',')} WHERE fixture_id=?`).run(...FIXTURE_RUNTIME_COLUMNS.slice(1).map(column => row[column]), row.fixture_id);
+    }
+    for (const row of state.timers) {
+      const existing = this.sqlite.prepare('SELECT 1 AS ok FROM world_timers WHERE session_id=?').get(row.session_id);
+      if (!existing) this.sqlite.prepare(`INSERT INTO world_timers(${TIMER_COLUMNS.join(',')}) VALUES(${TIMER_COLUMNS.map(() => '?').join(',')})`).run(...TIMER_COLUMNS.map(column => row[column]));
+      else this.sqlite.prepare(`UPDATE world_timers SET ${TIMER_COLUMNS.slice(1).map(column => `${column}=?`).join(',')} WHERE session_id=?`).run(...TIMER_COLUMNS.slice(1).map(column => row[column]), row.session_id);
+    }
+    const timerIds = new Set(state.timers.map(row => row.session_id));
+    for (const row of prior.timers || []) if (!timerIds.has(row.session_id)) this.sqlite.prepare('DELETE FROM world_timers WHERE session_id=?').run(row.session_id);
+    for (const row of state.briefs) {
+      const existing = this.sqlite.prepare('SELECT 1 AS ok FROM world_work_briefs WHERE session_id=? AND revision=?').get(row.session_id, row.revision);
+      if (!existing) this.sqlite.prepare(`INSERT INTO world_work_briefs(${BRIEF_COLUMNS.join(',')}) VALUES(${BRIEF_COLUMNS.map(() => '?').join(',')})`).run(...BRIEF_COLUMNS.map(column => row[column]));
+    }
+    for (const row of state.approvals) {
+      const existing = this.sqlite.prepare('SELECT 1 AS ok FROM world_approvals WHERE approval_id=?').get(row.approval_id);
+      if (!existing) this.sqlite.prepare(`INSERT INTO world_approvals(${APPROVAL_COLUMNS.join(',')}) VALUES(${APPROVAL_COLUMNS.map(() => '?').join(',')})`).run(...APPROVAL_COLUMNS.map(column => row[column]));
+      else this.sqlite.prepare(`UPDATE world_approvals SET ${APPROVAL_COLUMNS.slice(1).map(column => `${column}=?`).join(',')} WHERE approval_id=?`).run(...APPROVAL_COLUMNS.slice(1).map(column => row[column]), row.approval_id);
+    }
   }
-  _appendPhysicalEvent({ eventKind, aggregateKind, aggregateId, aggregateRevision, sessionId = null, wakeId = null, actor, commandId = null, causation = {}, payload, skipVerification = false, replayPrior = null, afterProjection = null }) {
+  _appendPhysicalEvent({ eventKind, aggregateKind, aggregateId, aggregateRevision, sessionId = null, wakeId = null, actor, commandId = null, causation = {}, payload, occurredAt = null, skipVerification = false, replayPrior = null, afterProjection = null }) {
     if (!skipVerification) this.assertVerified();
     const event = createWorldEvent({
       head: this.eventHead(), eventKind, aggregateKind, aggregateId, aggregateRevision, sessionId, wakeId,
-      actor, commandId, causation, payload, occurredAt: new Date(this.nowMs()).toISOString(),
+      actor, commandId, causation, payload, occurredAt: occurredAt || new Date(this.nowMs()).toISOString(),
     });
     const prior = replayPrior || readWorldProjection(this.sqlite);
     const next = reduceWorldEvent(prior, event);
     this.transaction(() => {
       insertWorldEvent(this.sqlite, event);
       this.eventFailureInjector?.({ phase: 'after_event_append', event });
-      this._materializeProjection(next);
+      this._materializeProjection(next, prior);
       afterProjection?.(event);
       this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
-    });
+    }, { verify: !skipVerification });
     return event;
   }
   bootstrapFreshTopology() {
@@ -248,7 +310,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     });
   }
   bootstrapLegacyBoundary() {
-    const projection = readWorldProjection(this.sqlite);
+    const projection = readWorldPhysicalProjection(this.sqlite);
     const installed = topologyEventPayload();
     const nodeById = new Map(projection.nodes.map(row => [row.id, row])); const edgeById = new Map(projection.edges.map(row => [row.id, row]));
     if (nodeById.size !== installed.nodes.length || edgeById.size !== installed.edges.length) throw Object.assign(new Error('Legacy World topology does not match the installed manifest.'), { code: 'world_legacy_topology_invalid' });
@@ -274,6 +336,115 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       actor: 'world_migration', causation: { boundary: 'pre_journal_projection' }, payload: { projectionSha256: sha256(canonicalize(snapshot)), ...snapshot },
       skipVerification: true, replayPrior: { nodes: [], edges: [], locations: [] },
     });
+  }
+  inspectA2Upgrade() {
+    const current = this.verification({ mismatchLimit: 50 });
+    if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
+    const boundary = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='operational_snapshot.imported/v1' ORDER BY sequence LIMIT 1").get();
+    const a1 = verifyWorldA1Sqlite(this.sqlite, { mismatchLimit: 50 });
+    if (boundary) return { status: 'corrupt_or_incomplete_a2', upgradeRequired: false, boundary, verification: current };
+    if (!a1.verified) return { status: 'corrupt_a1', upgradeRequired: false, verification: a1 };
+    return {
+      status: 'upgrade_required', upgradeRequired: true, verification: a1,
+      backupExpectation: 'Create and verify a byte-for-byte backup of the World database before applying the A2 migration.',
+    };
+  }
+  migrateA2({ backupConfirmed = false } = {}) {
+    if (!backupConfirmed) throw Object.assign(new Error('A2 migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_a2_backup_required' });
+    return this._migrateA2Boundary();
+  }
+  _tableRows(table) {
+    const exists = this.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?").get(table);
+    return exists ? this.sqlite.prepare(`SELECT * FROM ${table}`).all() : [];
+  }
+  _assertLegacyA1OperationalAdmission() {
+    for (const [table, expected] of Object.entries(LEGACY_A1_OPERATIONAL_TABLE_SQL)) {
+      const actual = this.sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)?.sql;
+      if (normalizeSchemaSql(actual) !== normalizeSchemaSql(expected)) throw Object.assign(new Error(`Unsupported pre-A2 schema for ${table}.`), { code: 'world_a2_legacy_schema_invalid', table });
+    }
+    for (const trigger of ['world_action_receipts_append_only_update', 'world_action_receipts_append_only_delete', 'world_approval_receipts_append_only_update', 'world_approval_receipts_append_only_delete']) {
+      const actual = this.sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger)?.sql;
+      if (normalizeTriggerSql(actual) !== normalizeTriggerSql(WORLD_INTEGRITY_TRIGGER_SQL[trigger])) throw Object.assign(new Error(`Unsupported pre-A2 integrity trigger: ${trigger}.`), { code: 'world_a2_legacy_trigger_invalid', trigger });
+    }
+    const violations = this.sqlite.prepare('PRAGMA foreign_key_check').all();
+    if (violations.length) throw Object.assign(new Error('Pre-A2 World database has foreign-key violations.'), { code: 'world_a2_legacy_foreign_key_invalid', violations });
+  }
+  _validateLegacyOperationalRelations({ fixtureRuntimes, timers, briefs, approvals, actionReceipts, approvalReceipts }) {
+    const nodes = new Map(this._tableRows('world_nodes').map(row => [row.id, row]));
+    const locations = new Map(this._tableRows('world_locations').map(row => [row.session_id, row]));
+    const approvalById = new Map(approvals.map(row => [row.approval_id, row])); const actionById = new Map(actionReceipts.map(row => [row.receipt_id, row]));
+    const invalid = (relation, identity) => { throw Object.assign(new Error(`Invalid pre-A2 operational relation: ${relation}.`), { code: 'world_a2_legacy_relation_invalid', relation, identity }); };
+    for (const row of fixtureRuntimes) if (!nodes.has(row.fixture_id)) invalid('fixture_runtime.fixture_id', row.fixture_id);
+    for (const row of timers) if (!locations.has(row.session_id)) invalid('timer.session_id', row.session_id);
+    for (const row of briefs) if (!locations.has(row.session_id)) invalid('brief.session_id', row.session_id);
+    for (const row of approvals) if (!locations.has(row.session_id)) invalid('approval.session_id', row.approval_id);
+    for (const row of actionReceipts) if (!nodes.has(row.room_node_id)) invalid('action_receipt.room_node_id', row.receipt_id);
+    for (const row of approvalReceipts) {
+      const approval = approvalById.get(row.approval_id); const action = actionById.get(row.action_receipt_id);
+      if (!approval) invalid('approval_receipt.approval_id', row.receipt_id);
+      if (!action) invalid('approval_receipt.action_receipt_id', row.receipt_id);
+      if (row.session_id !== approval.session_id || row.session_id !== action.session_id || (row.wake_id || null) !== (approval.wake_id || null) || (row.wake_id || null) !== (action.wake_id || null)) invalid('approval_receipt.session_wake', row.receipt_id);
+      if (row.phase !== 'pending' && row.phase !== approval.status) invalid('approval_receipt.phase_status', row.receipt_id);
+      if (action.outcome !== 'committed') invalid('approval_receipt.action_outcome', row.receipt_id);
+    }
+  }
+  _rebuildOperationalTablesForBoundary() {
+    this._assertLegacyA1OperationalAdmission();
+    const fixtureRuntimes = this._tableRows('world_fixture_runtime').map(row => ({ fixture_id: row.fixture_id, state_json: row.state_json, revision: 1, updated_at: row.updated_at })).sort((a, b) => a.fixture_id.localeCompare(b.fixture_id));
+    const timers = this._tableRows('world_timers').map(row => ({ session_id: row.session_id, seconds: row.seconds, due_at: row.due_at, created_at: row.created_at, revision: 1 })).sort((a, b) => a.session_id.localeCompare(b.session_id));
+    const briefs = this._tableRows('world_work_briefs').map(row => ({ brief_id: row.brief_id, session_id: row.session_id, revision: row.revision, objective: row.objective, scope_paths_json: row.scope_paths_json, acceptance_json: row.acceptance_json, non_goals_json: row.non_goals_json, field_hashes_json: row.field_hashes_json, created_at: row.created_at, updated_at: row.updated_at })).sort((a, b) => a.session_id.localeCompare(b.session_id) || a.revision - b.revision);
+    const approvals = this._tableRows('world_approvals').map(row => ({ approval_id: row.approval_id, session_id: row.session_id, wake_id: row.wake_id ?? null, kind: row.kind, status: row.status, payload_json: row.payload_json, preview_json: row.preview_json, application_json: null, outcome_json: row.outcome_json ?? null, created_at: row.created_at, decided_at: row.decided_at ?? null, revision: 1 })).sort((a, b) => a.approval_id.localeCompare(b.approval_id));
+    const actionReceipts = this._tableRows('world_action_receipts').map(row => ({ ...Object.fromEntries(ACTION_RECEIPT_COLUMNS.map(column => [column, column.startsWith('world_event_') ? null : (row[column] ?? null)])) })).sort((a, b) => a.receipt_id.localeCompare(b.receipt_id));
+    const approvalReceipts = this._tableRows('world_approval_receipts').map(row => ({ ...Object.fromEntries(APPROVAL_RECEIPT_COLUMNS.map(column => [column, column.startsWith('world_event_') ? null : (row[column] ?? null)])) })).sort((a, b) => a.receipt_id.localeCompare(b.receipt_id));
+    this._validateLegacyOperationalRelations({ fixtureRuntimes, timers, briefs, approvals, actionReceipts, approvalReceipts });
+    for (const trigger of Object.keys(WORLD_INTEGRITY_TRIGGER_SQL).filter(name => name.includes('_receipts_'))) this.sqlite.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
+    for (const table of ['world_approval_receipts', 'world_action_receipts', 'world_work_briefs', 'world_timers', 'world_fixture_runtime', 'world_approvals']) this.sqlite.exec(`DROP TABLE IF EXISTS ${table}`);
+    for (const [table, definition] of [
+      ['world_fixture_runtime', WORLD_PROJECTION_TABLE_SQL.world_fixture_runtime], ['world_timers', WORLD_PROJECTION_TABLE_SQL.world_timers],
+      ['world_work_briefs', WORLD_PROJECTION_TABLE_SQL.world_work_briefs], ['world_approvals', WORLD_PROJECTION_TABLE_SQL.world_approvals],
+      ['world_action_receipts', WORLD_CUSTODY_TABLE_SQL.world_action_receipts], ['world_approval_receipts', WORLD_CUSTODY_TABLE_SQL.world_approval_receipts],
+    ]) this.sqlite.exec(definition);
+    this.sqlite.exec('CREATE INDEX IF NOT EXISTS world_action_receipts_session_order ON world_action_receipts(session_id, created_at, receipt_id)');
+    this.sqlite.exec('CREATE INDEX IF NOT EXISTS world_approvals_session_order ON world_approvals(session_id, created_at, approval_id)');
+    this.sqlite.exec('CREATE INDEX IF NOT EXISTS world_approval_receipts_approval_order ON world_approval_receipts(approval_id, created_at, receipt_id)');
+    for (const row of actionReceipts) this.sqlite.prepare(`INSERT INTO world_action_receipts(${ACTION_RECEIPT_COLUMNS.join(',')}) VALUES(${ACTION_RECEIPT_COLUMNS.map(() => '?').join(',')})`).run(...ACTION_RECEIPT_COLUMNS.map(column => row[column]));
+    for (const row of approvalReceipts) this.sqlite.prepare(`INSERT INTO world_approval_receipts(${APPROVAL_RECEIPT_COLUMNS.join(',')}) VALUES(${APPROVAL_RECEIPT_COLUMNS.map(() => '?').join(',')})`).run(...APPROVAL_RECEIPT_COLUMNS.map(column => row[column]));
+    for (const trigger of Object.keys(WORLD_INTEGRITY_TRIGGER_SQL).filter(name => name.includes('_receipts_'))) this.sqlite.exec(WORLD_INTEGRITY_TRIGGER_SQL[trigger]);
+    const legacyCustody = {
+      actionReceipts: actionReceipts.map(row => ({ receiptId: row.receipt_id, rowSha256: custodyRowHash(row, 'action') })).sort((a, b) => a.receiptId.localeCompare(b.receiptId)),
+      approvalReceipts: approvalReceipts.map(row => ({ receiptId: row.receipt_id, rowSha256: custodyRowHash(row, 'approval') })).sort((a, b) => a.receiptId.localeCompare(b.receiptId)),
+    };
+    return { fixtureRuntimes, timers, briefs, approvals, legacyCustody };
+  }
+  _migrateA2Boundary() {
+    const inspection = this.inspectA2Upgrade();
+    if (!inspection.upgradeRequired) {
+      if (inspection.status === 'current') return inspection;
+      throw Object.assign(new Error('World A2 migration refused because the A1 journal is corrupt or an incomplete A2 boundary already exists.'), { code: 'world_a2_migration_refused', inspection });
+    }
+    this.sqlite.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;');
+    try {
+      const imported = this._rebuildOperationalTablesForBoundary();
+      const prior = replayWorldEvents(this.sqlite); const head = this.eventHead();
+      const exact = { ...imported };
+      const event = createWorldEvent({
+        head, eventKind: 'operational_snapshot.imported/v1', aggregateKind: 'operational_snapshot', aggregateId: 'installed', aggregateRevision: 1,
+        actor: 'world_migration', causation: { boundary: 'pre_a2_operational_projection', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence },
+        payload: { projectionSha256: sha256(canonicalize(exact)), ...exact }, occurredAt: new Date(this.nowMs()).toISOString(),
+      });
+      const next = reduceWorldEvent(prior, event); insertWorldEvent(this.sqlite, event);
+      this.eventFailureInjector?.({ phase: 'after_event_append', event }); this._materializeProjection(next, prior);
+      this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
+      const foreignKeyViolations = this.sqlite.prepare('PRAGMA foreign_key_check').all();
+      if (foreignKeyViolations.length) throw Object.assign(new Error('World A2 migration produced foreign-key violations.'), { code: 'world_a2_migration_foreign_key_failed', violations: foreignKeyViolations });
+      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+      if (!verification.verified) throw Object.assign(new Error('World A2 migration did not produce a verified projection.'), { code: 'world_a2_migration_verification_failed', verification });
+      this.sqlite.exec('COMMIT;');
+      return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
+    } catch (error) {
+      try { this.sqlite.exec('ROLLBACK;'); } catch {}
+      throw error;
+    } finally { this.sqlite.exec('PRAGMA foreign_keys=ON;'); }
   }
   seed() {
     const now = NOW();
@@ -312,10 +483,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     this.assertVerified();
     const location = this.ensureLifespan(sessionId);
     const pending = this.sqlite.prepare("SELECT approval_id FROM world_approvals WHERE session_id<>? AND status='pending' ORDER BY created_at, approval_id").all(sessionId);
-    if (pending.length) {
-      this.sqlite.prepare("UPDATE world_approvals SET status='cancelled', outcome_json=?, decided_at=? WHERE session_id<>? AND status='pending'")
-        .run(JSON.stringify({ reason }), NOW(), sessionId);
-    }
+    for (const row of pending) this._cancelApproval(row.approval_id, reason, { actor: 'world_lifespan' });
     return { location, cancelledApprovalIds: pending.map(row => row.approval_id) };
   }
   current(sessionId) { const row = this.sqlite.prepare('SELECT * FROM world_locations WHERE session_id=?').get(sessionId); if (row) { this.assertVerified(); return row; } return this.ensureLifespan(sessionId); }
@@ -325,35 +493,58 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     return this.sqlite.prepare("SELECT n.* FROM world_nodes n JOIN world_edges e ON e.to_node_id=n.id WHERE e.edge_type='contains' AND e.from_node_id=? AND n.lifecycle='standing' ORDER BY n.id").all(roomId);
   }
   getFixtureRuntime(fixtureId) {
+    this.assertVerified();
     const row = this.sqlite.prepare('SELECT * FROM world_fixture_runtime WHERE fixture_id=?').get(fixtureId);
     return row ? JSON.parse(row.state_json) : null;
   }
-  setFixtureRuntime(fixtureId, state) {
+  setFixtureRuntime(fixtureId, state, { sessionId = null, wakeId = null, commandId = null, actor = null, action = null } = {}) {
     this.assertVerified();
-    const now = NOW();
-    const json = JSON.stringify(state);
-    this.sqlite.prepare(`INSERT INTO world_fixture_runtime(fixture_id, state_json, updated_at) VALUES(?,?,?)
-      ON CONFLICT(fixture_id) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at`).run(fixtureId, json, now);
-    return state;
+    const current = this.sqlite.prepare('SELECT revision,state_json,last_event_sequence,last_event_hash FROM world_fixture_runtime WHERE fixture_id=?').get(fixtureId);
+    const priorState = current ? JSON.parse(current.state_json) : null;
+    const resolvedAction = action || (state?.status === 'running' ? 'recipe_started' : null);
+    if (!resolvedAction) throw Object.assign(new Error('Fixture runtime transition action is required.'), { code: 'world_runtime_action_required' });
+    const effectiveActor = actor || (commandId ? 'resident_tool' : resolvedAction === 'recipe_started' || resolvedAction === 'recipe_cancelled' ? 'world_internal' : 'world_runtime');
+    const boundaryRunId = resolvedAction === 'restart_reconciled' && priorState?.status === 'running' && !priorState.runId
+      ? `legacy_run_${sha256(canonicalize({ fixtureId, boundaryEventHash: current.last_event_hash, stateSha256: sha256(current.state_json) }))}`
+      : null;
+    const normalized = {
+      status: state?.status || 'failed', runId: state?.runId || priorState?.runId || boundaryRunId || (resolvedAction === 'recipe_started' ? id('kiln_run') : null), recipe: state?.recipe || priorState?.recipe || null, code: state?.code ?? null, signal: state?.signal ?? null,
+      reason: state?.reason || null, summaryTail: typeof state?.summaryTail === 'string' ? state.summaryTail.slice(0, 240) : null,
+    };
+    const revision = this.aggregateRevision('fixture_runtime', fixtureId, current?.revision || 0) + 1;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'fixture_runtime.replaced/v1', aggregateKind: 'fixture_runtime', aggregateId: fixtureId, aggregateRevision: revision,
+      sessionId, wakeId, actor: effectiveActor, commandId, causation: { action: resolvedAction }, payload: { fixtureId, state: normalized },
+    });
+    return { ...normalized, worldEventSequence: event.sequence, worldEventHash: event.event_hash };
   }
-  setTimer(sessionId, seconds) {
+  setTimer(sessionId, seconds, { wakeId = null, commandId = null, actor = commandId ? 'resident_tool' : 'world_internal' } = {}) {
     this.assertVerified();
     if (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600) throw Object.assign(new Error('Timer seconds must be an integer from 1 to 3600.'), { code: 'workshop_invalid_argument' });
     this.ensureLifespan(sessionId);
-    const createdAt = new Date(this.nowMs()).toISOString();
-    const dueAt = new Date(this.nowMs() + seconds * 1000).toISOString();
-    this.sqlite.prepare(`INSERT INTO world_timers(session_id, seconds, due_at, created_at) VALUES(?,?,?,?)
-      ON CONFLICT(session_id) DO UPDATE SET seconds=excluded.seconds, due_at=excluded.due_at, created_at=excluded.created_at`)
-      .run(sessionId, seconds, dueAt, createdAt);
-    return this.getTimer(sessionId);
+    const observedNow = this.nowMs(); const createdAt = new Date(observedNow).toISOString(); const dueAt = new Date(observedNow + seconds * 1000).toISOString();
+    const current = this.sqlite.prepare('SELECT revision FROM world_timers WHERE session_id=?').get(sessionId);
+    const revision = this.aggregateRevision('timer', sessionId, current?.revision || 0) + 1;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'timer.set/v1', aggregateKind: 'timer', aggregateId: sessionId, aggregateRevision: revision,
+      sessionId, wakeId, actor, commandId, causation: { action: 'timer_set' }, payload: { seconds, dueAt, createdAt }, occurredAt: createdAt,
+    });
+    return { ...this.getTimer(sessionId), worldEventSequence: event.sequence, worldEventHash: event.event_hash };
   }
-  cancelTimer(sessionId) {
+  cancelTimer(sessionId, { wakeId = null, commandId = null, actor = commandId ? 'resident_tool' : 'world_internal', reason = 'cancelled_by_tool' } = {}) {
     this.assertVerified();
     const prior = this.getTimer(sessionId);
-    this.sqlite.prepare('DELETE FROM world_timers WHERE session_id=?').run(sessionId);
-    return { kind: 'workshop_timer_cancel', cancelled: prior.status !== 'none', prior };
+    if (prior.status === 'none') return { kind: 'workshop_timer_cancel', cancelled: false, prior };
+    const current = this.sqlite.prepare('SELECT revision,due_at FROM world_timers WHERE session_id=?').get(sessionId);
+    const revision = this.aggregateRevision('timer', sessionId, current.revision) + 1;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'timer.cleared/v1', aggregateKind: 'timer', aggregateId: sessionId, aggregateRevision: revision,
+      sessionId, wakeId, actor, commandId, causation: { action: 'timer_cleared' }, payload: { priorDueAt: current.due_at, reason },
+    });
+    return { kind: 'workshop_timer_cancel', cancelled: true, prior, worldEventSequence: event.sequence, worldEventHash: event.event_hash };
   }
   getTimer(sessionId) {
+    this.assertVerified();
     const row = this.sqlite.prepare('SELECT * FROM world_timers WHERE session_id=?').get(sessionId);
     if (!row) return { kind: 'workshop_timer_status', status: 'none', seconds: null, dueAt: null, remainingSeconds: null };
     const dueMs = Date.parse(row.due_at);
@@ -434,7 +625,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const patched = ` ${profilePresenceLine(projection.roomId)}`;
     return `Current room: ${projection.roomId}. ${projection.text} Fixtures: ${fixtures}. Engageable: ${engageable}. Engaged: ${engaged}. Exits: ${exits}.${workshopHonesty}${patched}${pending}${beat}`;
   }
-  move({ sessionId, wakeId, doorId, actor = 'resident_tool' }) {
+  move({ sessionId, wakeId, commandId = null, doorId, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     if (typeof doorId !== 'string' || !doorId) throw Object.assign(new Error('A door identity is required.'), { code: 'world_invalid_argument' });
     const current = this.current(sessionId); const edge = this.sqlite.prepare("SELECT * FROM world_edges WHERE edge_type='door' AND from_node_id=? AND door_identity=?").get(current.room_node_id, doorId);
     if (!edge) throw Object.assign(new Error('That door is not reachable from the current room.'), { code: 'world_wrong_room_or_door' });
@@ -442,7 +633,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const clearedFixture = leavingWorkshop ? engagedColumn(current) : null;
     const event = this._appendPhysicalEvent({
       eventKind: 'location.moved/v1', aggregateKind: 'lifespan', aggregateId: sessionId, aggregateRevision: current.revision + 1,
-      sessionId, wakeId: wakeId || null, actor, causation: { doorIdentity: edge.door_identity, edgeId: edge.id },
+      sessionId, wakeId: wakeId || null, actor, commandId, causation: { doorIdentity: edge.door_identity, edgeId: edge.id },
       payload: { fromRoomId: current.room_node_id, toRoomId: edge.to_node_id, edgeId: edge.id, doorIdentity: edge.door_identity, clearedFixtureId: clearedFixture || null },
       afterProjection: journalEvent => {
         this.sqlite.prepare('INSERT INTO world_location_events VALUES(?,?,?,?,?,?,?,?,?,?)').run(journalEvent.event_id, sessionId, wakeId || null, actor, current.room_node_id, edge.to_node_id, edge.id, edge.door_identity, journalEvent.occurred_at, canonicalize({ actor, wakeId: wakeId || null, clearedFixtureId: clearedFixture || null }));
@@ -450,7 +641,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     });
     return { eventId: event.event_id, worldEventSequence: event.sequence, worldEventHash: event.event_hash, edgeId: edge.id, doorId, fromRoom: current.room_node_id, toRoom: edge.to_node_id, clearedFixtureId: clearedFixture || null, projection: this.projection(sessionId) };
   }
-  engageFixture({ sessionId, wakeId, fixtureId, actor = 'resident_tool' }) {
+  engageFixture({ sessionId, wakeId, commandId = null, fixtureId, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     if (typeof fixtureId !== 'string' || !fixtureId) throw Object.assign(new Error('A fixture identity is required.'), { code: 'world_invalid_argument' });
     const current = this.current(sessionId);
     if (current.room_node_id !== 'room.workshop') throw Object.assign(new Error('Fixtures are only engageable inside the Workshop.'), { code: 'world_wrong_room' });
@@ -463,7 +654,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const previous = engagedColumn(current);
     const event = this._appendPhysicalEvent({
       eventKind: 'fixture.engaged/v1', aggregateKind: 'lifespan', aggregateId: sessionId, aggregateRevision: current.revision + 1,
-      sessionId, wakeId: wakeId || null, actor, causation: { action: 'engage_fixture' }, payload: { fixtureId, previousFixtureId: previous || null },
+      sessionId, wakeId: wakeId || null, actor, commandId, causation: { action: 'engage_fixture' }, payload: { fixtureId, previousFixtureId: previous || null },
       afterProjection: journalEvent => {
         this.sqlite.prepare('INSERT INTO world_location_events VALUES(?,?,?,?,?,?,?,?,?,?)').run(journalEvent.event_id, sessionId, wakeId || null, actor, current.room_node_id, current.room_node_id, null, null, journalEvent.occurred_at, canonicalize({ actor, wakeId: wakeId || null, action: 'engage_fixture', fixtureId, previousFixtureId: previous }));
       },
@@ -491,14 +682,14 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       projection: this.projection(sessionId),
     };
   }
-  disengageFixture({ sessionId, wakeId, actor = 'resident_tool' }) {
+  disengageFixture({ sessionId, wakeId, commandId = null, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     const current = this.current(sessionId);
     if (current.room_node_id !== 'room.workshop') throw Object.assign(new Error('Disengage is only lawful inside the Workshop.'), { code: 'world_wrong_room' });
     const previous = engagedColumn(current);
     if (!previous) throw Object.assign(new Error('No fixture is currently engaged.'), { code: 'world_not_engaged' });
     const event = this._appendPhysicalEvent({
       eventKind: 'fixture.disengaged/v1', aggregateKind: 'lifespan', aggregateId: sessionId, aggregateRevision: current.revision + 1,
-      sessionId, wakeId: wakeId || null, actor, causation: { action: 'disengage_fixture' }, payload: { fixtureId: previous },
+      sessionId, wakeId: wakeId || null, actor, commandId, causation: { action: 'disengage_fixture' }, payload: { fixtureId: previous },
       afterProjection: journalEvent => {
         this.sqlite.prepare('INSERT INTO world_location_events VALUES(?,?,?,?,?,?,?,?,?,?)').run(journalEvent.event_id, sessionId, wakeId || null, actor, current.room_node_id, current.room_node_id, null, null, journalEvent.occurred_at, canonicalize({ actor, wakeId: wakeId || null, action: 'disengage_fixture', previousFixtureId: previous }));
       },
@@ -509,35 +700,48 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
   engageStation(args) { return this.engageFixture({ ...args, fixtureId: args.stationId }); }
   /** @deprecated */
   disengageStation(args) { return this.disengageFixture(args); }
-  inspect(sessionId, source) {
+  inspect(sessionId, source, { wakeId = null, commandId = null, actor = commandId ? 'resident_tool' : 'world_internal' } = {}) {
     const current = this.current(sessionId);
     const event = this._appendPhysicalEvent({
       eventKind: 'source.inspected/v1', aggregateKind: 'lifespan', aggregateId: sessionId, aggregateRevision: current.revision + 1,
-      sessionId, actor: 'resident_tool', causation: { action: 'inspect_source' }, payload: { source: source || null },
+      sessionId, wakeId, actor, commandId, causation: { action: 'inspect_source' }, payload: { source: source || null },
     });
-    return { eventId: event.event_id, source: source || null };
+    return { eventId: event.event_id, source: source || null, worldEventSequence: event.sequence, worldEventHash: event.event_hash };
   }
-  actionReceipt({ sessionId, wakeId, roomNodeId, toolName, arguments: args, result, outcome, requestRecordId = null, spineRecordId = null }) { this.assertVerified(); const receiptId = id('action'); this.sqlite.prepare('INSERT INTO world_action_receipts(receipt_id,session_id,wake_id,room_node_id,tool_name,arguments_json,result_json,outcome,request_record_id,spine_record_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(receiptId, sessionId, wakeId || null, roomNodeId, toolName, JSON.stringify(args), JSON.stringify(result), outcome, requestRecordId, spineRecordId, NOW()); return { receiptId, requestRecordId, spineRecordId }; }
-  upsertBrief({ sessionId, objective, scopePaths = [], acceptance = [], nonGoals = [] }) {
+  actionReceipt({ sessionId, wakeId, roomNodeId, toolName, arguments: args, result, outcome, requestRecordId = null, spineRecordId = null, worldEventSequence = null, worldEventHash = null }) {
+    this.assertVerified();
+    if ((worldEventSequence === null) !== (worldEventHash === null)) throw Object.assign(new Error('Action receipt World event link is incomplete.'), { code: 'world_event_link_invalid' });
+    if (outcome === 'refused' && worldEventSequence !== null) throw Object.assign(new Error('A refused action cannot cite a World state event.'), { code: 'world_refusal_event_invalid' });
+    if (worldEventSequence !== null) {
+      const event = this.sqlite.prepare('SELECT event_hash FROM world_event_journal WHERE sequence=?').get(worldEventSequence);
+      if (!event || event.event_hash !== worldEventHash) throw Object.assign(new Error('Action receipt World event link does not resolve.'), { code: 'world_event_link_invalid' });
+    }
+    const receiptId = id('action');
+    this.sqlite.prepare(`INSERT INTO world_action_receipts(${ACTION_RECEIPT_COLUMNS.join(',')}) VALUES(${ACTION_RECEIPT_COLUMNS.map(() => '?').join(',')})`).run(
+      receiptId, sessionId, wakeId || null, roomNodeId, toolName, canonicalize(args), canonicalize(result), outcome, requestRecordId, spineRecordId, worldEventSequence, worldEventHash, NOW(),
+    );
+    return { receiptId, requestRecordId, spineRecordId, worldEventSequence, worldEventHash };
+  }
+  upsertBrief({ sessionId, wakeId = null, commandId = null, actor = commandId ? 'resident_tool' : 'world_internal', objective, scopePaths = [], acceptance = [], nonGoals = [] }) {
     this.assertVerified();
     if (typeof objective !== 'string' || !objective.trim() || objective.length > 2000) throw Object.assign(new Error('Work brief objective is invalid.'), { code: 'workshop_invalid_argument' });
     if (!Array.isArray(scopePaths) || scopePaths.length > 40 || scopePaths.some(item => typeof item !== 'string' || !item || item.length > 260)) throw Object.assign(new Error('Work brief scope paths are invalid.'), { code: 'workshop_invalid_argument' });
     if (!Array.isArray(acceptance) || acceptance.length > 20 || acceptance.some(item => typeof item !== 'string' || !item || item.length > 400)) throw Object.assign(new Error('Work brief acceptance checks are invalid.'), { code: 'workshop_invalid_argument' });
     if (!Array.isArray(nonGoals) || nonGoals.length > 20 || nonGoals.some(item => typeof item !== 'string' || !item || item.length > 400)) throw Object.assign(new Error('Work brief non-goals are invalid.'), { code: 'workshop_invalid_argument' });
-    const now = NOW();
+    this.ensureLifespan(sessionId);
     const fieldHashes = { objective: sha256(objective), scopePaths: sha256(JSON.stringify(scopePaths)), acceptance: sha256(JSON.stringify(acceptance)), nonGoals: sha256(JSON.stringify(nonGoals)) };
     const existing = this.sqlite.prepare('SELECT * FROM world_work_briefs WHERE session_id=? ORDER BY revision DESC LIMIT 1').get(sessionId);
-    if (existing) {
-      const revision = existing.revision + 1;
-      this.sqlite.prepare('UPDATE world_work_briefs SET revision=?, objective=?, scope_paths_json=?, acceptance_json=?, non_goals_json=?, field_hashes_json=?, updated_at=? WHERE brief_id=?')
-        .run(revision, objective, JSON.stringify(scopePaths), JSON.stringify(acceptance), JSON.stringify(nonGoals), JSON.stringify(fieldHashes), now, existing.brief_id);
-      return this.getBrief(sessionId);
-    }
-    const briefId = id('brief');
-    this.sqlite.prepare('INSERT INTO world_work_briefs VALUES(?,?,?,?,?,?,?,?,?,?)').run(briefId, sessionId, 1, objective, JSON.stringify(scopePaths), JSON.stringify(acceptance), JSON.stringify(nonGoals), JSON.stringify(fieldHashes), now, now);
-    return this.getBrief(sessionId);
+    const briefId = existing?.brief_id || id('brief'); const revision = this.aggregateRevision('brief', sessionId, existing?.revision || 0) + 1;
+    const createdAt = existing?.created_at || new Date(this.nowMs()).toISOString();
+    const event = this._appendPhysicalEvent({
+      eventKind: 'brief.revised/v1', aggregateKind: 'brief', aggregateId: sessionId, aggregateRevision: revision,
+      sessionId, wakeId, actor, commandId, causation: { action: 'brief_revised' },
+      payload: { briefId, objective, scopePaths, acceptance, nonGoals, fieldHashes, createdAt },
+    });
+    return { ...this.getBrief(sessionId), worldEventSequence: event.sequence, worldEventHash: event.event_hash };
   }
   getBrief(sessionId) {
+    this.assertVerified();
     const row = this.sqlite.prepare('SELECT * FROM world_work_briefs WHERE session_id=? ORDER BY revision DESC LIMIT 1').get(sessionId);
     if (!row) return { kind: 'workshop_brief', present: false };
     return {
@@ -553,13 +757,27 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       updatedAt: row.updated_at,
     };
   }
-  createApproval({ sessionId, wakeId, kind, payload, preview }) {
+  listBriefRevisions(sessionId) {
     this.assertVerified();
+    return this.sqlite.prepare('SELECT * FROM world_work_briefs WHERE session_id=? ORDER BY revision').all(sessionId).map(row => ({
+      briefId: row.brief_id, sessionId: row.session_id, revision: row.revision, objective: row.objective,
+      scopePaths: JSON.parse(row.scope_paths_json), acceptance: JSON.parse(row.acceptance_json), nonGoals: JSON.parse(row.non_goals_json),
+      fieldHashes: JSON.parse(row.field_hashes_json), createdAt: row.created_at, updatedAt: row.updated_at,
+      worldEventSequence: row.last_event_sequence, worldEventHash: row.last_event_hash,
+    }));
+  }
+  createApproval({ sessionId, wakeId = null, commandId = null, actor = commandId ? 'resident_tool' : 'world_internal', kind, payload, preview }) {
+    this.assertVerified();
+    this.ensureLifespan(sessionId);
     const approvalId = id('approval');
-    this.sqlite.prepare('INSERT INTO world_approvals VALUES(?,?,?,?,?,?,?,?,?,?)').run(approvalId, sessionId, wakeId || null, kind, 'pending', JSON.stringify(payload), JSON.stringify(preview), null, NOW(), null);
-    return this.getApproval(approvalId);
+    const event = this._appendPhysicalEvent({
+      eventKind: 'approval.opened/v1', aggregateKind: 'approval', aggregateId: approvalId, aggregateRevision: 1,
+      sessionId, wakeId, actor, commandId, causation: { action: 'approval_opened' }, payload: { approvalId, kind, payload, preview },
+    });
+    return { ...this.getApproval(approvalId), worldEventSequence: event.sequence, worldEventHash: event.event_hash };
   }
   getApproval(approvalId) {
+    this.assertVerified();
     const row = this.sqlite.prepare('SELECT * FROM world_approvals WHERE approval_id=?').get(approvalId);
     if (!row) return null;
     return {
@@ -570,49 +788,83 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       status: row.status,
       payload: JSON.parse(row.payload_json),
       preview: JSON.parse(row.preview_json),
+      application: row.application_json ? JSON.parse(row.application_json) : null,
       outcome: row.outcome_json ? JSON.parse(row.outcome_json) : null,
       createdAt: row.created_at,
       decidedAt: row.decided_at,
+      revision: row.revision,
+      worldEventSequence: row.last_event_sequence,
+      worldEventHash: row.last_event_hash,
     };
   }
   listApprovals(sessionId, { pendingOnly = false } = {}) {
+    this.assertVerified();
     const rows = pendingOnly
       ? this.sqlite.prepare("SELECT * FROM world_approvals WHERE session_id=? AND status='pending' ORDER BY created_at, approval_id").all(sessionId)
       : this.sqlite.prepare('SELECT * FROM world_approvals WHERE session_id=? ORDER BY created_at, approval_id').all(sessionId);
     return rows.map(row => this.getApproval(row.approval_id));
   }
-  decideApproval(approvalId, decision, outcome = null) {
+  beginApprovalApplication(approvalId, { attemptId = id('approval_attempt'), evidence, commandId, actor = 'builder' } = {}) {
     this.assertVerified();
     const row = this.getApproval(approvalId);
     if (!row) throw Object.assign(new Error('Approval not found.'), { code: 'workshop_approval_not_found' });
     if (row.status !== 'pending') throw Object.assign(new Error('Approval is no longer pending.'), { code: 'workshop_approval_not_pending' });
+    if (typeof commandId !== 'string' || !commandId || typeof attemptId !== 'string' || !attemptId || !evidence || typeof evidence !== 'object' || Array.isArray(evidence)) throw Object.assign(new Error('Approval application identity and evidence are required.'), { code: 'workshop_approval_application_invalid' });
+    const revision = this.aggregateRevision('approval', approvalId, row.revision) + 1;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'approval.applying/v1', aggregateKind: 'approval', aggregateId: approvalId, aggregateRevision: revision,
+      sessionId: row.sessionId, wakeId: row.wakeId, actor, commandId, causation: { action: 'approval_applying' }, payload: { attemptId, evidence },
+    });
+    return { ...this.getApproval(approvalId), worldEventSequence: event.sequence, worldEventHash: event.event_hash };
+  }
+  decideApproval(approvalId, decision, outcome = null, { commandId = null, actor = commandId ? 'builder' : 'world_internal' } = {}) {
+    this.assertVerified();
+    const row = this.getApproval(approvalId);
+    if (!row) throw Object.assign(new Error('Approval not found.'), { code: 'workshop_approval_not_found' });
     if (decision !== 'confirm' && decision !== 'reject') throw Object.assign(new Error('Approval decision must be confirm or reject.'), { code: 'workshop_invalid_argument' });
     const status = decision === 'confirm' ? 'confirmed' : 'rejected';
-    this.sqlite.prepare('UPDATE world_approvals SET status=?, outcome_json=?, decided_at=? WHERE approval_id=?').run(status, outcome ? JSON.stringify(outcome) : null, NOW(), approvalId);
-    return this.getApproval(approvalId);
+    if (decision === 'confirm' && row.status !== 'applying' || decision === 'reject' && row.status !== 'pending') throw Object.assign(new Error('Approval is no longer in a state that permits this decision.'), { code: 'workshop_approval_not_pending' });
+    const attemptId = decision === 'confirm' ? row.application?.attemptId : null;
+    const revision = this.aggregateRevision('approval', approvalId, row.revision) + 1;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'approval.resolved/v1', aggregateKind: 'approval', aggregateId: approvalId, aggregateRevision: revision,
+      sessionId: row.sessionId, wakeId: row.wakeId, actor, commandId, causation: { action: decision === 'confirm' ? 'approval_confirmed' : 'approval_rejected' }, payload: { status, attemptId, outcome },
+    });
+    return { ...this.getApproval(approvalId), worldEventSequence: event.sequence, worldEventHash: event.event_hash };
+  }
+  _cancelApproval(approvalId, reason, { actor = 'world_lifespan', commandId = null } = {}) {
+    const row = this.getApproval(approvalId);
+    if (!row || row.status !== 'pending') return null;
+    const revision = this.aggregateRevision('approval', approvalId, row.revision) + 1;
+    const event = this._appendPhysicalEvent({
+      eventKind: 'approval.cancelled/v1', aggregateKind: 'approval', aggregateId: approvalId, aggregateRevision: revision,
+      sessionId: row.sessionId, wakeId: row.wakeId, actor, commandId, causation: { action: 'approval_cancelled' }, payload: { reason },
+    });
+    return { ...this.getApproval(approvalId), worldEventSequence: event.sequence, worldEventHash: event.event_hash };
   }
   cancelPendingApprovals(sessionId, reason) {
     this.assertVerified();
     const pending = this.listApprovals(sessionId, { pendingOnly: true });
-    for (const item of pending) {
-      this.sqlite.prepare("UPDATE world_approvals SET status='cancelled', outcome_json=?, decided_at=? WHERE approval_id=?").run(JSON.stringify({ reason }), NOW(), item.approvalId);
-    }
+    for (const item of pending) this._cancelApproval(item.approvalId, reason);
     return pending.map(item => item.approvalId);
   }
-  recordApprovalReceipt({ approvalId, phase, actionReceiptId, result, hostReturnScrub }) {
+  recordApprovalReceipt({ approvalId, phase, actionReceiptId, result, hostReturnScrub, worldEventSequence = null, worldEventHash = null }) {
     this.assertVerified();
     const approval = this.getApproval(approvalId);
     if (!approval) throw Object.assign(new Error('Approval not found.'), { code: 'workshop_approval_not_found' });
-    if (!['pending', 'confirmed', 'rejected', 'cancelled'].includes(phase)) throw Object.assign(new Error('Approval receipt phase is invalid.'), { code: 'workshop_invalid_argument' });
+    if (!['pending', 'applying', 'reconciliation_required', 'confirmed', 'rejected', 'cancelled'].includes(phase)) throw Object.assign(new Error('Approval receipt phase is invalid.'), { code: 'workshop_invalid_argument' });
     const scrub = hostReturnScrub?.receipt ? hostReturnScrub.receipt : hostReturnScrub;
     if (!scrub || typeof scrub.receiptId !== 'string') throw Object.assign(new Error('Approval completion requires a host-return Scrub receipt.'), { code: 'host_return_scrub_invalid' });
+    if ((worldEventSequence === null) !== (worldEventHash === null) || worldEventSequence === null) throw Object.assign(new Error('Approval receipt requires one exact World event link.'), { code: 'world_event_link_invalid' });
+    const action = this.sqlite.prepare('SELECT world_event_sequence,world_event_hash FROM world_action_receipts WHERE receipt_id=?').get(actionReceiptId);
+    if (!action || action.world_event_sequence !== worldEventSequence || action.world_event_hash !== worldEventHash) throw Object.assign(new Error('Approval and action receipt World event links differ.'), { code: 'world_event_link_invalid' });
     const receiptId = id('approval_receipt');
-    this.sqlite.prepare('INSERT INTO world_approval_receipts(receipt_id,approval_id,session_id,wake_id,phase,action_receipt_id,result_json,host_return_scrub_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
-      .run(receiptId, approvalId, approval.sessionId, approval.wakeId || null, phase, actionReceiptId, JSON.stringify(result), JSON.stringify(scrub), NOW());
-    return { receiptId, approvalId, phase, actionReceiptId, hostReturnScrubReceiptId: scrub.receiptId };
+    this.sqlite.prepare(`INSERT INTO world_approval_receipts(${APPROVAL_RECEIPT_COLUMNS.join(',')}) VALUES(${APPROVAL_RECEIPT_COLUMNS.map(() => '?').join(',')})`)
+      .run(receiptId, approvalId, approval.sessionId, approval.wakeId || null, phase, actionReceiptId, canonicalize(result), canonicalize(scrub), worldEventSequence, worldEventHash, NOW());
+    return { receiptId, approvalId, phase, actionReceiptId, hostReturnScrubReceiptId: scrub.receiptId, worldEventSequence, worldEventHash };
   }
   listApprovalReceipts(approvalId) {
-    return this.sqlite.prepare('SELECT receipt_id AS receiptId, approval_id AS approvalId, session_id AS sessionId, wake_id AS wakeId, phase, action_receipt_id AS actionReceiptId, result_json AS resultJson, host_return_scrub_json AS hostReturnScrubJson, created_at AS createdAt FROM world_approval_receipts WHERE approval_id=? ORDER BY created_at, receipt_id').all(approvalId)
+    return this.sqlite.prepare('SELECT receipt_id AS receiptId, approval_id AS approvalId, session_id AS sessionId, wake_id AS wakeId, phase, action_receipt_id AS actionReceiptId, result_json AS resultJson, host_return_scrub_json AS hostReturnScrubJson, world_event_sequence AS worldEventSequence, world_event_hash AS worldEventHash, created_at AS createdAt FROM world_approval_receipts WHERE approval_id=? ORDER BY created_at, receipt_id').all(approvalId)
       .map(row => ({ ...row, result: JSON.parse(row.resultJson), hostReturnScrub: JSON.parse(row.hostReturnScrubJson) }));
   }
   listLocationEvents(sessionId) { return this.sqlite.prepare('SELECT * FROM world_location_events WHERE session_id=? ORDER BY created_at,event_id').all(sessionId); }

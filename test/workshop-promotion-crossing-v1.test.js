@@ -151,7 +151,10 @@ test('Gateway promotion is always confirmation-gated and appends completion cust
     assert.strictEqual(duplicate, confirmation);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(resetCalls, 1);
-    assert.equal(world.getApproval(proposed.result.approvalId).status, 'pending');
+    const applying = world.getApproval(proposed.result.approvalId);
+    assert.equal(applying.status, 'applying');
+    assert.match(applying.application.attemptId, /^approval_attempt_/);
+    assert.equal(applying.application.evidence.postcondition.planHash, proposed.result.preview.planHash);
     assert.throws(() => gateway.rejectApproval(proposed.result.approvalId, 'life'), error => error.code === 'workshop_approval_in_progress');
     assert.equal((await readFile(join(f.repo, 'note.txt'), 'utf8')).replaceAll('\r\n', '\n'), 'promoted\n');
     await releaseReset();
