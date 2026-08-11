@@ -200,6 +200,11 @@ test('Corner opens one same-origin EventSource and renders events through textCo
   assert.match(app, /retainWakeSlips/);
   assert.match(app, /clearLiveWake/);
   assert.match(app, /renderThread\(thread\)/);
+  assert.match(app, /captureConversationScroll\(conversationScroller\)/);
+  assert.match(app, /renderLive\(\{ scrollSnapshot: preservedScroll \}\)/);
+  assert.match(app, /renderLive\(\{ forceTail: true \}\)/);
+  assert.match(app, /renderedThinking \? renderedThinking\.open : undefined/);
+  assert.doesNotMatch(app, /conversationScroller\.scrollTop\s*=\s*conversationScroller\.scrollHeight/);
   assert.match(app, /event\.content === optimistic\.content/);
   assert.match(app, /textContent = content/);
   assert.doesNotMatch(`${app}\n${reducer}`, /innerHTML/);

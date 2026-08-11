@@ -9,6 +9,11 @@ import {
   setLiveConnection,
   setOptimisticUser,
 } from './live-state.js';
+import {
+  captureConversationScroll,
+  reconcileThinkingDisclosure,
+  restoreConversationScroll,
+} from './render-state.js';
 
 const app = document.querySelector('#app');
 const chip = document.querySelector('#chip');
@@ -57,6 +62,7 @@ let liveEventSource = null;
 let unregisterLiveEvents = null;
 let liveRecoveryTimer = null;
 let liveUnloading = false;
+let liveThinkingDisclosure = { wakeId: null, open: false };
 
 function node(tag, className, content) {
   const element = document.createElement(tag);
@@ -159,8 +165,15 @@ function renderSlips(parent, slips) {
   }
 }
 
-function renderLive() {
+function renderLive({ scrollSnapshot = null, forceTail = false } = {}) {
+  const preservedScroll = scrollSnapshot || captureConversationScroll(conversationScroller, { forceTail });
   const projection = projectLiveState(liveState);
+  const renderedThinking = liveGap.querySelector('.live-thinking');
+  liveThinkingDisclosure = reconcileThinkingDisclosure(liveThinkingDisclosure, {
+    wakeId: projection.wakeId,
+    hasThinking: Boolean(projection.thinking),
+    renderedOpen: renderedThinking ? renderedThinking.open : undefined,
+  });
   const conversation = [];
   if (projection.optimisticUser) {
     const event = node('div', 'event user optimistic-user');
@@ -181,6 +194,11 @@ function renderLive() {
   const machinery = [];
   if (projection.thinking) {
     const detail = node('details', 'slip slip-thinking live-thinking');
+    detail.open = liveThinkingDisclosure.open;
+    const disclosureWakeId = projection.wakeId;
+    detail.addEventListener('toggle', () => {
+      if (liveThinkingDisclosure.wakeId === disclosureWakeId) liveThinkingDisclosure = { wakeId: disclosureWakeId, open: detail.open };
+    });
     detail.append(node('summary', null, 'Thinking'), node('p', null, projection.thinking));
     machinery.push(detail);
   }
@@ -215,7 +233,7 @@ function renderLive() {
     machinery.push(row);
   }
   liveGap.replaceChildren(...machinery);
-  conversationScroller.scrollTop = conversationScroller.scrollHeight;
+  restoreConversationScroll(conversationScroller, preservedScroll);
 }
 
 function reconcileOptimisticUser(thread) {
@@ -241,6 +259,7 @@ function describeLifespan(data) {
 }
 
 function renderThread(data) {
+  const preservedScroll = captureConversationScroll(conversationScroller);
   log.replaceChildren();
   reconcileOptimisticUser(data);
   if (threadNote) threadNote.textContent = describeLifespan(data);
@@ -281,8 +300,7 @@ function renderThread(data) {
     wakeElement.append(actionRow);
     log.append(wakeElement);
   }
-  conversationScroller.scrollTop = conversationScroller.scrollHeight;
-  renderLive();
+  renderLive({ scrollSnapshot: preservedScroll });
 }
 
 async function request(path, options) {
@@ -586,7 +604,7 @@ async function submitWake(event) {
   if (!submitted.trim()) return;
   const localId = globalThis.crypto?.randomUUID?.() || `local-${Date.now()}`;
   liveState = setOptimisticUser(liveState, submitted, localId);
-  renderLive();
+  renderLive({ forceTail: true });
   busy = true; input.disabled = true; sendButton.disabled = true; setState('assembling');
   setTimeout(() => { if (busy) setState('orienting'); }, 0);
   startSlipPoll();
