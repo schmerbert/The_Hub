@@ -61,6 +61,7 @@ Fake mode is different by design: it retains the legacy direct-host RecipeRunner
 For a confirm-class call, the initial action receipt may be `committed` because creation of the pending approval was the immediate committed result. The later decision and mutation have their own append-only action and approval receipts linked to the pending phase.
 
 ## Adopted design, not implemented
+- [`WORLD_EVENT_PROJECTION_DRIFT_V1.md`](specs/WORLD_EVENT_PROJECTION_DRIFT_V1.md): A1 is implemented and verified: the physical core now has a hash-linked World event journal, deterministic projector, exact-schema/topology verification, honest legacy boundary, and fail-closed provider/action crossings. A2 remains pending for kiln runtime, timers, briefs, and approvals before House/Garden state is added.
 - `HEARTH_NOTES_FOREST_EXHALE_V1.md`: adopted downstream direction, revision required before implementation so its note/exhale crossings fit Glass anatomy and custody. It is not the next implementation slice.
 - `VAULT_V1.md`: the Vault room, door, document graph, wings, bin/slot crossing, principle documents, and Forest-to-Vault pointers.
 

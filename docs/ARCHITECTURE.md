@@ -1,6 +1,6 @@
 # The Hub architecture
 
-This document describes the implemented runtime. See [`STATUS.md`](STATUS.md) for specification precedence and the boundary between implemented cores and broader adopted designs.
+This document describes the implemented runtime. See [`STATUS.md`](STATUS.md) for specification precedence and the boundary between implemented cores and broader adopted designs. [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) is the compact crossing-and-authority index that must be updated whenever a new pipe is installed.
 
 ```text
 Source Ledger -> session/Hearth assembly -> provider-presentation Scrub

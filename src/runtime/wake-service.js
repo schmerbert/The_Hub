@@ -497,6 +497,7 @@ export class WakeService {
     let canonicalCommitted = false;
     try {
       if (!firstTurn && !wakeInheritance) throw { code: 'glass_cast_invalid', message: 'The active lifespan is missing its persisted Glass wake inheritance.' };
+      world.assertVerified();
       if (firstTurn) {
         const orientation = await callPhase('orientation', db.getSessionHistory(created.sessionId), { orientation: true, roomPresence: false });
         const action = validateOrientationResult(orientation.result);

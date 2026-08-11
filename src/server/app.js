@@ -83,7 +83,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     spine = spineOverride || new SpineStore(config.spinePath);
     world = worldOverride || new WorldGraphStore(config.worldPath);
     results = new ResultRackStore(config.resultPath, { projectionMaxBytes: config.resultProjectionMaxBytes, projectionMaxLines: config.resultProjectionMaxLines });
-    world.ensureLifespan(db.session.id);
+    if (world.verification({ mismatchLimit: 50 }).verified) world.ensureLifespan(db.session.id);
   } catch (error) {
     forest?.close(); spine?.close(); world?.close(); results?.close(); db.close(); throw { code: error?.code === 'wake_ritual_invalid' ? 'wake_ritual_invalid' : 'forest_activation_refused', message: error?.code === 'wake_ritual_invalid' ? error.message : error?.code === 'forest_activation_refused' ? error.message : 'Existing Forest validation failed.' };
   }
@@ -100,7 +100,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
       recipeRunner = new SandboxRecipeRunner(config.workshopRoot, { sandboxBay, timeoutMs: config.recipeTimeoutMs });
     }
     gateway = new WorldActionGateway({ world, workshop, forest, resultRack: results, recipeRunner, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs });
-    gateway.reconcileStartup(db.session.id);
+    if (world.verification({ mismatchLimit: 50 }).verified) gateway.reconcileStartup(db.session.id);
   } catch (error) {
     forest?.close(); spine?.close(); world?.close(); results?.close(); db.close();
     throw error;
@@ -136,7 +136,24 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
       }
       if (request.method === 'GET' && url.pathname === '/api/thread') return json(response, 200, { ...db.getThread(), residentMode: config.mode, model: config.model });
       if (request.method === 'GET' && url.pathname === '/api/session') return json(response, 200, { session: db.getActiveSession(), sessions: db.listSessions(), history: db.getSessionHistory(), world: world.projection(db.session.id), residentMode: config.mode, model: config.model });
-      if (request.method === 'GET' && url.pathname === '/api/world') return json(response, 200, { graph: { nodes: world.sqlite.prepare('SELECT * FROM world_nodes ORDER BY id').all(), edges: world.sqlite.prepare('SELECT * FROM world_edges ORDER BY id').all() }, location: world.current(db.session.id), projection: world.projection(db.session.id), ceiling: ceilingCatalog(), tools: schemasForSession(world, db.session.id), approvals: world.listApprovals(db.session.id) });
+      if (request.method === 'GET' && url.pathname === '/api/world') {
+        const verification = world.verification({ mismatchLimit: 50 });
+        const safeRows = (table, sql) => {
+          if (!world.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?").get(table)) return [];
+          try { return world.sqlite.prepare(sql).all(); } catch { return []; }
+        };
+        let approvals = [];
+        if (world.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='world_approvals'").get()) {
+          try { approvals = world.listApprovals(db.session.id); } catch { approvals = []; }
+        }
+        const builder = {
+          graph: { nodes: safeRows('world_nodes', 'SELECT * FROM world_nodes ORDER BY id'), edges: safeRows('world_edges', 'SELECT * FROM world_edges ORDER BY id') },
+          verification, ceiling: ceilingCatalog(), approvals,
+        };
+        if (!verification.verified) return json(response, 200, { ...builder, location: null, projection: null, tools: [] });
+        try { return json(response, 200, { ...builder, location: world.current(db.session.id), projection: world.projection(db.session.id), tools: schemasForSession(world, db.session.id) }); }
+        catch (error) { return json(response, 200, { ...builder, location: null, projection: null, tools: [], builderReadError: { code: error?.code || 'world_builder_read_failed', message: error?.message || 'World builder projection is unavailable.' } }); }
+      }
       if (request.method === 'GET' && url.pathname === '/api/approvals') return json(response, 200, { approvals: world.listApprovals(db.session.id) });
       if (request.method === 'GET' && url.pathname === '/api/events/history') {
         const afterSequence = cursor(url.searchParams.get('after'), 'after', 0);

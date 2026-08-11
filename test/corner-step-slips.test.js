@@ -4,7 +4,7 @@ import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHub } from '../src/server/app.js';
-import { WORKSHOP_ROOM_TEXT, WorldGraphStore } from '../src/world/graph.js';
+import { WorldGraphStore } from '../src/world/graph.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { projectWakeSlips } from '../src/corner/slips.js';
@@ -79,7 +79,7 @@ test('slips project thinking and multi-tool actions without polluting utterances
   } finally { await f.close(); }
 });
 
-test('sensory seed migration and presence name engageable fixtures', async () => {
+test('journal-bearing sensory drift is not silently normalized', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-sensory-seed-'));
   const path = join(dir, 'world.sqlite');
   try {
@@ -87,11 +87,9 @@ test('sensory seed migration and presence name engageable fixtures', async () =>
     first.withNodeMutations(() => first.sqlite.prepare('UPDATE world_nodes SET resident_text=? WHERE id=?').run('old workshop text', 'room.workshop'));
     first.close();
     const migrated = new WorldGraphStore(path);
-    migrated.ensureLifespan('life');
-    migrated.move({ sessionId: 'life', doorId: 'door.workshop' });
-    assert.equal(migrated.node('room.workshop').resident_text, WORKSHOP_ROOM_TEXT);
-    assert.match(migrated.projection('life').text, /scarred workbench/);
-    assert.match(migrated.presenceMessage('life'), /Engageable: .*shelves \(fixture\.workshop_shelves\)/);
+    assert.equal(migrated.node('room.workshop').resident_text, 'old workshop text');
+    assert.equal(migrated.verification().verified, false);
+    assert.throws(() => migrated.ensureLifespan('life'), error => error.code === 'world_projection_drift');
     migrated.close();
   } finally {
     await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch(error => {

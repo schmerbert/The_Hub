@@ -71,6 +71,7 @@ export class WorldActionGateway {
     };
   }
   confirmApproval(approvalId, sessionId, { recordCrossing = true } = {}) {
+    this.world.assertVerified();
     const approval = this.world.getApproval(approvalId);
     if (!approval || approval.sessionId !== sessionId) fail('workshop_approval_not_found', 'Approval not found for this lifespan.');
     if (approval.status !== 'pending') fail('workshop_approval_not_pending', 'Approval is no longer pending.');
@@ -91,9 +92,11 @@ export class WorldActionGateway {
     return recordCrossing ? this.recordApprovalCrossing({ approval: decided, phase: 'confirmed', result }) : result;
   }
   confirmSandboxPromotion(approval, { recordCrossing }) {
+    this.world.assertVerified();
     const active = this.approvalConfirmations.get(approval.approvalId);
     if (active) return active;
     const confirmation = Promise.resolve().then(async () => {
+      this.world.assertVerified();
       const promotion = applySandboxPromotion(this.workshop.root, approval.payload.plan);
       let reset;
       if (typeof this.recipes.reset !== 'function') {
@@ -127,6 +130,7 @@ export class WorldActionGateway {
     return confirmation;
   }
   rejectApproval(approvalId, sessionId) {
+    this.world.assertVerified();
     const approval = this.world.getApproval(approvalId);
     if (!approval || approval.sessionId !== sessionId) fail('workshop_approval_not_found', 'Approval not found for this lifespan.');
     if (this.approvalConfirmations.has(approvalId)) fail('workshop_approval_in_progress', 'Approval confirmation is already applying and cannot be rejected concurrently.');

@@ -11,7 +11,8 @@
     "forest:plan": "node src/scripts/forest-plan.js",
     "forest:apply": "node src/scripts/forest-apply.js",
     "forest:verify": "node src/scripts/forest-verify.js",
-    "spine:verify": "node src/scripts/spine-verify.js"
+    "spine:verify": "node src/scripts/spine-verify.js",
+    "world:verify": "node src/scripts/world-verify.js"
   },
   "devDependencies": {
     "electron": "43.2.0"

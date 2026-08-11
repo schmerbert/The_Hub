@@ -68,7 +68,7 @@ This v2 policy is recency-only. Semantic selection, mycelial selection, landmark
 
 The existing resident-authored blessing is the first Silver Bullet. V2 does not manufacture a larger collection or infer permanent truths automatically.
 
-A future Silver Bullet must be self-authored or explicitly adopted by the resident, versioned, source-linked, and changed only through a visible resident-involved crossing. It is not a summary or automatic memory compression.
+A future Silver Bullet must be self-authored or explicitly adopted by the resident, versioned, source-linked, and changed only through a visible resident-involved crossing. It is a deliberate resident-forged distillation of fuller source material into one or two sentences that preserve a point together with its inverse. It is never host-generated summary or automatic memory compression.
 
 ## Failure behavior
 
