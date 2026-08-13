@@ -10,6 +10,8 @@ The Marble now has a witnessed forward-only provenance boundary. [`TRACE_EPOCH_V
 
 Glass has its own forward boundary under the same law. [`GLASS_TRACE_EPOCH_V1.md`](specs/GLASS_TRACE_EPOCH_V1.md) closes every new cast item from authority witness through its presented/omitted Scrub disposition to the exact Spine request. Historical casts remain exact and honestly partial.
 
+Roots has a forward non-respiratory boundary. [`ROOTS_BOUNDARY_V1.md`](specs/ROOTS_BOUNDARY_V1.md) retains every new Hearth wake packet as causal evidence and links successful presentation to the exact response Glass cast. Historical packets remain exact without invented rooted custody.
+
 ## One-passage law
 
 No material enters resident attention, becomes resident speech, changes World reality, or enters continuity custody through an unnamed path.
@@ -104,6 +106,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | Closure-era utterance enters Session Scroll | Scroll trace boundary + atomic manifest insert | Append-only Scroll trace manifest linked to Source/Scrub/Spine witness | Exact chronological session custody |
 | Language enters a provider request | Glass validation + provider-presentation Scrub | Glass cast receipt, Scrub receipt, Spine request frame | Provider-visible messages |
 | Request-time ground enters Glass | Glass ground receipt + trace manifest | Crossing, World-head/projection, attention, continuity, and Patch Bay/schema receipts | Exact Glass source ordinal |
+| Hearth wake packet leaves immediate use | Roots boundary + atomic Hearth custody | Root artifact, typed wake-packet coordinate, and optional response-Glass edge | Roots only; never ordinary Forest Exhale |
 | Capabilities enter a provider request | Ceiling catalog + room Patch Bay + attention fitting | Exact request body in Spine; mount/profile inspection | Provider-visible tool schemas |
 | Provider bytes return | Capture ceiling + Spine admitted-body append | Spine raw-return frame and outcome | Provider-return Scrub |
 | Raw provisional fragments seek display | Bounded memory-only collector + provisional cross-fragment Scrub | Coalesced safe wake-journal event, or explicit suppressed-channel event | Corner only |
@@ -124,6 +127,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | World event journal | What causally changed material reality? |
 | World projection | What is the verified current material state? |
 | Forest | What exact material has been planted for continuity and linkage? |
+| Roots | What retained causal evidence explains a crossing without becoming respirable continuity? |
 | Glass receipt | What source bands were composed for this provider phase? |
 | Spine | What exact bytes crossed the provider boundary? |
 | Result Rack | What exact machine result or artifact was retained? |

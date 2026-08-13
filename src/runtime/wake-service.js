@@ -252,6 +252,8 @@ export class WakeService {
     if (trimmed.length > config.maxMessageLength) throw { code: 'message_too_large', message: `Message must be ${config.maxMessageLength} characters or fewer.` };
     const glassTraceVerification = db.verifyGlassTrace({ mismatchLimit: 10 });
     if (!glassTraceVerification.verified) throw { code: 'glass_trace_drift', message: `Glass trace verification found a dangling or altered closure-era path: ${glassTraceVerification.mismatches.map(item => item.code).join(', ')}.` };
+    const rootsVerification = db.verifyRoots({ mismatchLimit: 10 });
+    if (!rootsVerification.verified) throw { code: 'roots_drift', message: `Roots verification found altered or dangling causal evidence: ${rootsVerification.mismatches.map(item => item.code).join(', ')}.` };
     const providerName = config.mode === 'fake' ? 'fake' : 'deepseek';
     const firstTurn = !db.sessionHasOrientation();
     const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;

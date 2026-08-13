@@ -30,6 +30,7 @@ The Hub deliberately uses spatial and lived language where the implementation su
 | **Provisional collector** | Bounded memory-only pause that coalesces same-channel provider fragments before stream Scrub, persistence, and display. | Backpressure/coalescing buffer before an ingress validation boundary | Implemented | Provider-return custody; canonical speech; a raw-fragment log |
 | **Glass trace** | Per-packet path from each authority witness through Glass and Scrub to its exact provider ordinal or explicit omission. | Context provenance graph / request manifest | Implemented for closure-era casts | Truth certification; historical backfill |
 | **Ground receipt** | Durable witness for request-time crossing, World, tool-mount, attention, or continuity facts used by Glass. | Typed provenance receipt | Implemented | Resident identity; prose merely because it was displayed |
+| **Roots** | Append-only causal evidence retained for reconstruction but categorically outside ordinary Forest respiration. New Hearth wake packets live here after presentation. | Forensic provenance/evidence store | Wake-packet custody implemented; broader return/reasoning custody is future | Forest memory; Scroll chronology; Vault protection policy |
 | **Forest** | Exact admitted continuity terrain and attributable relations, divided into scale-relative Home and Wild. | Provenance graph / memory substrate, but neither alone is sufficient | Home/Wild intake implemented; traversal and recursive frames are not | Source history; embeddings; truth; World |
 | **Home** | The inside-facing continuity jurisdiction of the active Forest frame. Currently, eligible exact human and Resident utterances. | First-party continuity partition | Implemented at the current leaf frame | Trusted, correct, private, or human-only material |
 | **Wild** | Admitted, source-linked material encountered on the outside-facing side of the active Forest frame. Currently includes exact Workshop source spans. | External-source continuity partition | Implemented for typed Workshop material | Unsafe; unretained outside data; quarantine |
@@ -104,6 +105,7 @@ This glossary is deliberately compact. Detailed laws live in:
 - [`specs/HOUSE_GRAMMAR_V1.md`](specs/HOUSE_GRAMMAR_V1.md) for constitutional primitive families and status;
 - [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) for installed crossings and authority stores;
 - [`specs/GLASS_CASTING_V1.md`](specs/GLASS_CASTING_V1.md) for Glass;
+- [`specs/ROOTS_BOUNDARY_V1.md`](specs/ROOTS_BOUNDARY_V1.md) for non-respiratory causal evidence and rooted wake packets;
 - [`specs/SPINE_FOREST_INGESTION.md`](specs/SPINE_FOREST_INGESTION.md) for Source, Spine, Forest admission, and Intake custody;
 - [`specs/WORLD_GRAPH_WORKSHOP_V1.md`](specs/WORLD_GRAPH_WORKSHOP_V1.md) and [`specs/THRESHOLD_HOUSE_GARDEN_V1.md`](specs/THRESHOLD_HOUSE_GARDEN_V1.md) for current topology;
 - [`specs/FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md) for future traversal and waterfall; and
