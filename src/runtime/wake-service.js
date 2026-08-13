@@ -250,6 +250,8 @@ export class WakeService {
     const trimmed = submitted.trim();
     if (!trimmed) throw { code: 'invalid_message', message: 'Message must contain text.' };
     if (trimmed.length > config.maxMessageLength) throw { code: 'message_too_large', message: `Message must be ${config.maxMessageLength} characters or fewer.` };
+    const glassTraceVerification = db.verifyGlassTrace({ mismatchLimit: 10 });
+    if (!glassTraceVerification.verified) throw { code: 'glass_trace_drift', message: `Glass trace verification found a dangling or altered closure-era path: ${glassTraceVerification.mismatches.map(item => item.code).join(', ')}.` };
     const providerName = config.mode === 'fake' ? 'fake' : 'deepseek';
     const firstTurn = !db.sessionHasOrientation();
     const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;
@@ -314,6 +316,10 @@ export class WakeService {
             authority: row.messageKind === 'user' ? 'ground' : row.messageKind === 'resident' || row.messageKind === 'assistant_tool_call' ? 'model_signed' : 'host_receipt',
             sourceEventId: row.sourceEventId || null,
             sourceContentHash: row.contentHash || null,
+            historyId: row.id,
+            historySessionId: row.sessionId,
+            historyOrdinal: row.ordinal,
+            historyMessageHash: sha256(row.messageJson),
             message,
           };
         });
@@ -351,7 +357,7 @@ export class WakeService {
         toolProfile: options.toolProfile || null,
       };
       this.lastAttention = attention;
-      db.recordAttentionReceipt({ sessionId: created.sessionId, wakeId: created.wakeId, phase, attention });
+      const attentionReceipt = db.recordAttentionReceipt({ sessionId: created.sessionId, wakeId: created.wakeId, phase, attention });
       if (!attention.dispatchAllowed) throw { code: 'attention_ceiling_exceeded', message: `The fitted provider crossing is ${attention.totalBytes} bytes and exceeds the ${config.attentionRefuseBytes}-byte attention ceiling.` };
       const prepared = prepareProviderRequest(provider, {
         presentation, model: config.model,
@@ -365,12 +371,30 @@ export class WakeService {
       const requestFrame = spine?.prepareRequest({ requestBody: requestBodyString, threadId: wakeRecord.threadId, wakeId: wakeRecord.id, provider: wakeRecord.provider, model: config.model, authorizationPresent: config.mode === 'live' && Boolean(config.apiKey), requestPhase: phase });
       if (!requestFrame) throw { code: 'glass_cast_invalid', message: 'Glass Casting requires an exact Spine request frame.' };
       const requestId = db.recordProviderRequest({ sessionId: created.sessionId, wakeId: created.wakeId, phase, requestBody: requestBodyString, messageSources: presentedRefs, spineRecordId: requestFrame?.record_id, attention });
+      const worldVerification = world.verification({ mismatchLimit: 1 });
+      if (!worldVerification.verified || !worldVerification.journalHead) throw { code: 'glass_trace_invalid', message: 'Glass World ground requires a verified World journal head.' };
+      const worldProjection = world.projection(created.sessionId);
+      const toolSchemas = tools || [];
+      const commonWitness = { sessionId: created.sessionId, wakeId: created.wakeId, phase };
+      const messageHashesFor = kinds => refs.filter(ref => kinds.includes(ref.kind)).map(ref => sha256(JSON.stringify(ref.message)));
+      const groundWitnesses = {
+        crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
+        world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
+        tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
+        attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, sourceMessageHashes: messageHashesFor(['attention_current_ground']) },
+        continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'prior_horizon']) },
+      };
       const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });
-      const persistedGlass = db.recordGlassCastReceipt({ sessionId: created.sessionId, wakeId: created.wakeId, providerRequestId: requestId, receipt: glassReceipt });
+      const { persistedGlass, glassTrace } = db.transaction(() => {
+        const groundReceipts = db.recordGlassGroundReceipts({ providerRequestId: requestId, witnesses: groundWitnesses });
+        const persistedGlass = db.recordGlassCastReceipt({ sessionId: created.sessionId, wakeId: created.wakeId, providerRequestId: requestId, receipt: glassReceipt });
+        const glassTrace = db.recordGlassTraceManifest({ providerRequestId: requestId, glassCastReceiptId: persistedGlass.receiptId, sourceRefs: refs, presentationReceipt: presentation.receipt, groundReceipts });
+        return { persistedGlass, glassTrace };
+      });
       this.publish('phase.started', {
         sessionId: created.sessionId, wakeId: created.wakeId, phase,
         payload: { providerRequestId: requestId, spineRecordId: requestFrame?.record_id || null },
-        source: { providerRequestId: requestId, attentionReceiptStatus: attention.status, glassCastReceiptId: persistedGlass.receiptId },
+        source: { providerRequestId: requestId, attentionReceiptStatus: attention.status, glassCastReceiptId: persistedGlass.receiptId, glassTraceManifestId: glassTrace?.manifestId || null },
       });
       let observedOutcome = null;
       let rawReturnFrame = null;

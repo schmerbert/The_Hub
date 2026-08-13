@@ -51,4 +51,4 @@ The append-only epoch and manifest tables reject update and deletion. Future ver
 
 ## Scope boundary
 
-This first epoch closes new Session Scroll rows. It does not yet establish complete manifests for Glass ground construction, Forest Exhale, provisional stream batches, Patch Bay mounts, or every specialized authority store. Those remain visible in the circulation map. The same law must govern each future crossing when it is installed.
+This first epoch closes new Session Scroll rows. Glass ground construction and Patch Bay mounts are now closed by the separate [`GLASS_TRACE_EPOCH_V1.md`](GLASS_TRACE_EPOCH_V1.md) boundary. Forest Exhale, provisional stream batch manifests, and some specialized authority stores remain visible in the circulation map. The same law must govern each future crossing when it is installed.

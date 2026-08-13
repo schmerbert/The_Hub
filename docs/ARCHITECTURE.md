@@ -6,6 +6,8 @@ Source also owns the forward-only Session Scroll trace epoch. The append-only bo
 
 Provider streaming has a bounded pre-Scrub pause. Raw fragments remain only in a memory collector, separated by provider request, phase, delta kind, and tool index. The collector coalesces consecutive same-channel fragments, flushes on channel changes and normal phase completion, and discards paused material on failure or cancellation. Only coalesced batches that pass wake-stream credential Scrub enter the hash-linked wake journal and SSE; Corner renders accumulated safe events at most once per animation frame.
 
+New Glass casts are governed by a separate forward-only trace epoch. Five request-ground receipts bind crossing identity, verified World state, the exact Ceiling/Patch Bay schema mount, attention/omission state, and continuity state. A per-item manifest connects these receipts—or an exact Scroll row, Source event, or stable Glass hash—to the provider-presentation Scrub disposition and exact Spine request. The bundle commits atomically and verifies before the next wake.
+
 ```text
 Source Ledger -> session/Hearth assembly -> provider-presentation Scrub
               -> Spine exact request -> provider SSE -> Spine exact admitted-body return

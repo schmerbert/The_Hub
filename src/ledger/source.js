@@ -176,6 +176,31 @@ CREATE TABLE IF NOT EXISTS glass_cast_receipts (
 CREATE INDEX IF NOT EXISTS glass_cast_receipts_wake_order ON glass_cast_receipts(wake_id, created_at, id);
 CREATE TRIGGER IF NOT EXISTS glass_cast_receipts_append_only_update BEFORE UPDATE ON glass_cast_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS glass_cast_receipts_append_only_delete BEFORE DELETE ON glass_cast_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TABLE IF NOT EXISTS glass_trace_epochs (
+  id TEXT PRIMARY KEY, schema_version INTEGER NOT NULL CHECK(schema_version=1),
+  boundary_kind TEXT NOT NULL UNIQUE CHECK(boundary_kind='glass_trace_boundary/v1'),
+  pre_boundary_head_json TEXT NOT NULL, pre_boundary_head_hash TEXT NOT NULL,
+  law_json TEXT NOT NULL, law_hash TEXT NOT NULL, established_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS glass_trace_epochs_append_only_update BEFORE UPDATE ON glass_trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS glass_trace_epochs_append_only_delete BEFORE DELETE ON glass_trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TABLE IF NOT EXISTS glass_ground_receipts (
+  id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL REFERENCES glass_trace_epochs(id),
+  provider_request_id TEXT NOT NULL REFERENCES provider_requests(id), kind TEXT NOT NULL,
+  schema_version INTEGER NOT NULL CHECK(schema_version=1), receipt_json TEXT NOT NULL,
+  receipt_hash TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider_request_id,kind)
+);
+CREATE TRIGGER IF NOT EXISTS glass_ground_receipts_append_only_update BEFORE UPDATE ON glass_ground_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS glass_ground_receipts_append_only_delete BEFORE DELETE ON glass_ground_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TABLE IF NOT EXISTS glass_trace_manifests (
+  id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL REFERENCES glass_trace_epochs(id),
+  glass_cast_receipt_id TEXT NOT NULL UNIQUE REFERENCES glass_cast_receipts(id),
+  provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id),
+  schema_version INTEGER NOT NULL CHECK(schema_version=1), manifest_json TEXT NOT NULL,
+  manifest_hash TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS glass_trace_manifests_append_only_update BEFORE UPDATE ON glass_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS glass_trace_manifests_append_only_delete BEFORE DELETE ON glass_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TABLE IF NOT EXISTS attention_receipts (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -226,7 +251,7 @@ function now() { return new Date().toISOString(); }
 function rowToObject(row) { return row ? { ...row } : null; }
 
 export class HubDatabase {
-  constructor(path) {
+  constructor(path, { openSession = true } = {}) {
     mkdirSync(dirname(path), { recursive: true });
     this.sqlite = new DatabaseSync(path);
     const existingSource = Boolean(this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_history'").get());
@@ -238,8 +263,69 @@ export class HubDatabase {
     this.migrateCirculationColumns();
     this.wakeStream = new WakeStreamJournal(this.sqlite);
     this.threadId = this.ensureThread();
-    this.session = this.openSession();
-    if (!existingSource) this.establishTraceEpoch();
+    this.session = openSession ? this.openSession() : null;
+    if (!existingSource) { this.establishTraceEpoch(); this.establishGlassTraceEpoch(); }
+  }
+
+  getGlassTraceEpoch() {
+    return rowToObject(this.sqlite.prepare(`SELECT id,schema_version AS schemaVersion,boundary_kind AS boundaryKind,
+      pre_boundary_head_json AS preBoundaryHeadJson,pre_boundary_head_hash AS preBoundaryHeadHash,
+      law_json AS lawJson,law_hash AS lawHash,established_at AS establishedAt FROM glass_trace_epochs LIMIT 1`).get());
+  }
+
+  establishGlassTraceEpoch() {
+    const existing = this.getGlassTraceEpoch();
+    if (existing) return { status: 'already_established', epoch: existing };
+    const head = this.sqlite.prepare(`SELECT rowid AS rowid,id,provider_request_id AS providerRequestId,receipt_hash AS receiptHash,created_at AS createdAt
+      FROM glass_cast_receipts ORDER BY rowid DESC LIMIT 1`).get() || null;
+    const boundary = { castCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM glass_cast_receipts').get().count, head };
+    const law = { name: 'Glass Two-Ended Closure', version: 1, before: 'Exact historical casts may have partial ground ancestry.', after: 'Every new Glass source has a resolvable authority witness and explicit presented or omitted disposition.' };
+    const boundaryJson = canonicalize(boundary); const lawJson = canonicalize(law);
+    this.sqlite.prepare(`INSERT INTO glass_trace_epochs(id,schema_version,boundary_kind,pre_boundary_head_json,pre_boundary_head_hash,law_json,law_hash,established_at)
+      VALUES(?,1,'glass_trace_boundary/v1',?,?,?,?,?)`).run(id('glass_trace_epoch'), boundaryJson, sha256(boundaryJson), lawJson, sha256(lawJson), now());
+    return { status: 'established', epoch: this.getGlassTraceEpoch() };
+  }
+
+  verifyGlassTrace({ mismatchLimit = 50 } = {}) {
+    const epoch = this.getGlassTraceEpoch(); const mismatches = [];
+    const add = item => { if (mismatches.length < mismatchLimit) mismatches.push(item); };
+    if (!epoch) return { verified: true, epoch: null, tracedCastCount: 0, mismatches };
+    if (sha256(epoch.preBoundaryHeadJson) !== epoch.preBoundaryHeadHash) add({ code: 'glass_trace_boundary_hash_mismatch' });
+    if (sha256(epoch.lawJson) !== epoch.lawHash) add({ code: 'glass_trace_law_hash_mismatch' });
+    for (const trigger of ['glass_trace_epochs_append_only_update','glass_trace_epochs_append_only_delete','glass_ground_receipts_append_only_update','glass_ground_receipts_append_only_delete','glass_trace_manifests_append_only_update','glass_trace_manifests_append_only_delete']) {
+      if (!this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger)) add({ code: 'glass_trace_trigger_missing', trigger });
+    }
+    const boundary = JSON.parse(epoch.preBoundaryHeadJson);
+    const casts = this.sqlite.prepare('SELECT id,provider_request_id AS providerRequestId,receipt_hash AS receiptHash FROM glass_cast_receipts WHERE rowid>? ORDER BY rowid').all(boundary.head?.rowid || 0);
+    for (const cast of casts) {
+      const row = this.sqlite.prepare('SELECT manifest_json AS manifestJson,manifest_hash AS manifestHash FROM glass_trace_manifests WHERE glass_cast_receipt_id=?').get(cast.id);
+      if (!row) { add({ code: 'glass_trace_manifest_missing', glassCastReceiptId: cast.id }); continue; }
+      if (sha256(row.manifestJson) !== row.manifestHash) { add({ code: 'glass_trace_manifest_hash_mismatch', glassCastReceiptId: cast.id }); continue; }
+      let manifest; try { manifest = JSON.parse(row.manifestJson); } catch { add({ code: 'glass_trace_manifest_invalid_json', glassCastReceiptId: cast.id }); continue; }
+      if (manifest.providerRequestId !== cast.providerRequestId || manifest.glassCastReceiptHash !== cast.receiptHash) add({ code: 'glass_trace_cast_binding_mismatch', glassCastReceiptId: cast.id });
+      let requestMessages; try { requestMessages = JSON.parse(this.sqlite.prepare('SELECT request_body AS requestBody FROM provider_requests WHERE id=?').get(cast.providerRequestId)?.requestBody).messages; } catch {}
+      const presentedItems = (manifest.items || []).filter(item => item.disposition?.kind === 'presented').sort((left, right) => left.disposition.presentedOrdinal - right.disposition.presentedOrdinal);
+      if (!Array.isArray(requestMessages) || requestMessages.length !== presentedItems.length || presentedItems.some((item, index) => item.messageHash !== sha256(JSON.stringify(requestMessages[index])))) add({ code: 'glass_trace_request_projection_mismatch', glassCastReceiptId: cast.id });
+      for (const item of manifest.items || []) {
+        if (item.source?.authority === 'glass_ground_receipt') {
+          const ground = this.sqlite.prepare('SELECT receipt_hash AS receiptHash,receipt_json AS receiptJson FROM glass_ground_receipts WHERE id=? AND provider_request_id=?').get(item.source.receiptId, cast.providerRequestId);
+          if (!ground || ground.receiptHash !== item.source.receiptHash || sha256(ground.receiptJson) !== ground.receiptHash) add({ code: 'glass_trace_ground_unresolved', sourceOrdinal: item.sourceOrdinal });
+          else {
+            const receipt = JSON.parse(ground.receiptJson);
+            if (!Array.isArray(receipt.sourceMessageHashes) || !receipt.sourceMessageHashes.includes(item.messageHash)) add({ code: 'glass_trace_ground_message_mismatch', sourceOrdinal: item.sourceOrdinal });
+          }
+        } else if (item.source?.authority === 'Session Scroll') {
+          const history = this.sqlite.prepare('SELECT session_id AS sessionId,ordinal,message_json AS messageJson FROM session_history WHERE id=?').get(item.source.historyId);
+          if (!history || history.sessionId !== item.source.sessionId || history.ordinal !== item.source.ordinal || sha256(history.messageJson) !== item.source.messageHash) add({ code: 'glass_trace_scroll_unresolved', sourceOrdinal: item.sourceOrdinal });
+        } else if (item.source?.authority === 'Source') {
+          const event = this.sqlite.prepare('SELECT content FROM events WHERE id=?').get(item.source.eventId);
+          if (!event || (item.source.contentHash && sha256(event.content) !== item.source.contentHash)) add({ code: 'glass_trace_source_unresolved', sourceOrdinal: item.sourceOrdinal });
+        }
+        else if (item.source?.authority === 'code_owned_glass' && (item.source.version !== 1 || item.source.contentHash !== sha256(STABLE_GLASS_TEXT))) add({ code: 'glass_trace_stable_glass_mismatch', sourceOrdinal: item.sourceOrdinal });
+        else if (!['code_owned_glass','glass_ground_receipt','Session Scroll','Source'].includes(item.source?.authority)) add({ code: 'glass_trace_authority_unknown', sourceOrdinal: item.sourceOrdinal });
+      }
+    }
+    return { verified: mismatches.length === 0, epoch: { id: epoch.id, boundaryKind: epoch.boundaryKind, establishedAt: epoch.establishedAt }, tracedCastCount: casts.length, mismatches };
   }
 
   getTraceEpoch() {
@@ -673,6 +759,64 @@ export class HubDatabase {
     return { receiptId, receiptHash };
   }
 
+  recordGlassGroundReceipts({ providerRequestId, witnesses }) {
+    const epoch = this.getGlassTraceEpoch();
+    if (!epoch) return {};
+    const request = this.sqlite.prepare('SELECT session_id AS sessionId,wake_id AS wakeId,phase FROM provider_requests WHERE id=?').get(providerRequestId);
+    if (!request || !witnesses || typeof witnesses !== 'object') throw Object.assign(new Error('Glass ground witnesses are invalid.'), { code: 'glass_trace_invalid' });
+    const required = ['crossing_ground', 'world_current_ground', 'tool_mount', 'attention', 'continuity_ground'];
+    const result = {};
+    for (const kind of required) {
+      const witness = witnesses[kind];
+      if (!witness || witness.sessionId !== request.sessionId || witness.wakeId !== request.wakeId || witness.phase !== request.phase) throw Object.assign(new Error(`Glass ${kind} witness is missing or crosses another request.`), { code: 'glass_trace_invalid' });
+      const receipt = { schemaVersion: 1, kind, providerRequestId, ...witness };
+      const receiptJson = canonicalize(receipt); const receiptId = id('glass_ground'); const receiptHash = sha256(receiptJson);
+      this.sqlite.prepare(`INSERT INTO glass_ground_receipts(id,epoch_id,provider_request_id,kind,schema_version,receipt_json,receipt_hash,created_at)
+        VALUES(?,?,?,?,1,?,?,?)`).run(receiptId, epoch.id, providerRequestId, kind, receiptJson, receiptHash, now());
+      result[kind] = { receiptId, receiptHash, receipt };
+    }
+    return result;
+  }
+
+  recordGlassTraceManifest({ providerRequestId, glassCastReceiptId, sourceRefs, presentationReceipt, groundReceipts }) {
+    const epoch = this.getGlassTraceEpoch();
+    if (!epoch) return null;
+    const request = this.sqlite.prepare('SELECT session_id AS sessionId,wake_id AS wakeId,phase,request_body AS requestBody FROM provider_requests WHERE id=?').get(providerRequestId);
+    const cast = this.sqlite.prepare('SELECT receipt_hash AS receiptHash FROM glass_cast_receipts WHERE id=? AND provider_request_id=?').get(glassCastReceiptId, providerRequestId);
+    if (!request || !cast || !Array.isArray(sourceRefs) || !presentationReceipt || !groundReceipts) throw Object.assign(new Error('Glass trace inputs are incomplete.'), { code: 'glass_trace_invalid' });
+    const omitted = new Map((presentationReceipt.omissions || []).filter(item => item.omitMessage).map(item => [item.sourceIndex, item]));
+    let presentedOrdinal = 0;
+    const groundKind = kind => kind === 'crossing_ground' ? 'crossing_ground' : kind === 'world_current_ground' ? 'world_current_ground' : kind === 'tool_current_ground' ? 'tool_mount' : kind === 'attention_current_ground' ? 'attention' : null;
+    const items = sourceRefs.map((ref, sourceIndex) => {
+      const omission = omitted.get(sourceIndex);
+      if (!omission) presentedOrdinal += 1;
+      let source;
+      if (ref.kind === 'stable_glass') source = { authority: 'code_owned_glass', version: 1, contentHash: sha256(ref.message.content) };
+      else if (ref.historyId) source = { authority: 'Session Scroll', historyId: ref.historyId, sessionId: ref.historySessionId, ordinal: ref.historyOrdinal, sourceEventId: ref.sourceEventId || null, messageHash: ref.historyMessageHash };
+      else if (ref.sourceEventId || ref.glassSourceEventId) source = { authority: 'Source', eventId: ref.sourceEventId || ref.glassSourceEventId, contentHash: ref.sourceContentHash || null };
+      else {
+        const receipt = groundReceipts[groundKind(ref.kind) || (['clinical_wake_anchor', 'prior_horizon'].includes(ref.kind) ? 'continuity_ground' : 'attention')];
+        if (!receipt) throw Object.assign(new Error(`Glass source ${sourceIndex} has no resolvable witness.`), { code: 'glass_trace_invalid' });
+        source = { authority: 'glass_ground_receipt', kind: receipt.receipt.kind, receiptId: receipt.receiptId, receiptHash: receipt.receiptHash };
+      }
+      return {
+        sourceIndex, sourceOrdinal: sourceIndex + 1, kind: ref.kind, authority: ref.authority,
+        messageRole: ref.message.role, messageHash: sha256(JSON.stringify(ref.message)), source,
+        disposition: omission ? { kind: 'omitted', reason: omission.reason } : { kind: 'presented', presentedOrdinal },
+      };
+    });
+    let requestMessages;
+    try { requestMessages = JSON.parse(request.requestBody).messages; } catch {}
+    if (!Array.isArray(requestMessages) || requestMessages.length !== items.filter(item => item.disposition.kind === 'presented').length) throw Object.assign(new Error('Glass trace does not close over the exact provider messages.'), { code: 'glass_trace_invalid' });
+    const manifest = { schemaVersion: 1, epochId: epoch.id, providerRequestId, glassCastReceiptId, glassCastReceiptHash: cast.receiptHash,
+      crossing: { sessionId: request.sessionId, wakeId: request.wakeId, phase: request.phase }, items,
+      terminal: { authority: 'Spine provider request', requestBodyHash: sha256(request.requestBody) } };
+    const manifestJson = canonicalize(manifest); const manifestId = id('glass_trace'); const manifestHash = sha256(manifestJson);
+    this.sqlite.prepare(`INSERT INTO glass_trace_manifests(id,epoch_id,glass_cast_receipt_id,provider_request_id,schema_version,manifest_json,manifest_hash,created_at)
+      VALUES(?,?,?,?,1,?,?,?)`).run(manifestId, epoch.id, glassCastReceiptId, providerRequestId, manifestJson, manifestHash, now());
+    return { manifestId, manifestHash, manifest };
+  }
+
   getSessionGlassInheritance(sessionId = this.session.id) {
     const row = this.sqlite.prepare(`SELECT return_json AS returnJson FROM hearth_receipts WHERE session_id=? ORDER BY created_at,id LIMIT 1`).get(sessionId);
     if (!row) return null;
@@ -842,8 +986,17 @@ export class HubDatabase {
     const glassCasts = this.sqlite.prepare(`SELECT id AS receiptId, provider_request_id AS providerRequestId, phase, receipt_json AS receiptJson, receipt_hash AS receiptHash, created_at AS createdAt
       FROM glass_cast_receipts WHERE wake_id=? ORDER BY created_at,id`).all(wakeId).map(row => ({ ...row, receipt: JSON.parse(row.receiptJson) }));
     const glassByRequest = new Map(glassCasts.map(item => [item.providerRequestId, item]));
-    normalized.phases = normalized.phases.map(phase => ({ ...phase, glassCast: glassByRequest.get(phase.id) || null }));
+    const glassTraces = this.sqlite.prepare(`SELECT provider_request_id AS providerRequestId,id AS manifestId,manifest_json AS manifestJson,manifest_hash AS manifestHash,created_at AS createdAt
+      FROM glass_trace_manifests WHERE provider_request_id IN (SELECT id FROM provider_requests WHERE wake_id=?) ORDER BY created_at,id`).all(wakeId)
+      .map(row => ({ ...row, manifest: JSON.parse(row.manifestJson) }));
+    const traceByRequest = new Map(glassTraces.map(item => [item.providerRequestId, item]));
+    const groundReceipts = this.sqlite.prepare(`SELECT provider_request_id AS providerRequestId,id AS receiptId,kind,receipt_json AS receiptJson,receipt_hash AS receiptHash,created_at AS createdAt
+      FROM glass_ground_receipts WHERE provider_request_id IN (SELECT id FROM provider_requests WHERE wake_id=?) ORDER BY created_at,id`).all(wakeId)
+      .map(row => ({ ...row, receipt: JSON.parse(row.receiptJson) }));
+    normalized.phases = normalized.phases.map(phase => ({ ...phase, glassCast: glassByRequest.get(phase.id) || null, glassTrace: traceByRequest.get(phase.id) || null,
+      glassGroundReceipts: groundReceipts.filter(item => item.providerRequestId === phase.id) }));
     normalized.glassCasts = glassCasts;
+    normalized.glassTraces = glassTraces;
     normalized.attentionReceipts = this.sqlite.prepare('SELECT id, phase, status, receipt_json AS receiptJson, receipt_hash AS receiptHash, created_at AS createdAt FROM attention_receipts WHERE wake_id=? ORDER BY created_at,id').all(wakeId)
       .map(receipt => ({ ...receipt, receipt: JSON.parse(receipt.receiptJson) }));
     normalized.hearth = this.sqlite.prepare(`SELECT tool_call_id AS toolCallId, return_json AS returnJson, return_hash AS returnHash, scroll_markdown AS scrollMarkdown, scroll_hash AS scrollHash,

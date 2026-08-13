@@ -20,7 +20,8 @@
     "world:migrate-a2": "node src/scripts/world-migrate-a2.js",
     "world:migrate-b1": "node src/scripts/world-migrate-b1.js",
     "world:migrate-hearth": "node src/scripts/world-migrate-hearth.js",
-    "trace:establish": "node src/scripts/trace-establish.js"
+    "trace:establish": "node src/scripts/trace-establish.js",
+    "glass-trace:establish": "node src/scripts/glass-trace-establish.js"
   },
   "devDependencies": {
     "electron": "43.2.0"
