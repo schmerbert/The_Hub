@@ -2,6 +2,8 @@
 
 This document describes the implemented runtime and code ownership. New readers should begin with [`ORIENTATION.md`](ORIENTATION.md); [`GLOSSARY.md`](GLOSSARY.md) maps lived terms to clinical responsibilities. See [`STATUS.md`](STATUS.md) for specification precedence and the boundary between implemented cores and broader adopted designs. [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) is the compact crossing-and-authority index that must be updated whenever a new pipe is installed.
 
+Source also owns the forward-only Session Scroll trace epoch. The append-only boundary records the exact inherited head without backfilling it. After that boundary, each Scroll row and its trace manifest are committed atomically; the manifest connects authoritative source, Scrub or intake gate, durable witness, exact Scroll coordinate, and retained disposition. See [`TRACE_EPOCH_V1.md`](specs/TRACE_EPOCH_V1.md).
+
 ```text
 Source Ledger -> session/Hearth assembly -> provider-presentation Scrub
               -> Spine exact request -> provider SSE -> Spine exact admitted-body return

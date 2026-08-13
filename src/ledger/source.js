@@ -106,6 +106,30 @@ CREATE TABLE IF NOT EXISTS session_history (
   UNIQUE(session_id, ordinal)
 );
 CREATE INDEX IF NOT EXISTS session_history_order ON session_history(session_id, ordinal);
+CREATE TABLE IF NOT EXISTS trace_epochs (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK(schema_version=1),
+  boundary_kind TEXT NOT NULL UNIQUE CHECK(boundary_kind='scroll_trace_boundary/v1'),
+  pre_boundary_head_json TEXT NOT NULL,
+  pre_boundary_head_hash TEXT NOT NULL,
+  law_json TEXT NOT NULL,
+  law_hash TEXT NOT NULL,
+  established_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS trace_epochs_append_only_update BEFORE UPDATE ON trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS trace_epochs_append_only_delete BEFORE DELETE ON trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TABLE IF NOT EXISTS scroll_trace_manifests (
+  id TEXT PRIMARY KEY,
+  epoch_id TEXT NOT NULL REFERENCES trace_epochs(id),
+  history_id TEXT NOT NULL UNIQUE REFERENCES session_history(id),
+  schema_version INTEGER NOT NULL CHECK(schema_version=1),
+  manifest_json TEXT NOT NULL,
+  manifest_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS scroll_trace_manifests_epoch ON scroll_trace_manifests(epoch_id, created_at, id);
+CREATE TRIGGER IF NOT EXISTS scroll_trace_manifests_append_only_update BEFORE UPDATE ON scroll_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS scroll_trace_manifests_append_only_delete BEFORE DELETE ON scroll_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TABLE IF NOT EXISTS provider_requests (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -205,6 +229,7 @@ export class HubDatabase {
   constructor(path) {
     mkdirSync(dirname(path), { recursive: true });
     this.sqlite = new DatabaseSync(path);
+    const existingSource = Boolean(this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_history'").get());
     this.sqlite.exec('PRAGMA foreign_keys = ON;');
     this.sqlite.exec(SCHEMA);
     this.migrateContextItems();
@@ -214,6 +239,71 @@ export class HubDatabase {
     this.wakeStream = new WakeStreamJournal(this.sqlite);
     this.threadId = this.ensureThread();
     this.session = this.openSession();
+    if (!existingSource) this.establishTraceEpoch();
+  }
+
+  getTraceEpoch() {
+    const row = this.sqlite.prepare(`SELECT id, schema_version AS schemaVersion, boundary_kind AS boundaryKind,
+      pre_boundary_head_json AS preBoundaryHeadJson, pre_boundary_head_hash AS preBoundaryHeadHash,
+      law_json AS lawJson, law_hash AS lawHash, established_at AS establishedAt FROM trace_epochs LIMIT 1`).get();
+    return rowToObject(row);
+  }
+
+  establishTraceEpoch() {
+    const existing = this.getTraceEpoch();
+    if (existing) return { status: 'already_established', epoch: existing };
+    const head = this.sqlite.prepare(`SELECT id,session_id AS sessionId,ordinal,content_hash AS contentHash,created_at AS createdAt
+      FROM session_history ORDER BY created_at DESC,id DESC LIMIT 1`).get() || null;
+    const preBoundaryHead = {
+      historyCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM session_history').get().count,
+      providerRequestCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM provider_requests').get().count,
+      sourceEventCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM events').get().count,
+      head,
+    };
+    const law = {
+      name: 'Two-Ended Closure Law',
+      version: 1,
+      before: 'Exact inherited history; trace ancestry may be partial and must not be fabricated.',
+      after: 'Every new Session Scroll row has one atomic manifest naming source, gate, witness, destination, and disposition.',
+    };
+    const preBoundaryHeadJson = canonicalize(preBoundaryHead);
+    const lawJson = canonicalize(law);
+    const epochId = id('trace_epoch');
+    const establishedAt = now();
+    this.sqlite.prepare(`INSERT INTO trace_epochs(id,schema_version,boundary_kind,pre_boundary_head_json,pre_boundary_head_hash,law_json,law_hash,established_at)
+      VALUES(?,1,'scroll_trace_boundary/v1',?,?,?,?,?)`).run(epochId, preBoundaryHeadJson, sha256(preBoundaryHeadJson), lawJson, sha256(lawJson), establishedAt);
+    return { status: 'established', epoch: this.getTraceEpoch() };
+  }
+
+  appendScrollTraceManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId, scrubReceipt }) {
+    const epoch = this.getTraceEpoch();
+    if (!epoch) return null;
+    let source;
+    let gate;
+    if (messageKind === 'user') {
+      if (!sourceEventId) throw new Error('Closure-era human Scroll rows require a Source event.');
+      source = { authority: 'Source', eventId: sourceEventId };
+      gate = { kind: 'http_wake_validation+source_append' };
+    } else if (messageKind === 'tool_result') {
+      if (!sourceEventId || !scrubReceipt?.receipt?.receiptId) throw new Error('Closure-era tool results require a host Source event and host-return Scrub receipt.');
+      source = { authority: 'Source', eventId: sourceEventId };
+      gate = { kind: 'host-return_scrub', receiptId: scrubReceipt.receipt.receiptId };
+    } else {
+      if (!scrubReceipt?.receipt?.receiptId || !scrubReceipt?.receipt?.source?.spineRecordId) throw new Error('Closure-era provider Scroll rows require return Scrub and Spine witnesses.');
+      source = { authority: 'Spine', recordId: scrubReceipt.receipt.source.spineRecordId, recordHash: scrubReceipt.receipt.source.recordHash || null };
+      gate = { kind: 'provider-return_scrub', receiptId: scrubReceipt.receipt.receiptId };
+    }
+    const manifest = {
+      epochId: epoch.id, historyId, sessionId, wakeId, ordinal, messageKind,
+      source, gate,
+      witness: { historyId, sourceEventId: sourceEventId || null, scrubReceiptId: scrubReceipt?.receipt?.receiptId || null },
+      destination: { authority: 'Session Scroll', sessionId, ordinal },
+      disposition: 'retained_in_session_scroll',
+    };
+    const manifestJson = canonicalize(manifest);
+    this.sqlite.prepare(`INSERT INTO scroll_trace_manifests(id,epoch_id,history_id,schema_version,manifest_json,manifest_hash,created_at)
+      VALUES(?,?,?,1,?,?,?)`).run(id('scroll_trace'), epoch.id, historyId, manifestJson, sha256(manifestJson), now());
+    return manifest;
   }
 
   migrateSessionColumns() {
@@ -483,6 +573,7 @@ export class HubDatabase {
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(eventId, this.threadId, session.id, wakeId, 'user', 'utterance', content, 'ground', null, null, timestamp);
       this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?)`).run(historyId, session.id, wakeId, historyOrdinal, JSON.stringify(message), 'user', 'user', eventId, sha256(content), timestamp);
+      this.appendScrollTraceManifest({ historyId, sessionId: session.id, wakeId, ordinal: historyOrdinal, messageKind: 'user', sourceEventId: eventId, scrubReceipt: null });
       this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
       for (const item of [
         { ordinal: 1, itemKind: 'clinical_anchor', actorRole: 'system', content: STABLE_GLASS_TEXT, sourceDescription: 'Stable clinical Glass v1', authority: 'host_receipt', included: true },
@@ -518,8 +609,10 @@ export class HubDatabase {
       assertScrubbedHostReturn(hostReturnScrub);
     }
     const scrubReceipt = messageKind === 'tool_result' ? hostReturnScrub : returnScrub;
+    const historyId = id('history');
     this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at, scrub_receipt_id, raw_return_record_id, source_record_hash)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id('history'), sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now(), scrubReceipt?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(historyId, sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now(), scrubReceipt?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
+    this.appendScrollTraceManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId, scrubReceipt });
     return ordinal;
   }
 
@@ -620,7 +713,7 @@ export class HubDatabase {
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
-      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', hostReturnScrub });
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', sourceEventId: eventId, hostReturnScrub });
       this.persistHostReturnScrub({ sessionId, wakeId, toolName: 'tend_hearth', hostReturnScrub });
       this.sqlite.prepare(`INSERT INTO hearth_receipts(id, session_id, wake_id, tool_call_id, return_json, return_hash, scroll_markdown, scroll_hash, action_event_id, return_event_id, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(id('hearth'), sessionId, wakeId, toolCallId, JSON.stringify(returnValue), returnHash, scrollMarkdown, scrollHash, actionEventId, eventId, now());
@@ -644,7 +737,7 @@ export class HubDatabase {
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
-      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', hostReturnScrub });
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', sourceEventId: eventId, hostReturnScrub });
       this.persistHostReturnScrub({ sessionId, wakeId, toolName, hostReturnScrub });
     });
     return eventId;

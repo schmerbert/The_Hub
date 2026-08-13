@@ -4,6 +4,10 @@
 
 The map exists so the system's shape does not depend on anyone holding every subsystem in working memory. It names the one crossing responsible for each kind of movement and the durable evidence that proves the crossing occurred.
 
+## Trace epoch
+
+The Marble now has a witnessed forward-only provenance boundary. [`TRACE_EPOCH_V1.md`](specs/TRACE_EPOCH_V1.md) records the **Two-Ended Closure Law**: paths traced forward from authority and backward from custody must meet at the same crossing. Pre-boundary Session Scroll history remains exact but may have partial ancestry; every new closure-era Scroll row is atomically paired with a source/gate/witness/destination/disposition manifest. No historical pointers are invented.
+
 ## One-passage law
 
 No material enters resident attention, becomes resident speech, changes World reality, or enters continuity custody through an unnamed path.
@@ -88,6 +92,7 @@ The provisional display branch is deliberately terminal: provisional thinking, c
 | Movement | Sole gate | Durable proof | Destination |
 | --- | --- | --- | --- |
 | Human utterance enters host custody | HTTP wake validation + Source append | Source event | Active session assembly |
+| Closure-era utterance enters Session Scroll | Scroll trace boundary + atomic manifest insert | Append-only Scroll trace manifest linked to Source/Scrub/Spine witness | Exact chronological session custody |
 | Language enters a provider request | Glass validation + provider-presentation Scrub | Glass cast receipt, Scrub receipt, Spine request frame | Provider-visible messages |
 | Capabilities enter a provider request | Ceiling catalog + room Patch Bay + attention fitting | Exact request body in Spine; mount/profile inspection | Provider-visible tool schemas |
 | Provider bytes return | Capture ceiling + Spine admitted-body append | Spine raw-return frame and outcome | Provider-return Scrub |
@@ -151,6 +156,7 @@ These are tracked architecture gaps, not implied capabilities:
 7. Recursive Forest frames, scale-relative Home/Wild relationships, Mycelium, cross-Forest portals, and projection into an experiential `place.forest` do not yet exist. The installed Forest remains one configured custody substrate with its current exact Home and Wild intake laws.
 8. Current Source, Spine, Forest, World, Result Rack, and wake stores do not have application-level encryption at rest. Authentication, sealed-pointer custody, key lifecycle, direct Vault intake, cryptographic erasure, remote-device admission, and independent security review are not installed.
 9. The adopted [`FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md) waterfall and traversal crossings are not installed. Current attention fitting can omit declared older tool exchanges but cannot generate a rolling fold, lay Resident-chosen paths, preserve latent branch offers, enter Forest attention, or walk exact prior conversation terrain through a warm return tether.
+10. The trace epoch currently closes new Session Scroll rows only. Glass ground items still lack first-class durable source pointers, presentation omissions do not yet name plain Scroll coordinates, Forest Exhale is absent, and provisional stream batches do not yet carry closure-era batch manifests.
 
 Loose wires remain visible until a tested crossing removes them. Documentation must not smooth over them.
 
