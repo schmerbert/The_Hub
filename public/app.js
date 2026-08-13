@@ -11,7 +11,6 @@ import {
 } from './live-state.js';
 import {
   captureConversationScroll,
-  reconcileThinkingDisclosure,
   restoreConversationScroll,
 } from './render-state.js';
 
@@ -62,7 +61,7 @@ let liveEventSource = null;
 let unregisterLiveEvents = null;
 let liveRecoveryTimer = null;
 let liveUnloading = false;
-let liveThinkingDisclosure = { wakeId: null, open: false };
+const openThinkingDisclosures = new Set();
 
 function node(tag, className, content) {
   const element = document.createElement(tag);
@@ -133,10 +132,20 @@ async function decideApproval(approvalId, decision) {
 }
 
 function renderSlips(parent, slips) {
+  for (const detail of parent.querySelectorAll('details[data-disclosure-id]')) {
+    if (detail.open) openThinkingDisclosures.add(detail.dataset.disclosureId);
+    else openThinkingDisclosures.delete(detail.dataset.disclosureId);
+  }
   parent.replaceChildren();
   for (const slip of slips) {
     if (slip.kind === 'thinking') {
       const detail = node('details', 'slip slip-thinking');
+      detail.dataset.disclosureId = slip.id;
+      detail.open = openThinkingDisclosures.has(slip.id);
+      detail.addEventListener('toggle', () => {
+        if (detail.open) openThinkingDisclosures.add(slip.id);
+        else openThinkingDisclosures.delete(slip.id);
+      });
       detail.append(node('summary', null, slip.label), node('p', null, slip.detail));
       parent.append(detail);
     } else if (slip.kind === 'pending' && slip.decidable && slip.approvalId) {
@@ -165,24 +174,74 @@ function renderSlips(parent, slips) {
   }
 }
 
-function renderLive({ scrollSnapshot = null, forceTail = false } = {}) {
-  const preservedScroll = scrollSnapshot || captureConversationScroll(conversationScroller, { forceTail });
-  const projection = projectLiveState(liveState);
-  const renderedThinking = liveGap.querySelector('.live-thinking');
-  liveThinkingDisclosure = reconcileThinkingDisclosure(liveThinkingDisclosure, {
-    wakeId: projection.wakeId,
-    hasThinking: Boolean(projection.thinking),
-    renderedOpen: renderedThinking ? renderedThinking.open : undefined,
-  });
-  const conversation = [];
-  if (projection.optimisticUser) {
-    const event = node('div', 'event user optimistic-user');
-    event.append(node('span', 'event-label', 'You · sending'), node('span', null, projection.optimisticUser.content));
-    conversation.push(event);
+function renderLiveCard(card) {
+  const row = node('section', `slip live-card card-${card.cardKind}`);
+  row.append(node('div', 'live-card-heading', `${card.label} · ${card.state}`));
+  if (card.detail) row.append(node('pre', 'live-card-detail', card.detail));
+  if (card.pointer) row.append(node('div', 'live-card-pointer', card.pointer));
+  if (card.cardKind === 'approval' && card.state === 'pending' && card.decidable && card.approvalId) {
+    const actions = node('div', 'slip-decide');
+    const confirm = node('button', null, 'Confirm');
+    confirm.type = 'button';
+    confirm.addEventListener('click', async () => {
+      try { await decideApproval(card.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+    });
+    const reject = node('button', null, 'Reject');
+    reject.type = 'button';
+    reject.addEventListener('click', async () => {
+      try { await decideApproval(card.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+    });
+    actions.append(confirm, reject);
+    row.append(actions);
+  }
+  return row;
+}
+
+function renderLiveTimeline(projection) {
+  for (const detail of liveGap.querySelectorAll('details[data-disclosure-id]')) {
+    if (detail.open) openThinkingDisclosures.add(detail.dataset.disclosureId);
+    else openThinkingDisclosures.delete(detail.dataset.disclosureId);
+  }
+  const elements = [];
+  for (const segment of projection.timeline) {
+    if (segment.kind === 'phase') elements.push(node('div', 'slip phase', segment.label));
+    if (segment.kind === 'thinking') {
+      const disclosureId = `${projection.wakeId}:${segment.id}`;
+      const detail = node('details', 'slip slip-thinking live-thinking');
+      detail.dataset.disclosureId = disclosureId;
+      detail.open = openThinkingDisclosures.has(disclosureId);
+      detail.addEventListener('toggle', () => {
+        if (detail.open) openThinkingDisclosures.add(disclosureId);
+        else openThinkingDisclosures.delete(disclosureId);
+      });
+      detail.append(node('summary', null, 'Thinking'), node('p', null, segment.text));
+      elements.push(detail);
+    }
+    if (segment.kind === 'tool') {
+      const detail = node('details', 'slip live-tool-call');
+      const toolCall = segment.toolCall;
+      const name = toolCall.name || toolCall.id || `#${toolCall.index}`;
+      detail.append(node('summary', null, `Preparing tool · ${name}`));
+      if (toolCall.id) detail.append(node('pre', 'live-machine-text', `id: ${toolCall.id}`));
+      elements.push(detail);
+    }
+    if (segment.kind === 'card') elements.push(renderLiveCard(segment.card));
   }
   if (projection.draft) {
     const event = node('div', 'event resident provisional-resident');
     event.append(node('span', 'event-label', 'Resident · provisional'), node('span', null, projection.draft));
+    elements.push(event);
+  }
+  liveGap.replaceChildren(...elements);
+}
+
+function renderLive({ scrollSnapshot = null, forceTail = false } = {}) {
+  const preservedScroll = scrollSnapshot || captureConversationScroll(conversationScroller, { forceTail });
+  const projection = projectLiveState(liveState);
+  const conversation = [];
+  if (projection.optimisticUser) {
+    const event = node('div', 'event user optimistic-user');
+    event.append(node('span', 'event-label', 'You · sending'), node('span', null, projection.optimisticUser.content));
     conversation.push(event);
   }
   if (conversation.length) {
@@ -191,48 +250,7 @@ function renderLive({ scrollSnapshot = null, forceTail = false } = {}) {
     liveConversation.replaceChildren(wake);
   } else liveConversation.replaceChildren();
 
-  const machinery = [];
-  if (projection.thinking) {
-    const detail = node('details', 'slip slip-thinking live-thinking');
-    detail.open = liveThinkingDisclosure.open;
-    const disclosureWakeId = projection.wakeId;
-    detail.addEventListener('toggle', () => {
-      if (liveThinkingDisclosure.wakeId === disclosureWakeId) liveThinkingDisclosure = { wakeId: disclosureWakeId, open: detail.open };
-    });
-    detail.append(node('summary', null, 'Thinking'), node('p', null, projection.thinking));
-    machinery.push(detail);
-  }
-  for (const toolCall of projection.toolCalls) {
-    const detail = node('details', 'slip live-tool-call');
-    const name = toolCall.name || toolCall.id || `#${toolCall.index}`;
-    detail.append(node('summary', null, `Preparing tool · ${name}`));
-    const text = toolCall.id ? `id: ${toolCall.id}` : '';
-    if (text) detail.append(node('pre', 'live-machine-text', text));
-    machinery.push(detail);
-  }
-  for (const card of projection.cards) {
-    const row = node('section', `slip live-card card-${card.cardKind}`);
-    row.append(node('div', 'live-card-heading', `${card.label} · ${card.state}`));
-    if (card.detail) row.append(node('pre', 'live-card-detail', card.detail));
-    if (card.pointer) row.append(node('div', 'live-card-pointer', card.pointer));
-    if (card.cardKind === 'approval' && card.state === 'pending' && card.decidable && card.approvalId) {
-      const actions = node('div', 'slip-decide');
-      const confirm = node('button', null, 'Confirm');
-      confirm.type = 'button';
-      confirm.addEventListener('click', async () => {
-        try { await decideApproval(card.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
-      });
-      const reject = node('button', null, 'Reject');
-      reject.type = 'button';
-      reject.addEventListener('click', async () => {
-        try { await decideApproval(card.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
-      });
-      actions.append(confirm, reject);
-      row.append(actions);
-    }
-    machinery.push(row);
-  }
-  liveGap.replaceChildren(...machinery);
+  renderLiveTimeline(projection);
   restoreConversationScroll(conversationScroller, preservedScroll);
 }
 
@@ -278,19 +296,22 @@ function renderThread(data) {
   }
   for (const group of wakes.values()) {
     const wakeElement = node('article', 'wake');
-    for (const event of group.events.filter(item => item.eventKind === 'utterance' && (item.actorKind === 'user' || item.actorKind === 'resident'))) {
+    const utterances = group.events.filter(item => item.eventKind === 'utterance' && (item.actorKind === 'user' || item.actorKind === 'resident'));
+    for (const event of utterances.filter(item => item.actorKind === 'user')) {
       const eventElement = node('div', `event ${event.actorKind}`);
       eventElement.append(node('span', 'event-label', eventLabel(event)), node('span', null, event.content));
       wakeElement.append(eventElement);
     }
     const steps = wakeSlips.get(group.wake.id);
     if (steps?.length) {
-      const detail = node('details', 'slips');
-      detail.append(node('summary', 'slip phase', `Steps · ${steps.length}`));
-      const rows = node('div', 'gap');
+      const rows = node('div', 'gap wake-timeline');
       renderSlips(rows, steps);
-      detail.append(rows);
-      wakeElement.append(detail);
+      wakeElement.append(rows);
+    }
+    for (const event of utterances.filter(item => item.actorKind === 'resident')) {
+      const eventElement = node('div', `event ${event.actorKind}`);
+      eventElement.append(node('span', 'event-label', eventLabel(event)), node('span', null, event.content));
+      wakeElement.append(eventElement);
     }
     const actionRow = node('div', 'wake-actions');
     const inspect = node('button', 'inspect-button', 'Inspect wake');

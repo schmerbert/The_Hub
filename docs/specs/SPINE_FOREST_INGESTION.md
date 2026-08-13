@@ -218,6 +218,16 @@ After explicit activation, each committed operational utterance is synchronously
 
 Forest intake failure must never erase or rewrite the operational event. It must be visible through a typed host failure or health receipt and remain retryable from the immutable source event.
 
+### 8.1 Intake Ledger
+
+Every structurally valid offer receives one stable `intake_*` identity before admission. The append-only Intake Ledger is crossing custody, not Forest terrain. It stores the source kind and durable pointer, source hash, intended jurisdiction and bucket, source timestamp where applicable, Scrub policy/version, and decision history. It does not duplicate the offered utterance or source body.
+
+Decision states are `admitted`, `held`, `routed`, `superseded`, and `permanently_refused`. `admitted`, `routed`, `superseded`, and `permanently_refused` are terminal. Repeating the same decision is idempotent; conflicting continuation after a terminal decision refuses.
+
+A technical or policy failure appends `held` with a bounded reason and no destination entry. A held Home offer records the predecessor claimed by that attempt and creates no placeholder terrain. Because later Home intake must name its immediate predecessor, an unresolved chronological gap blocks later atoms in that thread without blocking unrelated threads or independent Wild spans. Retrying the same source may append a later `admitted` decision with the corrected predecessor and the real destination entry.
+
+Existing terrain predating this ledger receives historical `admitted` decisions derived only from its already-verified Source/World ancestry. Migration must not invent rejected offers or copy bodies into the ledger. Health reports offer, held, and unresolved counts; any hold or unresolved offer makes Forest catch-up false.
+
 Before exhale exists, a lagging Forest may not alter provider context silently. Later exhale work must refuse to use a Forest whose ingestion watermark is behind the operational ledger.
 
 For a successful live provider wake:
@@ -243,6 +253,8 @@ Provide commands equivalent to:
 npm run forest:plan
 npm run forest:apply -- --confirm-create
 npm run forest:verify
+npm run forest:intake:plan
+npm run forest:intake:apply -- --confirm-apply
 npm run spine:verify
 ```
 

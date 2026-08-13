@@ -65,7 +65,7 @@ export function applyBackfill({ operationalPath, forest, spinePath, worldPath, c
   if (forest.count() > 0) {
     forest.verifySchema();
     // A non-empty store is allowed only after its existing append-only custody validates.
-    verifyForest({ forestPath: forest.path, operationalPath, spinePath, worldPath, strictBijection: false });
+    verifyForest({ forestPath: forest.path, operationalPath, spinePath, worldPath, strictBijection: false, strictWildBijection: false });
   }
   const operational = readOperational(operationalPath);
   const existingCount = forest.count();
@@ -83,10 +83,10 @@ export function applyBackfillAtomically({ operationalPath, forestPath, spinePath
   if (existsSync(forestPath)) {
     const forest = new ForestStore(forestPath, { mode: 'requireExisting' });
     try {
-      verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection: false });
+      verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection: false, strictWildBijection: false });
       const result = applyBackfill({ operationalPath, forest, spinePath, worldPath, confirmCreate: true });
       forest.close();
-      verifyForest({ forestPath, operationalPath, spinePath, worldPath });
+      verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictWildBijection: false });
       return result;
     } catch (error) { try { forest.close(); } catch {} throw error; }
   }
@@ -97,7 +97,7 @@ export function applyBackfillAtomically({ operationalPath, forestPath, spinePath
     forest = new ForestStore(temporaryPath);
     const result = applyBackfill({ operationalPath, forest, spinePath, worldPath, confirmCreate: true });
     forest.close(); forest = null;
-    verifyForest({ forestPath: temporaryPath, operationalPath, spinePath, worldPath });
+    verifyForest({ forestPath: temporaryPath, operationalPath, spinePath, worldPath, strictWildBijection: false });
     if (existsSync(forestPath)) throw new Error('Forest target appeared during atomic activation.');
     renameSync(temporaryPath, forestPath);
     return result;

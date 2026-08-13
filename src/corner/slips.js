@@ -5,6 +5,9 @@ function parsed(value, fallback = {}) {
 function roomLabel(roomId) {
   if (roomId === 'room.workshop') return 'Workshop';
   if (roomId === 'room.center') return 'Center';
+  if (roomId === 'place.garden') return 'Garden';
+  if (roomId === 'place.house') return 'House';
+  if (roomId === 'place.threshold') return 'Threshold';
   return roomId || 'the next room';
 }
 
@@ -50,6 +53,9 @@ function actionLabel(receipt) {
   if (receipt.outcome === 'refused') return { kind: 'outcome', label: `Refused · ${result.error || 'action_refused'}`, detail: result.message || undefined };
   if (receipt.tool_name === 'tend_hearth') return null;
   if (receipt.tool_name === 'move_through_door') return { kind: 'action', label: `Steps through to ${roomLabel(result.toRoom || result.projection?.roomId)}` };
+  if (receipt.tool_name === 'move_through_passage') return { kind: 'action', label: `Steps through to ${roomLabel(result.toLocationId || result.projection?.roomId)}` };
+  if (receipt.tool_name === 'operate_passage') return { kind: 'action', label: `${String(args.action || 'Attends to').replace(/^./, letter => letter.toUpperCase())} the passage` };
+  if (receipt.tool_name === 'turn_fixture') return { kind: 'action', label: `Turns the ${fixtureLabel(result.fixtureId || args.fixture_id)}` };
   if (receipt.tool_name === 'inspect_fixture') return { kind: 'action', label: `Looks at the ${fixtureLabel(result.fixtureId || args.fixture_id)}` };
   if (receipt.tool_name === 'engage_fixture') return { kind: 'action', label: `Engages the ${fixtureLabel(result.fixtureId || args.fixture_id)}` };
   if (receipt.tool_name === 'disengage_fixture') return { kind: 'action', label: 'Steps back from the fixture' };

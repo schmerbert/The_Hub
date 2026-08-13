@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "expressionId": "expression.spotlight.observatory",
+  "room": {
+    "id": "room.spotlight",
+    "label": "Spotlight Observatory",
+    "description": "A quiet observatory for noticing one evidence-bearing change at a time."
+  },
+  "fixtures": [
+    { "id": "fixture.present_window", "label": "Present Window", "description": "Shows what is presently within observational reach.", "layout": { "zone": "north", "order": 1 } },
+    { "id": "fixture.past_archive", "label": "Past Archive", "description": "Places recorded analogues beside the present.", "layout": { "zone": "north", "order": 2 } },
+    { "id": "fixture.packet_table", "label": "Packet Table", "description": "Holds immutable evidence packets.", "layout": { "zone": "center", "order": 1 } },
+    { "id": "fixture.replay_table", "label": "Replay Table", "description": "Advances recorded observations without exposing the future.", "layout": { "zone": "west", "order": 1 } },
+    { "id": "fixture.bell", "label": "Bell", "description": "Makes a crossed attention boundary visible.", "layout": { "zone": "ceiling", "order": 1 } },
+    { "id": "fixture.helm", "label": "Helm", "description": "A place for later resident judgment; no execution authority is implied.", "layout": { "zone": "south", "order": 1 } }
+  ]
+}

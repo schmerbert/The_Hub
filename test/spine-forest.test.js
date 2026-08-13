@@ -64,18 +64,18 @@ test('Forest append-only triggers refuse update and delete on every custody tabl
     const second = forest.ingestEvent(event('e2', 'two', 'resident', '2026-08-05T00:00:01.000Z'), { predecessorSourceEventId: 'e1' });
     forest.linkPresentation({ entryId: first.entryId, requestRecordId: 'request-1', messageOrdinal: 1, providerRole: 'user', contentHash: first.entryId ? forest.sqlite.prepare('SELECT body_hash FROM forest_entries WHERE entry_id=?').get(first.entryId).body_hash : '' });
     forest.linkEmission({ entryId: second.entryId, requestRecordId: 'request-1' });
-    for (const table of ['forest_metadata', 'forest_entries', 'scrub_receipts', 'forest_edges', 'presentation_links', 'emission_links']) {
+    for (const table of ['forest_metadata', 'forest_entries', 'scrub_receipts', 'forest_edges', 'presentation_links', 'emission_links', 'forest_intake_offers', 'forest_intake_decisions']) {
       assert.ok(forest.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name=?").get(`${table}_append_only_update`));
       assert.ok(forest.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name=?").get(`${table}_append_only_delete`));
     }
     const updates = {
       forest_metadata: 'schema_version=schema_version', forest_entries: 'body=body', scrub_receipts: 'changed=changed', forest_edges: 'edge_type=edge_type',
-      presentation_links: 'message_ordinal=message_ordinal', emission_links: 'request_record_id=request_record_id',
+      presentation_links: 'message_ordinal=message_ordinal', emission_links: 'request_record_id=request_record_id', forest_intake_offers: 'source_hash=source_hash', forest_intake_decisions: 'state=state',
     };
     for (const table of Object.keys(updates)) assert.throws(() => forest.sqlite.prepare(`UPDATE ${table} SET ${updates[table]}`).run(), /append-only/);
     const deletes = {
       forest_metadata: 'metadata_id=1', forest_entries: `entry_id='${first.entryId}'`, scrub_receipts: `receipt_id=(SELECT scrub_receipt_id FROM forest_entries WHERE entry_id='${first.entryId}')`,
-      forest_edges: `edge_id=(SELECT edge_id FROM forest_edges LIMIT 1)`, presentation_links: `link_id=(SELECT link_id FROM presentation_links LIMIT 1)`, emission_links: `link_id=(SELECT link_id FROM emission_links LIMIT 1)`,
+      forest_edges: `edge_id=(SELECT edge_id FROM forest_edges LIMIT 1)`, presentation_links: `link_id=(SELECT link_id FROM presentation_links LIMIT 1)`, emission_links: `link_id=(SELECT link_id FROM emission_links LIMIT 1)`, forest_intake_offers: `offer_id=(SELECT offer_id FROM forest_intake_offers LIMIT 1)`, forest_intake_decisions: `decision_id=(SELECT decision_id FROM forest_intake_decisions LIMIT 1)`,
     };
     for (const table of Object.keys(deletes)) assert.throws(() => forest.sqlite.prepare(`DELETE FROM ${table} WHERE ${deletes[table]}`).run(), /append-only/);
   } finally { forest.close(); await rm(dir, { recursive: true, force: true }); }
@@ -286,8 +286,10 @@ test('Forest intake refuses missing or incorrect immediate predecessors, includi
   try {
     forest.ingestEvent(event('root', 'root'), { predecessorSourceEventId: null });
     assert.throws(() => forest.ingestEvent(event('child', 'child', 'resident', '2026-08-05T00:00:01.000Z'), { predecessorSourceEventId: 'missing' }), /predecessor/);
-    assert.equal(forest.count(), 1);
+    assert.equal(forest.count(), 1); assert.equal(forest.intakeStatus().held, 1); assert.equal(forest.listIntakeHolds()[0].decision_predecessor_source_id, 'missing');
+    assert.equal(forest.sqlite.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('forest_intake_offers') WHERE name IN ('body','content','text')").get().count, 0);
     forest.ingestEvent(event('child', 'child', 'resident', '2026-08-05T00:00:01.000Z'), { predecessorSourceEventId: 'root' });
+    assert.equal(forest.intakeStatus().held, 0); const repaired = forest.sqlite.prepare("SELECT * FROM forest_intake_decisions WHERE offer_id=(SELECT offer_id FROM forest_intake_offers WHERE source_id='child') ORDER BY revision").all(); assert.deepEqual(repaired.map(row => row.state), ['held','admitted']); assert.equal(repaired[1].predecessor_source_id, 'root');
     assert.throws(() => forest.ingestEvent(event('child', 'child', 'resident', '2026-08-05T00:00:01.000Z'), { predecessorSourceEventId: null }), /predecessor/);
   } finally { forest.close(); await rm(dir, { recursive: true, force: true }); }
 });
@@ -356,7 +358,7 @@ test('health exposes bounded Forest custody state and post-response intake failu
   const upstream = createServer(async (request, response) => { let raw = ''; for await (const chunk of request) raw += chunk; const body = JSON.parse(raw); const payload = body.tool_choice ? { id: 'o', model: 'm', choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'health-hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] } : { id: 'r', model: 'm', choices: [{ message: { role: 'assistant', content: 'resident' }, finish_reason: 'stop' }] }; response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify(payload)); }); await new Promise(resolve => upstream.listen(0, resolve));
   const hub = createHub({ env: { HUB_RESIDENT_MODE: 'live', DEEPSEEK_API_KEY: 'secret', DEEPSEEK_BASE_URL: `http://127.0.0.1:${upstream.address().port}` }, ...paths, activateForest: true, forest: failingForest }); await new Promise(resolve => hub.server.listen(0, resolve));
   try {
-    const initial = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/health`); const initialBody = await initial.json(); assert.equal(initialBody.forestActive, true); assert.equal(initialBody.forestCaughtUp, true); assert.equal(initialBody.forestIntegrity, 'ok'); assert.equal(initialBody.forestErrorCode, null);
+    const initial = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/health`); const initialBody = await initial.json(); assert.equal(initialBody.forestActive, true); assert.equal(initialBody.forestCaughtUp, true); assert.equal(initialBody.forestIntegrity, 'ok'); assert.equal(initialBody.forestErrorCode, null); assert.equal(initialBody.forestWildCount, 0);
     const response = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/wakes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'intake failure' }) }); const body = await response.json();
     assert.equal(response.status, 503); assert.equal(body.status, 'committed'); assert.equal(body.custodyFailureCode, 'forest_intake_failed'); assert.match(body.events.at(-1).content, /resident intake/);
     const health = await fetch(`http://127.0.0.1:${hub.server.address().port}/api/health`); const healthBody = await health.json(); assert.equal(healthBody.ok, false); assert.equal(healthBody.forestActive, true); assert.equal(healthBody.forestCaughtUp, false); assert.equal(healthBody.forestIntegrity, 'error'); assert.equal(healthBody.forestErrorCode, 'forest_integrity_error'); assert.doesNotMatch(JSON.stringify(healthBody), /resident intake|secret/);

@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { sha256 } from '../core/hash.js';
+import { canonicalize, sha256 } from '../core/hash.js';
 import { readSpineFrames } from '../spine/store.js';
 import { metadataForEvent } from './admission.js';
 import { APPEND_ONLY_TABLES } from './store.js';
 
-export function verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection = true } = {}) {
+export function verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection = true, strictWildBijection = true } = {}) {
   if (!forestPath || !existsSync(forestPath)) throw new Error('Forest database is missing.');
   const forest = new DatabaseSync(forestPath, { readOnly: true });
   const op = new DatabaseSync(operationalPath, { readOnly: true });
@@ -96,11 +96,13 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
         const links = presentationsByRequest.get(frame.record_id) || [];
         const lifecycle = lifecycleByRequest.get(frame.record_id);
         if (!lifecycle.dispatched) { if (links.length) throw new Error(`Prepared-only request ${frame.record_id} cannot have presentation links.`); continue; }
-        if (links.length !== expected.length) throw new Error(`Presentation link set is incomplete for request ${frame.record_id}.`);
+        const required = expected.filter(item => entryBySource.get(item.sourceEventId)?.spine_status === 'live');
+        if (links.length < required.length || links.length > expected.length) throw new Error(`Presentation link set is incomplete for request ${frame.record_id}.`);
         const linkByEntry = new Map(links.map(link => [link.entry_id, link]));
         for (const item of expected) {
           const entry = entryBySource.get(item.sourceEventId); const link = entry && linkByEntry.get(entry.entry_id);
-          if (!entry || !link || link.message_ordinal !== item.ordinal || link.provider_role !== request.messages[item.ordinal - 1].role || link.content_hash !== sha256(request.messages[item.ordinal - 1].content) || link.content_hash !== entry.body_hash) throw new Error(`Presentation truth failed for request ${frame.record_id}.`);
+          if (!entry) { if (strictBijection) throw new Error(`Presentation truth failed for request ${frame.record_id}.`); continue; }
+          if ((entry.spine_status === 'live' && !link) || (link && (link.message_ordinal !== item.ordinal || link.provider_role !== request.messages[item.ordinal - 1].role || link.content_hash !== sha256(request.messages[item.ordinal - 1].content) || link.content_hash !== entry.body_hash))) throw new Error(`Presentation truth failed for request ${frame.record_id}.`);
         }
         if (links.some(link => !expected.some(item => entryBySource.get(item.sourceEventId)?.entry_id === link.entry_id))) throw new Error(`Presentation link set has extras for request ${frame.record_id}.`);
         continue;
@@ -116,11 +118,13 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
         if (links.length) throw new Error(`Prepared-only request ${frame.record_id} cannot have presentation links.`);
         continue;
       }
-      if (links.length !== expected.length) throw new Error(`Presentation link set is incomplete for request ${frame.record_id}.`);
+      const required = expected.filter(({ item }) => entryBySource.get(item.sourceEventId)?.spine_status === 'live');
+      if (links.length < required.length || links.length > expected.length) throw new Error(`Presentation link set is incomplete for request ${frame.record_id}.`);
       const linkByEntry = new Map(links.map(link => [link.entry_id, link]));
       for (const { item, ordinal } of expected) {
         const entry = entryBySource.get(item.sourceEventId); const link = entry && linkByEntry.get(entry.entry_id);
-        if (!entry || !link || link.message_ordinal !== ordinal || link.provider_role !== request.messages[ordinal - 1].role || link.content_hash !== sha256(request.messages[ordinal - 1].content) || link.content_hash !== entry.body_hash) throw new Error(`Presentation truth failed for request ${frame.record_id}.`);
+        if (!entry) { if (strictBijection) throw new Error(`Presentation truth failed for request ${frame.record_id}.`); continue; }
+        if ((entry.spine_status === 'live' && !link) || (link && (link.message_ordinal !== ordinal || link.provider_role !== request.messages[ordinal - 1].role || link.content_hash !== sha256(request.messages[ordinal - 1].content) || link.content_hash !== entry.body_hash))) throw new Error(`Presentation truth failed for request ${frame.record_id}.`);
       }
       if (links.some(link => !expected.some(({ item }) => entryBySource.get(item.sourceEventId)?.entry_id === link.entry_id))) throw new Error(`Presentation link set has extras for request ${frame.record_id}.`);
     }
@@ -170,13 +174,21 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       if (residents.length > 1) throw new Error(`Wake ${frame.wake_id} has multiple resident emissions.`);
       if (lifecycle.outcome?.kind === 'success' && residents.length !== 1) throw new Error(`Successful provider outcome lacks exactly one resident emission for wake ${frame.wake_id}.`);
       if (residents.length && lifecycle.outcome?.kind !== 'success') throw new Error(`Resident emission lacks a successful provider outcome for wake ${frame.wake_id}.`);
-      if (residents.length === 1 && (emissionsByEntry.get(entryBySource.get(residents[0].id)?.entry_id) !== 1 || emissionLinksByRequest.get(frame.record_id)?.length !== 1)) throw new Error(`Resident emission link is missing for wake ${frame.wake_id}.`);
+      if (residents.length === 1) {
+        const residentEntry = entryBySource.get(residents[0].id);
+        const emissionCount = emissionsByEntry.get(residentEntry?.entry_id) || 0;
+        const requestEmissionCount = emissionLinksByRequest.get(frame.record_id)?.length || 0;
+        if ((!residentEntry && strictBijection) || (residentEntry?.spine_status === 'live' && (emissionCount !== 1 || requestEmissionCount !== 1)) || emissionCount > 1 || requestEmissionCount > 1) throw new Error(`Resident emission link is missing for wake ${frame.wake_id}.`);
+      }
       if (lifecycle.outcome && lifecycle.outcome.kind !== 'success' && residents.length) throw new Error(`Failed provider outcome has a resident emission for wake ${frame.wake_id}.`);
     }
     const wildTable = forest.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wild_entries'").get();
     let wildCount = 0;
+    let eligibleWildCount = null;
+    let wildEntries = [];
     if (wildTable) {
       const wild = forest.prepare('SELECT * FROM wild_entries ORDER BY created_at,entry_id').all();
+      wildEntries = wild;
       if (wild.length) {
         if (!worldPath || !existsSync(worldPath)) throw new Error('Wild workshop custody exists but its World Graph path was not provided.');
         world = new DatabaseSync(worldPath, { readOnly: true });
@@ -211,8 +223,71 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
           unmatched.splice(index, 1);
         }
       }
+      if (strictWildBijection && worldPath && existsSync(worldPath)) {
+        if (!world) world = new DatabaseSync(worldPath, { readOnly: true });
+        const actions = world.prepare("SELECT * FROM world_action_receipts WHERE outcome='committed' AND tool_name IN ('workshop_read','workshop_search') AND request_record_id IS NOT NULL AND spine_record_id IS NOT NULL ORDER BY created_at,receipt_id").all();
+        const expectedKeys = new Set();
+        for (const action of actions) {
+          let result;
+          try { result = JSON.parse(action.result_json); } catch { throw new Error(`World action result is not valid JSON for ${action.receipt_id}.`); }
+          const expected = action.tool_name === 'workshop_read'
+            ? [{ path: result.source?.path, startLine: result.source?.startLine, endLine: result.source?.endLine, text: result.source?.text, hash: result.source?.hash }]
+            : (Array.isArray(result.matches) ? result.matches.map(match => ({ path: match.path, startLine: match.line, endLine: match.line, text: match.text, hash: match.hash })) : null);
+          if (!expected || result.kind !== action.tool_name || expected.some(item => !item.path || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine) || typeof item.text !== 'string' || item.hash !== sha256(item.text))) throw new Error(`World action source result is not exact for ${action.receipt_id}.`);
+          for (const item of expected) expectedKeys.add(`${action.receipt_id}\0${item.path}\0${item.startLine}\0${item.endLine}\0${item.hash}`);
+        }
+        const actualKeys = new Set(wild.map(entry => `${entry.action_receipt_id}\0${entry.repository_path}\0${entry.start_line}\0${entry.end_line}\0${entry.body_hash}`));
+        eligibleWildCount = expectedKeys.size;
+        const missing = [...expectedKeys].filter(key => !actualKeys.has(key));
+        const extra = [...actualKeys].filter(key => !expectedKeys.has(key));
+        if (missing.length || extra.length || actualKeys.size !== expectedKeys.size) throw new Error(`Forest Wild source bijection failed (${missing.length} missing, ${extra.length} extra).`);
+      }
       wildCount = wild.length;
     }
-    return { ok: true, entryCount: entries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length, wildCount };
+    const offers = forest.prepare('SELECT * FROM forest_intake_offers ORDER BY offer_id').all();
+    const decisions = forest.prepare('SELECT * FROM forest_intake_decisions ORDER BY offer_id,revision').all();
+    const offersById = new Map(offers.map(offer => [offer.offer_id, offer]));
+    const decisionsByOffer = new Map();
+    for (const decision of decisions) {
+      if (!offersById.has(decision.offer_id)) throw new Error('Forest Intake Ledger contains an orphan decision.');
+      if (!decisionsByOffer.has(decision.offer_id)) decisionsByOffer.set(decision.offer_id, []);
+      decisionsByOffer.get(decision.offer_id).push(decision);
+    }
+    const latestByOffer = new Map();
+    for (const [offerId, history] of decisionsByOffer) {
+      for (let index = 0; index < history.length; index++) {
+        const decision = history[index];
+        if (decision.revision !== index + 1) throw new Error(`Forest Intake Ledger revision chain is invalid for ${offerId}.`);
+        if (decision.state === 'admitted' && (!decision.destination_entry_id || decision.reason_code || decision.reason_detail)) throw new Error(`Forest admitted decision is malformed for ${offerId}.`);
+        if (decision.state !== 'admitted' && decision.destination_entry_id) throw new Error(`Forest non-admitted decision claims a destination for ${offerId}.`);
+        if (index < history.length - 1 && ['admitted','routed','superseded','permanently_refused'].includes(decision.state)) throw new Error(`Forest Intake Ledger continues after a terminal decision for ${offerId}.`);
+      }
+      latestByOffer.set(offerId, history.at(-1));
+    }
+    const expectedOfferIds = new Set();
+    for (const entry of entries) {
+      const edge = edgeByFrom.get(entry.entry_id);
+      const predecessorSourceId = edge ? entries.find(candidate => candidate.entry_id === edge.to_entry_id)?.source_event_id || null : null;
+      const locator = { threadId: entry.thread_id, wakeId: entry.wake_id || null, actorKind: entry.actor_kind };
+      const offerId = `intake_${sha256(canonicalize({ sourceKind: 'source_event', sourceId: entry.source_event_id, sourceLocator: locator }))}`;
+      expectedOfferIds.add(offerId);
+      const offer = offersById.get(offerId); const latest = latestByOffer.get(offerId);
+      if (!offer || offer.source_kind !== 'source_event' || offer.source_id !== entry.source_event_id || offer.source_locator_json !== canonicalize(locator) || offer.source_hash !== entry.source_event_hash || offer.intended_jurisdiction !== 'home' || offer.intended_bucket !== 'utterance' || offer.predecessor_source_id || offer.source_timestamp !== entry.source_timestamp || offer.scrub_policy !== entry.scrub_policy || offer.scrub_version !== entry.scrub_version || latest?.state !== 'admitted' || (latest.predecessor_source_id || null) !== predecessorSourceId || latest.destination_entry_id !== entry.entry_id) throw new Error(`Forest Home intake custody mismatch for ${entry.entry_id}.`);
+    }
+    for (const entry of wildEntries) {
+      const locator = { path: entry.repository_path, startLine: entry.start_line, endLine: entry.end_line };
+      const offerId = `intake_${sha256(canonicalize({ sourceKind: 'world_action_span', sourceId: entry.action_receipt_id, sourceLocator: locator }))}`;
+      expectedOfferIds.add(offerId);
+      const offer = offersById.get(offerId); const latest = latestByOffer.get(offerId);
+      if (!offer || offer.source_kind !== 'world_action_span' || offer.source_id !== entry.action_receipt_id || offer.source_locator_json !== canonicalize(locator) || offer.source_hash !== entry.body_hash || offer.intended_jurisdiction !== 'wild' || offer.intended_bucket !== 'workshop_source' || offer.predecessor_source_id || offer.source_timestamp || offer.scrub_policy !== 'workshop_exact_source' || offer.scrub_version !== 'v1' || latest?.state !== 'admitted' || latest.predecessor_source_id || latest.destination_entry_id !== entry.entry_id) throw new Error(`Forest Wild intake custody mismatch for ${entry.entry_id}.`);
+    }
+    for (const offer of offers) {
+      const latest = latestByOffer.get(offer.offer_id);
+      if (!latest) continue;
+      if (latest.state === 'admitted' && !expectedOfferIds.has(offer.offer_id)) throw new Error(`Forest Intake Ledger admits an unknown destination for ${offer.offer_id}.`);
+    }
+    const intakeHeldCount = [...latestByOffer.values()].filter(decision => decision.state === 'held').length;
+    const intakeUnresolvedCount = offers.filter(offer => !latestByOffer.has(offer.offer_id)).length;
+    return { ok: true, entryCount: entries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length, wildCount, eligibleWildCount, intakeOfferCount: offers.length, intakeHeldCount, intakeUnresolvedCount };
   } finally { world?.close(); forest.close(); op.close(); }
 }

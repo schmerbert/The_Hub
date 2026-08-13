@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { byteLength, id, sha256 } from '../core/hash.js';
+import { byteLength, canonicalize, id, sha256 } from '../core/hash.js';
 import { identityScrubV1, metadataForEvent, normalizeAdmissionEvent, verifyAdmissionScrub } from './admission.js';
 
-export const APPEND_ONLY_TABLES = ['forest_metadata', 'scrub_receipts', 'forest_entries', 'forest_edges', 'presentation_links', 'emission_links'];
+export const APPEND_ONLY_TABLES = ['forest_metadata', 'scrub_receipts', 'forest_entries', 'forest_edges', 'presentation_links', 'emission_links', 'forest_intake_offers', 'forest_intake_decisions'];
 export const WILD_TABLES = ['wild_entries'];
 
 const SCHEMA = `
@@ -73,7 +73,35 @@ CREATE TABLE IF NOT EXISTS emission_links (
   created_at TEXT NOT NULL,
   UNIQUE(entry_id)
 );
+CREATE TABLE IF NOT EXISTS forest_intake_offers (
+  offer_id TEXT PRIMARY KEY CHECK(length(offer_id)>0),
+  source_kind TEXT NOT NULL CHECK(source_kind IN ('source_event','world_action_span')),
+  source_id TEXT NOT NULL CHECK(length(source_id)>0),
+  source_locator_json TEXT NOT NULL CHECK(length(source_locator_json)>0),
+  source_hash TEXT NOT NULL CHECK(length(source_hash)=64),
+  intended_jurisdiction TEXT NOT NULL CHECK(intended_jurisdiction IN ('home','wild','vault')),
+  intended_bucket TEXT NOT NULL CHECK(length(intended_bucket)>0),
+  predecessor_source_id TEXT,
+  source_timestamp TEXT,
+  scrub_policy TEXT NOT NULL CHECK(length(scrub_policy)>0),
+  scrub_version TEXT NOT NULL CHECK(length(scrub_version)>0),
+  offered_at TEXT NOT NULL,
+  UNIQUE(source_kind,source_id,source_locator_json)
+);
+CREATE TABLE IF NOT EXISTS forest_intake_decisions (
+  decision_id TEXT PRIMARY KEY CHECK(length(decision_id)>0),
+  offer_id TEXT NOT NULL REFERENCES forest_intake_offers(offer_id),
+  revision INTEGER NOT NULL CHECK(revision>0),
+  state TEXT NOT NULL CHECK(state IN ('admitted','held','routed','superseded','permanently_refused')),
+  reason_code TEXT,
+  reason_detail TEXT,
+  predecessor_source_id TEXT,
+  destination_entry_id TEXT,
+  decided_at TEXT NOT NULL,
+  UNIQUE(offer_id,revision)
+);
 CREATE INDEX IF NOT EXISTS forest_entries_thread_order ON forest_entries(thread_id, source_timestamp, source_event_id);
+CREATE INDEX IF NOT EXISTS forest_intake_decisions_offer_order ON forest_intake_decisions(offer_id,revision);
 ${APPEND_ONLY_TABLES.map(table => `
 CREATE TRIGGER IF NOT EXISTS ${table}_append_only_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS ${table}_append_only_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`).join('\n')}`;
@@ -102,6 +130,7 @@ CREATE TABLE IF NOT EXISTS wild_entries (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS wild_entries_source_order ON wild_entries(repository_path,start_line,entry_id);
+CREATE UNIQUE INDEX IF NOT EXISTS wild_entries_source_identity ON wild_entries(action_receipt_id,repository_path,start_line,end_line);
 CREATE TRIGGER IF NOT EXISTS wild_metadata_append_only_update BEFORE UPDATE ON wild_metadata BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS wild_metadata_append_only_delete BEFORE DELETE ON wild_metadata BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS wild_entries_append_only_update BEFORE UPDATE ON wild_entries BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
@@ -111,6 +140,11 @@ function custodyConflict(message) { return Object.assign(new Error(message), { c
 function predecessorConflict(message) { return Object.assign(new Error(message), { code: 'forest_predecessor_conflict' }); }
 function now() { return new Date().toISOString(); }
 function ensureWildMetadata(sqlite) { sqlite.prepare("INSERT OR IGNORE INTO wild_metadata(metadata_id, schema_name, schema_version, created_at) VALUES(1, 'forest_wild', 1, ?)").run(now()); }
+function boundedReason(error) {
+  const code = typeof error?.code === 'string' && error.code ? error.code : 'forest_intake_refused';
+  const detail = String(error?.message || 'Forest intake refused.').slice(0, 512);
+  return { code, detail };
+}
 
 function eventMatches(row, event, sourceHash, bodyHash) {
   return row.source_event_hash === sourceHash && row.body_hash === bodyHash && row.source_timestamp === event.createdAt && row.actor_kind === event.actorKind && row.signature === `actor:${event.actorKind}` && row.thread_id === event.threadId && (row.wake_id || null) === (event.wakeId || null) && row.source_authority === event.authority && row.scrub_policy === 'utterance_identity' && row.scrub_version === 'v1' && row.metadata_json === metadataForEvent(event);
@@ -166,32 +200,84 @@ export class ForestStore {
     catch (error) { try { this.sqlite.exec('ROLLBACK'); } catch {} throw error; }
   }
 
+  ensureIntakeOffer({ sourceKind, sourceId, sourceLocator, sourceHash, intendedJurisdiction, intendedBucket, predecessorSourceId = null, sourceTimestamp = null, scrubPolicy, scrubVersion, offeredAt = now() }) {
+    const locatorJson = canonicalize(sourceLocator || {});
+    const offerId = `intake_${sha256(canonicalize({ sourceKind, sourceId, sourceLocator: sourceLocator || {} }))}`;
+    const existing = this.sqlite.prepare('SELECT * FROM forest_intake_offers WHERE offer_id=?').get(offerId);
+    if (existing) {
+      if (existing.source_kind !== sourceKind || existing.source_id !== sourceId || existing.source_locator_json !== locatorJson || existing.source_hash !== sourceHash || existing.intended_jurisdiction !== intendedJurisdiction || existing.intended_bucket !== intendedBucket || (existing.source_timestamp || null) !== (sourceTimestamp || null) || existing.scrub_policy !== scrubPolicy || existing.scrub_version !== scrubVersion) throw custodyConflict('Forest intake offer has conflicting Forest custody.');
+      return { offerId, existing: true };
+    }
+    this.sqlite.prepare(`INSERT INTO forest_intake_offers
+      (offer_id,source_kind,source_id,source_locator_json,source_hash,intended_jurisdiction,intended_bucket,predecessor_source_id,source_timestamp,scrub_policy,scrub_version,offered_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(offerId,sourceKind,sourceId,locatorJson,sourceHash,intendedJurisdiction,intendedBucket,null,sourceTimestamp,scrubPolicy,scrubVersion,offeredAt);
+    return { offerId, existing: false };
+  }
+
+  intakeDecision(offerId) {
+    return this.sqlite.prepare('SELECT * FROM forest_intake_decisions WHERE offer_id=? ORDER BY revision DESC LIMIT 1').get(offerId) || null;
+  }
+
+  appendIntakeDecision({ offerId, state, reasonCode = null, reasonDetail = null, predecessorSourceId = null, destinationEntryId = null, decidedAt = now() }) {
+    if (!['admitted','held','routed','superseded','permanently_refused'].includes(state)) throw new Error('Forest intake decision state is invalid.');
+    const current = this.intakeDecision(offerId);
+    if (current?.state === 'admitted') {
+      if (state === 'admitted' && current.destination_entry_id === destinationEntryId && (current.predecessor_source_id || null) === (predecessorSourceId || null)) return { ...current, existing: true };
+      throw custodyConflict('An admitted Forest intake offer is terminal.');
+    }
+    if (current && ['routed','superseded','permanently_refused'].includes(current.state)) {
+      if (current.state === state && current.destination_entry_id === destinationEntryId && (current.predecessor_source_id || null) === (predecessorSourceId || null)) return { ...current, existing: true };
+      throw custodyConflict('A resolved Forest intake offer is terminal.');
+    }
+    const cleanDetail = reasonDetail === null ? null : String(reasonDetail).slice(0, 512);
+    if (current?.state === state && current.reason_code === reasonCode && current.reason_detail === cleanDetail && (current.predecessor_source_id || null) === (predecessorSourceId || null) && (current.destination_entry_id || null) === (destinationEntryId || null)) return { ...current, existing: true };
+    const revision = (current?.revision || 0) + 1;
+    const decisionId = id('intake_decision');
+    this.sqlite.prepare(`INSERT INTO forest_intake_decisions(decision_id,offer_id,revision,state,reason_code,reason_detail,predecessor_source_id,destination_entry_id,decided_at)
+      VALUES(?,?,?,?,?,?,?,?,?)`).run(decisionId,offerId,revision,state,reasonCode,cleanDetail,predecessorSourceId,destinationEntryId,decidedAt);
+    return { decisionId, offerId, revision, state, existing: false };
+  }
+
+  holdIntake(offerId, error, predecessorSourceId = null) {
+    const reason = boundedReason(error);
+    return this.transaction(() => this.appendIntakeDecision({ offerId, state: 'held', reasonCode: reason.code, reasonDetail: reason.detail, predecessorSourceId }));
+  }
+
   ingestEvent(rawEvent, { scrub = identityScrubV1, spineStatus = 'live', predecessorSourceEventId } = {}) {
     const event = normalizeAdmissionEvent(rawEvent);
-    const scrubbed = scrub(event.content);
-    const { inputHash, outputHash } = verifyAdmissionScrub(event, scrubbed);
-    const predecessor = expectedPredecessor(this, event, predecessorSourceEventId);
-    const existing = this.sqlite.prepare('SELECT * FROM forest_entries WHERE source_event_id=?').get(event.id);
-    if (existing) {
-      if (!eventMatches(existing, event, inputHash, outputHash)) throw custodyConflict(`Source event ${event.id} has conflicting Forest custody.`);
-      verifyExistingEdge(this, existing.entry_id, predecessorSourceEventId);
-      return { ...existing, entryId: existing.entry_id, existing: true };
+    const sourceHash = sha256(event.content);
+    const { offerId } = this.ensureIntakeOffer({ sourceKind: 'source_event', sourceId: event.id, sourceLocator: { threadId: event.threadId, wakeId: event.wakeId || null, actorKind: event.actorKind }, sourceHash, intendedJurisdiction: 'home', intendedBucket: 'utterance', predecessorSourceId: predecessorSourceEventId || null, sourceTimestamp: event.createdAt, scrubPolicy: 'utterance_identity', scrubVersion: 'v1' });
+    try {
+      const scrubbed = scrub(event.content);
+      const { inputHash, outputHash } = verifyAdmissionScrub(event, scrubbed);
+      const predecessor = expectedPredecessor(this, event, predecessorSourceEventId);
+      const existing = this.sqlite.prepare('SELECT * FROM forest_entries WHERE source_event_id=?').get(event.id);
+      if (existing) {
+        if (!eventMatches(existing, event, inputHash, outputHash)) throw custodyConflict(`Source event ${event.id} has conflicting Forest custody.`);
+        verifyExistingEdge(this, existing.entry_id, predecessorSourceEventId);
+        this.transaction(() => this.appendIntakeDecision({ offerId, state: 'admitted', predecessorSourceId: predecessorSourceEventId || null, destinationEntryId: existing.entry_id, decidedAt: existing.ingested_at }));
+        return { ...existing, entryId: existing.entry_id, existing: true };
+      }
+      const receiptId = id('scrub');
+      const entryId = id('forest');
+      const timestamp = now();
+      const metadataJson = metadataForEvent(event);
+      const sourceStatus = spineStatus === 'pre_spine' ? 'pre_spine' : 'live';
+      return this.transaction(() => {
+        this.sqlite.prepare(`INSERT INTO scrub_receipts
+          (receipt_id, policy_name, policy_version, source_event_id, input_hash, input_byte_length, output_hash, output_byte_length, operations_json, changed, created_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(receiptId, scrubbed.policyName, scrubbed.policyVersion, event.id, inputHash, byteLength(event.content), outputHash, byteLength(scrubbed.body), JSON.stringify(scrubbed.operations), 0, timestamp);
+        this.sqlite.prepare(`INSERT INTO forest_entries
+          (entry_id, source_event_id, source_event_hash, source_timestamp, thread_id, wake_id, actor_kind, signature, source_authority, jurisdiction, bucket, body, body_hash, scrub_policy, scrub_version, scrub_receipt_id, ingested_at, spine_status, metadata_json)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(entryId, event.id, inputHash, event.createdAt, event.threadId, event.wakeId || null, event.actorKind, `actor:${event.actorKind}`, event.authority, 'home', 'utterance', scrubbed.body, outputHash, scrubbed.policyName, scrubbed.policyVersion, receiptId, timestamp, sourceStatus, metadataJson);
+        if (predecessor) this.sqlite.prepare(`INSERT INTO forest_edges(edge_id, edge_type, from_entry_id, to_entry_id, created_at) VALUES(?,?,?,?,?)`).run(id('edge'), 'responds_to', entryId, predecessor.entry_id, timestamp);
+        this.appendIntakeDecision({ offerId, state: 'admitted', predecessorSourceId: predecessorSourceEventId || null, destinationEntryId: entryId, decidedAt: timestamp });
+        return { entryId, sourceEventId: event.id, offerId, existing: false };
+      });
+    } catch (error) {
+      try { this.holdIntake(offerId, error, predecessorSourceEventId || null); } catch {}
+      throw error;
     }
-    const receiptId = id('scrub');
-    const entryId = id('forest');
-    const timestamp = now();
-    const metadataJson = metadataForEvent(event);
-    const sourceStatus = spineStatus === 'pre_spine' ? 'pre_spine' : 'live';
-    return this.transaction(() => {
-      this.sqlite.prepare(`INSERT INTO scrub_receipts
-        (receipt_id, policy_name, policy_version, source_event_id, input_hash, input_byte_length, output_hash, output_byte_length, operations_json, changed, created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(receiptId, scrubbed.policyName, scrubbed.policyVersion, event.id, inputHash, byteLength(event.content), outputHash, byteLength(scrubbed.body), JSON.stringify(scrubbed.operations), 0, timestamp);
-      this.sqlite.prepare(`INSERT INTO forest_entries
-        (entry_id, source_event_id, source_event_hash, source_timestamp, thread_id, wake_id, actor_kind, signature, source_authority, jurisdiction, bucket, body, body_hash, scrub_policy, scrub_version, scrub_receipt_id, ingested_at, spine_status, metadata_json)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(entryId, event.id, inputHash, event.createdAt, event.threadId, event.wakeId || null, event.actorKind, `actor:${event.actorKind}`, event.authority, 'home', 'utterance', scrubbed.body, outputHash, scrubbed.policyName, scrubbed.policyVersion, receiptId, timestamp, sourceStatus, metadataJson);
-      if (predecessor) this.sqlite.prepare(`INSERT INTO forest_edges(edge_id, edge_type, from_entry_id, to_entry_id, created_at) VALUES(?,?,?,?,?)`).run(id('edge'), 'responds_to', entryId, predecessor.entry_id, timestamp);
-      return { entryId, sourceEventId: event.id, existing: false };
-    });
   }
 
   ingestUtterance(event, options) { return this.ingestEvent(event, options); }
@@ -235,18 +321,53 @@ export class ForestStore {
     if (!source || !['workshop_read', 'workshop_search'].includes(sourceKind) || typeof actionReceiptId !== 'string') throw new Error('Workshop Wild admission requires exact source custody.');
     const rows = sourceKind === 'workshop_read' ? [source] : (source.matches || []).map(match => ({ path: match.path, startLine: match.line, endLine: match.line, text: match.text, hash: match.hash, byteLength: Buffer.byteLength(match.text, 'utf8') }));
     if (!rows.length) return [];
-    return this.transaction(() => rows.map(item => {
-      if (!item.path || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine) || typeof item.text !== 'string' || item.hash !== sha256(item.text)) throw new Error('Workshop Wild source is not an exact span.');
-      const entryId = id('wild');
-      this.sqlite.prepare(`INSERT INTO wild_entries(entry_id,jurisdiction,bucket,source_kind,repository_path,start_line,end_line,body,body_hash,action_receipt_id,spine_record_id,request_record_id,metadata_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(entryId,'wild','workshop_source',sourceKind,item.path,item.startLine,item.endLine,item.text,item.hash,actionReceiptId,spineRecordId,requestRecordId,JSON.stringify({ exact: true, sourceHash: item.hash, byteLength: item.byteLength }),now());
-      return { entryId, path: item.path, startLine: item.startLine, endLine: item.endLine, bodyHash: item.hash };
+    const checked = rows.map(item => {
+      if (!item.path || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine) || typeof item.text !== 'string') throw new Error('Workshop Wild source lacks a stable locator.');
+      const sourceHash = sha256(item.text);
+      const { offerId } = this.ensureIntakeOffer({ sourceKind: 'world_action_span', sourceId: actionReceiptId, sourceLocator: { path: item.path, startLine: item.startLine, endLine: item.endLine }, sourceHash, intendedJurisdiction: 'wild', intendedBucket: 'workshop_source', sourceTimestamp: null, scrubPolicy: 'workshop_exact_source', scrubVersion: 'v1' });
+      if (item.hash !== sourceHash) {
+        const error = new Error('Workshop Wild source is not an exact span.');
+        try { this.holdIntake(offerId, error); } catch {}
+        throw error;
+      }
+      const existing = this.sqlite.prepare(`SELECT * FROM wild_entries
+        WHERE action_receipt_id=? AND repository_path=? AND start_line=? AND end_line=?`).get(actionReceiptId,item.path,item.startLine,item.endLine);
+      if (existing && (existing.source_kind !== sourceKind || existing.body !== item.text || existing.body_hash !== item.hash || existing.spine_record_id !== spineRecordId || existing.request_record_id !== requestRecordId)) {
+        const error = custodyConflict('Workshop Wild source identity conflicts with existing custody.');
+        try { this.holdIntake(offerId, error); } catch {}
+        throw error;
+      }
+      return { item, existing, offerId };
+    });
+    return this.transaction(() => checked.map(({ item, existing, offerId }) => {
+      if (existing) {
+        this.appendIntakeDecision({ offerId, state: 'admitted', destinationEntryId: existing.entry_id, decidedAt: existing.created_at });
+        return { entryId: existing.entry_id, offerId, path: existing.repository_path, startLine: existing.start_line, endLine: existing.end_line, bodyHash: existing.body_hash, existing: true };
+      }
+      const entryId = `wild_${sha256(canonicalize({ actionReceiptId, path: item.path, startLine: item.startLine, endLine: item.endLine }))}`;
+      const timestamp = now();
+      this.sqlite.prepare(`INSERT INTO wild_entries(entry_id,jurisdiction,bucket,source_kind,repository_path,start_line,end_line,body,body_hash,action_receipt_id,spine_record_id,request_record_id,metadata_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(entryId,'wild','workshop_source',sourceKind,item.path,item.startLine,item.endLine,item.text,item.hash,actionReceiptId,spineRecordId,requestRecordId,JSON.stringify({ exact: true, sourceHash: item.hash, byteLength: item.byteLength }),timestamp);
+      this.appendIntakeDecision({ offerId, state: 'admitted', destinationEntryId: entryId, decidedAt: timestamp });
+      return { entryId, offerId, path: item.path, startLine: item.startLine, endLine: item.endLine, bodyHash: item.hash, existing: false };
     }));
   }
 
   listWildEntries() { return this.sqlite.prepare('SELECT * FROM wild_entries ORDER BY created_at,entry_id').all(); }
 
   listEntries() { return this.sqlite.prepare('SELECT * FROM forest_entries ORDER BY thread_id, source_timestamp, source_event_id').all(); }
+  listIntakeHolds() { return this.sqlite.prepare(`SELECT o.*,d.decision_id,d.revision,d.reason_code,d.reason_detail,d.predecessor_source_id AS decision_predecessor_source_id,d.decided_at
+    FROM forest_intake_offers o JOIN forest_intake_decisions d ON d.offer_id=o.offer_id
+    WHERE d.revision=(SELECT MAX(latest.revision) FROM forest_intake_decisions latest WHERE latest.offer_id=o.offer_id) AND d.state='held'
+    ORDER BY o.source_timestamp,o.offer_id`).all(); }
+  intakeStatus() {
+    const offers = this.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_intake_offers').get().count;
+    const held = this.listIntakeHolds().length;
+    const unresolved = this.sqlite.prepare(`SELECT COUNT(*) AS count FROM forest_intake_offers o
+      WHERE NOT EXISTS(SELECT 1 FROM forest_intake_decisions d WHERE d.offer_id=o.offer_id)`).get().count;
+    return { offers, held, unresolved };
+  }
   count() { return this.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_entries').get().count; }
+  countWild() { return this.sqlite.prepare('SELECT COUNT(*) AS count FROM wild_entries').get().count; }
   verifySchema() {
     const tables = APPEND_ONLY_TABLES;
     for (const table of tables) if (!this.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) throw new Error(`Forest schema is missing ${table}.`);

@@ -283,10 +283,12 @@ test('B1 projection drift blocks every new crossing and wake before receipts or 
   } finally { await new Promise(resolve => hub.server.close(resolve)); await hub.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
-test('copied configured legacy World migrates to B1 while source remains read-only', { skip: !existsSync(join(process.cwd(), '.runtime', 'world.sqlite')) }, async () => {
+test('copied configured legacy World migrates to B1 while source remains read-only', { skip: !existsSync(join(process.cwd(), '.runtime', 'world.sqlite')) }, async context => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-b1-runtime-copy-')); const source = join(process.cwd(), '.runtime', 'world.sqlite'); const copy = join(dir, 'world.sqlite');
   try {
     const sourceDb = new DatabaseSync(source, { readOnly: true });
+    const sourceEventCount = sourceDb.prepare('SELECT COUNT(*) AS count FROM world_event_journal').get().count;
+    if (sourceEventCount !== 2) { sourceDb.close(); context.skip('Configured World is no longer the two-event legacy migration fixture.'); return; }
     const tables = ['world_nodes', 'world_edges', 'world_locations', 'world_fixture_runtime', 'world_timers', 'world_work_briefs', 'world_approvals', 'world_action_receipts', 'world_approval_receipts'];
     const before = Object.fromEntries(tables.map(table => {
       const columns = sourceDb.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name);

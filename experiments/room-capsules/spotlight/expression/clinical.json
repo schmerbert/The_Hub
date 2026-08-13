@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "expressionId": "expression.spotlight.clinical",
+  "room": {
+    "id": "room.spotlight",
+    "label": "Spotlight development shell",
+    "description": "An unfinished room with visible fixture positions, capped sockets, and labeled cable drops."
+  },
+  "fixtures": [
+    { "id": "fixture.present_window", "label": "Present window slot", "description": "Unbound observation surface.", "layout": { "zone": "north", "order": 1 } },
+    { "id": "fixture.past_archive", "label": "Past archive slot", "description": "Unbound comparison surface.", "layout": { "zone": "north", "order": 2 } },
+    { "id": "fixture.packet_table", "label": "Packet table slot", "description": "Unbound evidence surface.", "layout": { "zone": "center", "order": 1 } },
+    { "id": "fixture.replay_table", "label": "Replay table slot", "description": "Unbound recorded-time surface.", "layout": { "zone": "west", "order": 1 } },
+    { "id": "fixture.bell", "label": "Bell slot", "description": "Unbound attention-state surface.", "layout": { "zone": "ceiling", "order": 1 } },
+    { "id": "fixture.helm", "label": "Helm slot", "description": "Unbound resident decision surface.", "layout": { "zone": "south", "order": 1 } }
+  ]
+}

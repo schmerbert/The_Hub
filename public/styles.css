@@ -104,7 +104,8 @@ h2 { margin: 0; font-size: .86rem; font-weight: 600; letter-spacing: .02em; }
 .live-card.card-result { border-left-color: rgba(126, 184, 160, .8); }
 .live-card.card-approval { border-left-color: rgba(215, 131, 114, .8); }
 .live-card-pointer { overflow-wrap: anywhere; color: var(--mint); user-select: text; }
-.wake .slips { margin-top: .15rem; padding: 0; }
+.wake-timeline { padding: .1rem .15rem .25rem; }
+.live-gap .event { margin-top: .2rem; }
 .inspect-button { padding: .35rem .55rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: transparent; font-size: .7rem; }
 .inspect-button:hover { color: var(--text); border-color: rgba(212, 164, 90, .45); }
 .compose { display: grid; grid-template-columns: 1fr auto; gap: .5rem; padding: .75rem 1rem 1rem; border-top: 1px solid var(--line); background: rgba(0, 0, 0, .2); }

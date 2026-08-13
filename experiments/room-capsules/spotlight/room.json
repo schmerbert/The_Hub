@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": "room-capsule.v1",
+  "entrypoint": "src/capsule.js",
+  "identity": {
+    "id": "room.spotlight",
+    "kind": "room",
+    "version": "0.1.0"
+  },
+  "status": {
+    "classification": "experimental",
+    "activation": "inert",
+    "standing": false,
+    "autoInstall": false
+  },
+  "lifecycle": {
+    "current": "discovered",
+    "allowed": ["discovered", "validated", "inspected", "admitted", "wired", "standing", "disabled", "retired"]
+  },
+  "fitOut": {
+    "current": "bare",
+    "allowed": ["bare", "wired", "furnished", "connected"]
+  },
+  "expression": {
+    "current": "expression.spotlight.clinical",
+    "clinicalDefault": "expression/clinical.json",
+    "proposedDefault": "expression/observatory.json",
+    "residentRevision": true
+  },
+  "fixtureSlots": [
+    { "id": "fixture.present_window", "accepts": ["socket.market_observations"] },
+    { "id": "fixture.past_archive", "accepts": ["socket.historical_query"] },
+    { "id": "fixture.packet_table", "accepts": ["socket.packet_custody"] },
+    { "id": "fixture.replay_table", "accepts": ["socket.replay_clock"] },
+    { "id": "fixture.bell", "accepts": ["socket.market_observations"] },
+    { "id": "fixture.helm", "accepts": ["socket.resident_outbox"] }
+  ],
+  "sockets": [
+    { "id": "socket.packet_custody", "capability": "storage.append_only", "requiredFor": ["replay_only"] },
+    { "id": "socket.replay_clock", "capability": "clock.replay", "requiredFor": ["replay_only"] },
+    { "id": "socket.market_observations", "capability": "channel.market_delivery", "requiredFor": ["live_observation"], "optional": true },
+    { "id": "socket.historical_query", "capability": "history.recorded_analogues", "requiredFor": [], "optional": true },
+    { "id": "socket.resident_outbox", "capability": "outbox.resident", "requiredFor": [], "optional": true }
+  ],
+  "modes": {
+    "bare": { "alwaysAvailable": true },
+    "replay_only": { "requires": ["storage.append_only", "clock.replay"] },
+    "live_observation": { "requires": ["channel.market_delivery"], "experimental": true }
+  },
+  "operations": [
+    {
+      "id": "operation.replay_first_marble",
+      "requiredMode": "replay_only",
+      "observationalOnly": true,
+      "externalEffects": false
+    }
+  ],
+  "authority": {
+    "selfAuthorization": false,
+    "financialExecution": false,
+    "externalEffects": false
+  },
+  "resources": {
+    "recordedReplay": "fixtures/recorded-replay.json"
+  }
+}

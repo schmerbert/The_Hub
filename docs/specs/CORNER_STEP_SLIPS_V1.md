@@ -9,7 +9,7 @@
 - The conversation rail contains only user ground and final resident utterances.
 - Slips are neither resident speech nor Forest material. Tool JSON, Hearth Scroll content, and reasoning content do not enter the rail.
 - A slip is projected from persisted wake phases, World action receipts, and pending approvals. It is never an LLM summary.
-- Provider `reasoning_content` may appear only as an expandable thinking disclosure in the gap or under that wake's collapsed Steps record.
+- Provider `reasoning_content` may appear only as an expandable thinking disclosure in the wake's ordered step timeline.
 
 ## Projection
 
@@ -21,7 +21,7 @@
 - `pending`: **Cut waiting on the workbench** for a pending mutation approval.
 - `outcome`: refused tool result with its short host error.
 
-The host exposes the active wake ID in `/api/health` while the wake is in progress. Corner polls health and then this projection at a short interval, renders it in `#gap`, and moves the final projection under the completed wake as collapsed Steps.
+The host exposes the active wake ID in `/api/health` while the wake is in progress. Corner polls health and then this projection at a short interval. During a wake, phases, thinking bursts, tool preparation, and action cards remain in chronological order; provisional resident speech follows them. Once complete, the same ordered slips remain inline between the user's ground and the resident's final utterance. Thinking disclosures retain their open state across live rerenders.
 
 ## Verification
 

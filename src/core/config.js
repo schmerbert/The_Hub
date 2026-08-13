@@ -1,8 +1,20 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const VALID_MODES = new Set(['live', 'fake']);
 const VALID_SANDBOX_BACKENDS = new Set(['docker', 'host-test']);
+
+function integer(env, name, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const raw = env[name];
+  const value = Number(raw === undefined || raw === '' ? fallback : raw);
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    const range = max === Number.MAX_SAFE_INTEGER ? `an integer of at least ${min}` : `an integer from ${min} to ${max}`;
+    throw new Error(`${name} must be ${range}`);
+  }
+  return value;
+}
+
+function immutable(value) { return Object.freeze(value); }
 
 export function readConfig(env = process.env) {
   const mode = env.HUB_RESIDENT_MODE || 'live';
@@ -12,18 +24,14 @@ export function readConfig(env = process.env) {
   const sandboxBackend = env.HUB_SANDBOX_BACKEND || expectedSandboxBackend;
   if (!VALID_SANDBOX_BACKENDS.has(sandboxBackend)) throw new Error('HUB_SANDBOX_BACKEND must be docker or host-test');
   if (sandboxBackend !== expectedSandboxBackend) throw new Error(`HUB_SANDBOX_BACKEND must be ${expectedSandboxBackend} in ${mode} mode`);
-  const resultProjectionMaxBytes = Number(env.HUB_RESULT_PROJECTION_MAX_BYTES || 12000);
-  const resultProjectionMaxLines = Number(env.HUB_RESULT_PROJECTION_MAX_LINES || 120);
-  const attentionWarnBytes = Number(env.HUB_ATTENTION_WARN_BYTES || 80000);
-  const attentionRefuseBytes = Number(env.HUB_ATTENTION_REFUSE_BYTES || 120000);
-  const retainedToolPairs = Number(env.HUB_RETAINED_TOOL_PAIRS || 2);
-  const providerMaxReturnBytes = Number(env.HUB_PROVIDER_MAX_RETURN_BYTES || 8 * 1024 * 1024);
-  if (!Number.isInteger(resultProjectionMaxBytes) || resultProjectionMaxBytes < 192) throw new Error('HUB_RESULT_PROJECTION_MAX_BYTES must be an integer of at least 192');
-  if (!Number.isInteger(resultProjectionMaxLines) || resultProjectionMaxLines < 1) throw new Error('HUB_RESULT_PROJECTION_MAX_LINES must be a positive integer');
-  if (!Number.isInteger(attentionWarnBytes) || attentionWarnBytes < 0 || !Number.isInteger(attentionRefuseBytes) || attentionRefuseBytes <= attentionWarnBytes) throw new Error('Attention thresholds require 0 <= HUB_ATTENTION_WARN_BYTES < HUB_ATTENTION_REFUSE_BYTES');
-  if (!Number.isInteger(retainedToolPairs) || retainedToolPairs < 0) throw new Error('HUB_RETAINED_TOOL_PAIRS must be a non-negative integer');
-  if (!Number.isInteger(providerMaxReturnBytes) || providerMaxReturnBytes < 1) throw new Error('HUB_PROVIDER_MAX_RETURN_BYTES must be a positive integer');
-  return {
+  const resultProjectionMaxBytes = integer(env, 'HUB_RESULT_PROJECTION_MAX_BYTES', 12000, { min: 192 });
+  const resultProjectionMaxLines = integer(env, 'HUB_RESULT_PROJECTION_MAX_LINES', 120, { min: 1 });
+  const attentionWarnBytes = integer(env, 'HUB_ATTENTION_WARN_BYTES', 80000);
+  const attentionRefuseBytes = integer(env, 'HUB_ATTENTION_REFUSE_BYTES', 120000, { min: 1 });
+  const retainedToolPairs = integer(env, 'HUB_RETAINED_TOOL_PAIRS', 2);
+  const providerMaxReturnBytes = integer(env, 'HUB_PROVIDER_MAX_RETURN_BYTES', 8 * 1024 * 1024, { min: 1 });
+  if (attentionRefuseBytes <= attentionWarnBytes) throw new Error('Attention thresholds require 0 <= HUB_ATTENTION_WARN_BYTES < HUB_ATTENTION_REFUSE_BYTES');
+  return immutable({
     mode,
     baseUrl: (env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, ''),
     model: env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
@@ -38,19 +46,19 @@ export function readConfig(env = process.env) {
     resultPath: env.HUB_RESULT_PATH || join(runtimeRoot, 'results.sqlite'),
     workshopRoot: env.HUB_WORKSHOP_ROOT || process.cwd(),
     forestActive: env.HUB_FOREST_ACTIVE === 'true',
-    port: Number(env.HUB_PORT || 3000),
-    messageCeiling: Number(env.HUB_MESSAGE_CEILING || 20),
-    hearthScrollBudget: Number(env.HUB_HEARTH_SCROLL_BUDGET || 3000),
-    hearthExcerptLimit: Number(env.HUB_HEARTH_EXCERPT_LIMIT || 600),
-    maxMessageLength: Number(env.HUB_MAX_MESSAGE_LENGTH || 4000),
-    maxBodyBytes: Number(env.HUB_MAX_BODY_BYTES || 10000),
-    maxToolRounds: Number(env.HUB_MAX_TOOL_ROUNDS || 8),
-    workshopMaxFiles: Number(env.HUB_WORKSHOP_MAX_FILES || 100),
-    workshopMaxBytes: Number(env.HUB_WORKSHOP_MAX_BYTES || 120000),
-    workshopMaxLines: Number(env.HUB_WORKSHOP_MAX_LINES || 160),
-    workshopMaxResults: Number(env.HUB_WORKSHOP_MAX_RESULTS || 50),
+    port: integer(env, 'HUB_PORT', 3000, { min: 0, max: 65535 }),
+    messageCeiling: integer(env, 'HUB_MESSAGE_CEILING', 20, { min: 1 }),
+    hearthScrollBudget: integer(env, 'HUB_HEARTH_SCROLL_BUDGET', 3000, { min: 1 }),
+    hearthExcerptLimit: integer(env, 'HUB_HEARTH_EXCERPT_LIMIT', 600, { min: 1 }),
+    maxMessageLength: integer(env, 'HUB_MAX_MESSAGE_LENGTH', 4000, { min: 1 }),
+    maxBodyBytes: integer(env, 'HUB_MAX_BODY_BYTES', 10000, { min: 1 }),
+    maxToolRounds: integer(env, 'HUB_MAX_TOOL_ROUNDS', 8, { min: 1 }),
+    workshopMaxFiles: integer(env, 'HUB_WORKSHOP_MAX_FILES', 100, { min: 1 }),
+    workshopMaxBytes: integer(env, 'HUB_WORKSHOP_MAX_BYTES', 120000, { min: 1 }),
+    workshopMaxLines: integer(env, 'HUB_WORKSHOP_MAX_LINES', 160, { min: 1 }),
+    workshopMaxResults: integer(env, 'HUB_WORKSHOP_MAX_RESULTS', 50, { min: 1 }),
     approvalMode: mode === 'fake' && env.HUB_APPROVAL_MODE === 'auto' ? 'auto' : 'confirm',
-    recipeTimeoutMs: Number(env.HUB_RECIPE_TIMEOUT_MS || 120000),
+    recipeTimeoutMs: integer(env, 'HUB_RECIPE_TIMEOUT_MS', 120000, { min: 1 }),
     resultProjectionMaxBytes,
     resultProjectionMaxLines,
     attentionWarnBytes,
@@ -60,5 +68,21 @@ export function readConfig(env = process.env) {
     sandboxBackend,
     sandboxImage: env.HUB_SANDBOX_IMAGE || 'node:22-alpine',
     sandboxJobsRoot: env.HUB_SANDBOX_JOBS_ROOT || join(tmpdir(), 'hub-sandbox-bay'),
+  });
+}
+
+export function resolveHubConfig(env = process.env, overrides = {}) {
+  const base = readConfig(env);
+  const dbPath = overrides.dbPath || base.dbPath;
+  const dbWasSelected = Boolean(overrides.dbPath || env.HUB_DB_PATH);
+  const resolved = {
+    ...base,
+    dbPath,
+    forestPath: overrides.forestPath || base.forestPath,
+    spinePath: overrides.spinePath || (dbWasSelected && !env.HUB_SPINE_PATH ? join(dirname(dbPath), 'spine.jsonl') : base.spinePath),
+    worldPath: overrides.worldPath || (dbWasSelected && !env.HUB_WORLD_PATH ? join(dirname(dbPath), 'world.sqlite') : base.worldPath),
+    resultPath: overrides.resultPath || (dbWasSelected && !env.HUB_RESULT_PATH ? join(dirname(dbPath), 'results.sqlite') : base.resultPath),
+    forestActive: overrides.activateForest === undefined ? base.forestActive : Boolean(overrides.activateForest),
   };
+  return immutable(resolved);
 }

@@ -1,6 +1,6 @@
 # Marble Circulation Map
 
-> **Status: Active architecture map.** This page is the compact clinical index of how material and authority move through the Hub. Detailed laws remain in the linked specifications and executable modules. Any new source, sink, store, or crossing must update this map and add a bypass test.
+> **Status: Active architecture map.** This page is the compact clinical index of how material and authority move through the Hub. [`HOUSE_GRAMMAR_V1.md`](specs/HOUSE_GRAMMAR_V1.md) names the broader constitutional vocabulary and labels proposed primitives; [`SECURITY_PRIVACY_CUSTODY_V1.md`](specs/SECURITY_PRIVACY_CUSTODY_V1.md) names the adopted security gates for sensitive and remote crossings. This map remains the authority for installed pipes. Detailed laws remain in the linked specifications and executable modules. Any new source, sink, store, or crossing must update this map and add a bypass test.
 
 The map exists so the system's shape does not depend on anyone holding every subsystem in working memory. It names the one crossing responsible for each kind of movement and the durable evidence that proves the crossing occurred.
 
@@ -96,8 +96,8 @@ The provisional display branch is deliberately terminal: provisional thinking, c
 | World reality changes | Versioned World event reducer | Hash-linked World event and derived projection pointer | Verified materialized World |
 | World becomes resident-visible ground | Drift verifier + actor-local perception + provider-presentation Scrub | World verification result, Glass source manifest, Scrub receipt, Spine | Glass living edge |
 | Machine result continues the session | Result Rack when fitted + host-return Scrub | Exact result/artifact custody and host-return receipt | Tool-role history |
-| Utterance enters continuity | Forest admission Scrub | Forest entry, admission receipt, Source link | Home jurisdiction |
-| Outside source enters continuity | Typed Wild admission | Wild entry and action/source ancestry | Wild jurisdiction |
+| Utterance seeks continuity | Forest Intake Ledger + admission Scrub | Body-free offer, decision history, Scrub receipt, Source link | Home entry or held crossing |
+| Outside source seeks continuity | Forest Intake Ledger + typed Wild admission | Body-free offer, decision history, action/source ancestry | Wild entry or held crossing |
 | Live activity reaches the interface | Append-before-broadcast wake journal | Hash-linked wake event | Corner display |
 
 ## Authority stores are not interchangeable
@@ -114,6 +114,10 @@ The provisional display branch is deliberately terminal: provisional thinking, c
 | Wake event journal | What safe live display events were published, and in what order? |
 
 A pointer may connect stores. One store must never be treated as a substitute for another. A resident statement does not mutate World; a World projection does not become Forest merely because it was shown; a Corner card does not prove provider or action custody.
+
+Home and Wild have separate completeness watermarks. Home is bijective with eligible terminal conversation utterances. Implemented Wild is bijective with exact source spans from committed, Spine-backed Workshop read/search actions; an empty exact search creates no Wild atom. Catch-up reuses the same custody checks as live intake and refuses conflicts.
+
+The Intake Ledger is not terrain. A held offer reserves its source identity and attempted chronological position at the crossing while adding no placeholder entry to Home or Wild. Repair retries the same immutable source; successful retry appends an admitted decision pointing at the real entry. Terminal resolution cannot be silently reopened.
 
 ## Visible bundles through the Ceiling
 
@@ -144,6 +148,9 @@ These are tracked architecture gaps, not implied capabilities:
 4. Automatic reconciliation of a durable `applying` approval after an uncertain external effect is not installed; the state remains visible and non-retryable for future Builder reconciliation.
 5. World verification produces bounded diagnostics but still scans and replays the complete store; adversarially enormous stores do not yet have a CPU/time preflight ceiling.
 6. Autonomous wakes, outside channels, browser/Web capability, MCP capability doors, and general connector ingress do not yet exist.
+7. Recursive Forest frames, scale-relative Home/Wild relationships, Mycelium, cross-Forest portals, and projection into an experiential `place.forest` do not yet exist. The installed Forest remains one configured custody substrate with its current exact Home and Wild intake laws.
+8. Current Source, Spine, Forest, World, Result Rack, and wake stores do not have application-level encryption at rest. Authentication, sealed-pointer custody, key lifecycle, direct Vault intake, cryptographic erasure, remote-device admission, and independent security review are not installed.
+9. The adopted [`FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md) waterfall and traversal crossings are not installed. Current attention fitting can omit declared older tool exchanges but cannot generate a rolling fold, lay Resident-chosen paths, preserve latent branch offers, enter Forest attention, or walk exact prior conversation terrain through a warm return tether.
 
 Loose wires remain visible until a tested crossing removes them. Documentation must not smooth over them.
 
@@ -158,5 +165,7 @@ Every new pipe must answer all of these before implementation:
 5. What durable receipt proves the movement?
 6. Which destination gains authority, and which destinations explicitly do not?
 7. How does verification detect a bypass, leak, duplicate, stale projection, or broken link?
+8. If Forest scale changes, which frame is active, which interior jurisdictions remain unchanged, and how is authority laundering prevented?
+9. What security class applies, where is plaintext permitted, which key or device boundary protects it, and what residual copies remain after expiry or destruction?
 
 If any answer is absent, the pipe is not installed.

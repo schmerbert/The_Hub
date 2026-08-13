@@ -1,19 +1,20 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { extname, join, dirname } from 'node:path';
+import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HubDatabase } from '../ledger/source.js';
-import { readConfig } from '../core/config.js';
+import { resolveHubConfig } from '../core/config.js';
 import { createProvider } from '../providers/index.js';
 import { ForestStore } from '../forest/store.js';
 import { verifyForest } from '../forest/verify.js';
+import { projectForestHealth } from '../forest/health.js';
 import { SpineStore } from '../spine/store.js';
 import { WorldGraphStore } from '../world/graph.js';
+import { projectWorldBuilderInspection } from '../world/inspection.js';
 import { WorkshopAdapter } from '../world/workshop.js';
 import { WorldActionGateway } from '../world/gateway.js';
-import { ceilingCatalog } from '../world/ceiling.js';
-import { residentToolProfile, schemasForSession } from '../world/tools.js';
+import { residentToolProfile } from '../world/tools.js';
 import { projectWakeSlips } from '../corner/slips.js';
 import { ResultRackStore } from '../world/results.js';
 import { DockerCliSandboxBackend, SandboxBay } from '../world/sandbox.js';
@@ -60,16 +61,7 @@ function sseFrame(event) {
 }
 
 export function createHub({ env = process.env, dbPath, forestPath, spinePath, worldPath, resultPath, activateForest, forest: forestOverride, spine: spineOverride, world: worldOverride, provider: providerOverride, recipeRunner: recipeRunnerOverride } = {}) {
-  const config = readConfig(env);
-  if (dbPath) config.dbPath = dbPath;
-  if (forestPath) config.forestPath = forestPath;
-  if (spinePath) config.spinePath = spinePath;
-  else if ((dbPath || env.HUB_DB_PATH) && !env.HUB_SPINE_PATH) config.spinePath = join(dirname(config.dbPath), 'spine.jsonl');
-  if (worldPath) config.worldPath = worldPath;
-  else if ((dbPath || env.HUB_DB_PATH) && !env.HUB_WORLD_PATH) config.worldPath = join(dirname(config.dbPath), 'world.sqlite');
-  if (resultPath) config.resultPath = resultPath;
-  else if ((dbPath || env.HUB_DB_PATH) && !env.HUB_RESULT_PATH) config.resultPath = join(dirname(config.dbPath), 'results.sqlite');
-  if (activateForest !== undefined) config.forestActive = activateForest;
+  const config = resolveHubConfig(env, { dbPath, forestPath, spinePath, worldPath, resultPath, activateForest });
   if (config.forestActive && config.mode === 'fake') throw { code: 'forest_activation_refused', message: 'Forest activation requires a live DeepSeek provider.' };
   if (config.forestActive && (!existsSync(config.dbPath) || !existsSync(config.forestPath))) throw { code: 'forest_activation_refused', message: 'Forest activation requires an existing operational database and validated Forest database.' };
   const db = new HubDatabase(config.dbPath);
@@ -111,22 +103,12 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
   let closing = false;
   let closePromise = null;
   const eventStreams = new Set();
-  function forestHealth() {
-    if (!forest) return { forestActive: false, forestEligibleCount: null, forestCount: null, forestCaughtUp: null, forestIntegrity: 'inactive', forestErrorCode: null, excludedFakeUtteranceCount: null };
-    const eligibleCount = db.listEligibleUtteranceEvents().length;
-    const excludedFakeUtteranceCount = db.countExcludedFakeUtterances();
-    try {
-      const verification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
-      return { forestActive: true, forestEligibleCount: eligibleCount, forestCount: forest.count(), forestCaughtUp: verification.ok && verification.entryCount === eligibleCount, forestIntegrity: 'ok', forestErrorCode: null, excludedFakeUtteranceCount };
-    } catch { return { forestActive: true, forestEligibleCount: eligibleCount, forestCount: forest.count(), forestCaughtUp: false, forestIntegrity: 'error', forestErrorCode: 'forest_integrity_error', excludedFakeUtteranceCount }; }
-  }
-
   async function handler(request, response) {
     const url = new URL(request.url, 'http://localhost');
     try {
       if (closing) return typedError(response, 503, 'hub_closing', 'The Hub is shutting down and is not accepting new requests.');
       if (request.method === 'GET' && url.pathname === '/api/health') {
-        const custody = forestHealth();
+        const custody = projectForestHealth({ forest, source: db, paths: config });
         const projection = world.projection(db.session.id);
         return json(response, 200, {
           ok: !custody.forestActive || (custody.forestIntegrity === 'ok' && custody.forestCaughtUp), schemaReady: true,
@@ -137,70 +119,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
       if (request.method === 'GET' && url.pathname === '/api/thread') return json(response, 200, { ...db.getThread(), residentMode: config.mode, model: config.model });
       if (request.method === 'GET' && url.pathname === '/api/session') return json(response, 200, { session: db.getActiveSession(), sessions: db.listSessions(), history: db.getSessionHistory(), world: world.projection(db.session.id), residentMode: config.mode, model: config.model });
       if (request.method === 'GET' && url.pathname === '/api/world') {
-        const verification = world.verification({ mismatchLimit: 50 });
-        const collectionLimit = 100; const sampleLimit = collectionLimit + 1; const cellCharacterLimit = 2048;
-        const safeCollection = (table, sql, parameters = []) => {
-          if (!world.sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?").get(table)) return { rows: [], total: 0, totalAtLeast: 0, returned: 0, truncated: false, available: false };
-          try {
-            const sampled = world.sqlite.prepare(sql).all(...parameters, sampleLimit); const truncated = sampled.length > collectionLimit; const rows = sampled.slice(0, collectionLimit);
-            return { rows, total: truncated ? null : rows.length, totalAtLeast: sampled.length, returned: rows.length, truncated, available: true };
-          } catch { return { rows: [], total: 0, totalAtLeast: 0, returned: 0, truncated: false, available: false }; }
-        };
-        const cap = column => `substr(${column},1,${cellCharacterLimit + 1}) AS ${column}`;
-        const nodes = safeCollection('world_nodes', verification.verified
-          ? 'SELECT * FROM world_nodes ORDER BY id LIMIT ?'
-          : `SELECT ${['id', 'node_type', 'resident_text', 'state_json', 'lifecycle'].map(cap).join(',')},revision,${cap('created_at')},last_event_sequence,${cap('last_event_hash')} FROM world_nodes ORDER BY id LIMIT ?`);
-        const edges = safeCollection('world_edges', verification.verified
-          ? 'SELECT * FROM world_edges ORDER BY id LIMIT ?'
-          : `SELECT ${['id', 'edge_type', 'from_node_id', 'to_node_id', 'door_identity', 'label', 'created_at'].map(cap).join(',')},last_event_sequence,${cap('last_event_hash')} FROM world_edges ORDER BY id LIMIT ?`);
-        const passageRows = safeCollection('world_passages',
-          `SELECT ${['edge_id', 'passage_id', 'passage_kind', 'from_node_id', 'to_node_id', 'governed_object_id'].map(cap).join(',')},last_event_sequence,${cap('last_event_hash')} FROM world_passages ORDER BY edge_id LIMIT ?`);
-        const objectStateRows = safeCollection('world_object_states',
-          `SELECT ${cap('object_id')},${cap('state_json')},revision,${cap('updated_at')},last_event_sequence,${cap('last_event_hash')} FROM world_object_states ORDER BY object_id LIMIT ?`);
-        const approvalRows = safeCollection('world_approvals',
-          `SELECT ${['approval_id', 'session_id', 'wake_id', 'kind', 'status', 'payload_json', 'preview_json', 'application_json', 'outcome_json', 'created_at', 'decided_at'].map(cap).join(',')},revision,last_event_sequence,${cap('last_event_hash')} FROM world_approvals WHERE session_id=? ORDER BY created_at,approval_id LIMIT ?`, [db.session.id]);
-        const diagnosticText = value => value === null ? null : { value: value.slice(0, cellCharacterLimit), truncated: value.length > cellCharacterLimit, charactersObserved: value.length };
-        const diagnosticRow = row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' ? diagnosticText(value) : value]));
-        const boundedVerifiedRow = row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' && value.length > cellCharacterLimit ? diagnosticText(value) : value]));
-        if (!verification.verified) {
-          nodes.rows = nodes.rows.map(diagnosticRow); edges.rows = edges.rows.map(diagnosticRow); approvalRows.rows = approvalRows.rows.map(diagnosticRow);
-          passageRows.rows = passageRows.rows.map(diagnosticRow); objectStateRows.rows = objectStateRows.rows.map(diagnosticRow);
-        } else {
-          passageRows.rows = passageRows.rows.map(boundedVerifiedRow); objectStateRows.rows = objectStateRows.rows.map(boundedVerifiedRow);
-        }
-        const approvals = approvalRows.rows.map(row => {
-          if (!verification.verified) return row;
-          const boundedString = value => typeof value === 'string' && value.length > cellCharacterLimit ? diagnosticText(value) : value;
-          const parsedField = value => {
-            if (value === null) return null;
-            if (value.length > cellCharacterLimit) return { bounded: true, truncated: true, charactersAtLeast: value.length, prefix: value.slice(0, cellCharacterLimit) };
-            return JSON.parse(value);
-          };
-          try {
-            return {
-              approvalId: boundedString(row.approval_id), sessionId: boundedString(row.session_id), wakeId: boundedString(row.wake_id), kind: boundedString(row.kind), status: boundedString(row.status),
-              payload: parsedField(row.payload_json), preview: parsedField(row.preview_json), application: parsedField(row.application_json),
-              outcome: parsedField(row.outcome_json), createdAt: boundedString(row.created_at), decidedAt: boundedString(row.decided_at),
-              revision: row.revision, worldEventSequence: row.last_event_sequence, worldEventHash: boundedString(row.last_event_hash),
-            };
-          } catch { return { approvalId: row.approval_id ?? null, status: row.status ?? null, malformed: true }; }
-        });
-        const builder = {
-          graph: { nodes: nodes.rows, edges: edges.rows, passages: passageRows.rows, objectStates: objectStateRows.rows }, verification, ceiling: ceilingCatalog(), approvals,
-          collectionBounds: {
-            limit: collectionLimit,
-            diagnosticCellCharacterLimit: cellCharacterLimit,
-            approvalFieldCharacterLimit: cellCharacterLimit,
-            nodes: { total: nodes.total, totalAtLeast: nodes.totalAtLeast, returned: nodes.returned, truncated: nodes.truncated, available: nodes.available },
-            edges: { total: edges.total, totalAtLeast: edges.totalAtLeast, returned: edges.returned, truncated: edges.truncated, available: edges.available },
-            passages: { total: passageRows.total, totalAtLeast: passageRows.totalAtLeast, returned: passageRows.returned, truncated: passageRows.truncated, available: passageRows.available },
-            objectStates: { total: objectStateRows.total, totalAtLeast: objectStateRows.totalAtLeast, returned: objectStateRows.returned, truncated: objectStateRows.truncated, available: objectStateRows.available },
-            approvals: { total: approvalRows.total, totalAtLeast: approvalRows.totalAtLeast, returned: approvalRows.returned, truncated: approvalRows.truncated, available: approvalRows.available },
-          },
-        };
-        if (!verification.verified) return json(response, 200, { ...builder, location: null, projection: null, tools: [] });
-        try { return json(response, 200, { ...builder, location: world.current(db.session.id), projection: world.projection(db.session.id), tools: schemasForSession(world, db.session.id) }); }
-        catch (error) { return json(response, 200, { ...builder, location: null, projection: null, tools: [], builderReadError: { code: error?.code || 'world_builder_read_failed', message: error?.message || 'World builder projection is unavailable.' } }); }
+        return json(response, 200, projectWorldBuilderInspection(world, db.session.id));
       }
       if (request.method === 'GET' && url.pathname === '/api/approvals') return json(response, 200, { approvals: world.listApprovals(db.session.id) });
       if (request.method === 'GET' && url.pathname === '/api/events/history') {

@@ -46,6 +46,10 @@ test('live reducer projects a complete streamed wake without making provisional 
   ]);
   assert.equal(projected.cards[0].detail, '<exact output>');
   assert.equal(projected.cards[0].pointer, 'result-rack://job/j/output');
+  assert.deepEqual(projected.timeline.map(segment => segment.kind), ['phase', 'thinking', 'tool', 'card', 'card']);
+  assert.equal(projected.timeline[1].text, 'careful <thought>');
+  assert.equal(projected.timeline[2].toolCall.name, 'workshop_read');
+  assert.equal(projected.timeline[3].card.label, 'Read complete');
 
   state = reduceHubEvent(state, envelope(14, 'message.committed', { content: 'canonical only on thread endpoint' }));
   projected = projectLiveState(state);
@@ -75,6 +79,21 @@ test('sequence and card revision rules ignore duplicates and require resync on g
   assert.equal(state.resyncRequired, false);
   state = reduceHubEvent(state, envelope(25, 'resync_required'));
   assert.equal(state.resyncRequired, true);
+});
+
+test('live timeline preserves thinking and actions between provider phases', () => {
+  let state = reduceHubEvent(createLiveState(), envelope(1, 'wake.accepted'));
+  state = reduceHubEvent(state, envelope(2, 'phase.started', { phase: 'ordinary' }));
+  state = reduceHubEvent(state, envelope(3, 'provider.thinking.delta', { delta: 'first thought' }));
+  state = reduceHubEvent(state, envelope(4, 'provider.tool_call.delta', { index: 0, id: 'first', function: { name: 'inspect_fixture' } }));
+  state = reduceHubEvent(state, envelope(5, 'card.upsert', { cardId: 'first-card', revision: 1, label: 'Looks at the stone' }));
+  state = reduceHubEvent(state, envelope(6, 'phase.started', { phase: 'ordinary' }));
+  state = reduceHubEvent(state, envelope(7, 'provider.thinking.delta', { delta: 'second thought' }));
+  state = reduceHubEvent(state, envelope(8, 'provider.tool_call.delta', { index: 0, id: 'second', function: { name: 'turn_fixture' } }));
+  const timeline = projectLiveState(state).timeline;
+  assert.deepEqual(timeline.map(segment => segment.kind), ['phase', 'thinking', 'tool', 'card', 'phase', 'thinking', 'tool']);
+  assert.deepEqual(timeline.filter(segment => segment.kind === 'thinking').map(segment => segment.text), ['first thought', 'second thought']);
+  assert.deepEqual(timeline.filter(segment => segment.kind === 'tool').map(segment => segment.toolCall.name), ['inspect_fixture', 'turn_fixture']);
 });
 
 test('named EventSource lifecycle events reach the reducer, dedupe, and invoke terminal reconciliation', () => {
@@ -203,7 +222,10 @@ test('Corner opens one same-origin EventSource and renders events through textCo
   assert.match(app, /captureConversationScroll\(conversationScroller\)/);
   assert.match(app, /renderLive\(\{ scrollSnapshot: preservedScroll \}\)/);
   assert.match(app, /renderLive\(\{ forceTail: true \}\)/);
-  assert.match(app, /renderedThinking \? renderedThinking\.open : undefined/);
+  assert.match(app, /for \(const segment of projection\.timeline\)/);
+  assert.match(app, /openThinkingDisclosures/);
+  assert.match(app, /gap wake-timeline/);
+  assert.doesNotMatch(app, /`Steps [^`]*\$\{steps\.length\}`/);
   assert.doesNotMatch(app, /conversationScroller\.scrollTop\s*=\s*conversationScroller\.scrollHeight/);
   assert.match(app, /event\.content === optimistic\.content/);
   assert.match(app, /textContent = content/);

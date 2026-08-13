@@ -136,3 +136,28 @@ test('resolved approvals no longer project stale decidable pending slips', async
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('Garden passage and turning-stone receipts receive human step labels', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hub-slips-garden-'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(process.cwd()), approvalMode: 'confirm' });
+  const wake = { id: 'wake-garden', status: 'committed', phases: [{ id: 'provider-garden', phase: 'ordinary', createdAt: '2026-08-11T00:00:00.000Z' }] };
+  const execute = (id, name, args) => gateway.execute({
+    sessionId: 'life', wakeId: wake.id, requestRecordId: 'provider-garden',
+    intent: { id, type: 'function', function: { name, arguments: JSON.stringify(args) } },
+  });
+  try {
+    world.ensureLifespan('life');
+    await execute('garden', 'move_through_passage', { passage_id: 'passage.center_garden' });
+    await execute('turn', 'turn_fixture', { fixture_id: 'fixture.garden_turning_stone' });
+    await execute('open', 'operate_passage', { passage_id: 'passage.garden_house', action: 'open' });
+    const labels = projectWakeSlips({ wake, world }).slips.map(slip => slip.label);
+    assert.ok(labels.includes('Steps through to Garden'));
+    assert.ok(labels.includes('Turns the garden turning stone'));
+    assert.ok(labels.includes('Open the passage'));
+  } finally {
+    gateway.close('test_close');
+    world.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

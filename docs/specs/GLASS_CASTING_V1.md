@@ -1,6 +1,8 @@
 # Glass Casting v1 — A Stable View Across the Crossing
 
-> **Status: Implemented anatomy, receipts, and exact inheritance port; generation still deferred.** The runtime validates the five-band anatomy, projects the resulting ordered messages and declared omissions through provider-presentation Scrub, witnesses the exact crossing in the Spine, and persists stripped append-only cast manifests. The capped rolling fold, semantic selection, and farther walk-back remain deferred.
+> **Status: Implemented anatomy, receipts, and exact inheritance port; generation still deferred.** The runtime validates the five-band anatomy, projects the resulting ordered messages and declared omissions through provider-presentation Scrub, witnesses the exact crossing in the Spine, and persists stripped append-only cast manifests. The capped rolling fold, semantic selection, and farther walk-back remain unimplemented; their adopted downstream shape is now specified by [`FOREST_PATHS_ROLLING_FOLD_V1.md`](FOREST_PATHS_ROLLING_FOLD_V1.md).
+
+[`HOUSE_HEARTH_WAKE_V1.md`](HOUSE_HEARTH_WAKE_V1.md) is an adopted, unimplemented revision to first-wake continuity presentation: minimal Glass physics remains passive, while the Ember header, Silver Bullets, and exact prior-session continuity arrive through the active Hearth return. Until that revision is implemented, this v1 document and runtime remain current.
 
 Glass is the resident-facing provider presentation assembled for a request. It is a stable, clinical view over attributable material, not a new memory store and not a replacement for canonical Source.
 

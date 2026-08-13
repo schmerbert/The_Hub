@@ -1,6 +1,6 @@
 # The Hub architecture
 
-This document describes the implemented runtime. See [`STATUS.md`](STATUS.md) for specification precedence and the boundary between implemented cores and broader adopted designs. [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) is the compact crossing-and-authority index that must be updated whenever a new pipe is installed.
+This document describes the implemented runtime and code ownership. New readers should begin with [`ORIENTATION.md`](ORIENTATION.md); [`GLOSSARY.md`](GLOSSARY.md) maps lived terms to clinical responsibilities. See [`STATUS.md`](STATUS.md) for specification precedence and the boundary between implemented cores and broader adopted designs. [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) is the compact crossing-and-authority index that must be updated whenever a new pipe is installed.
 
 ```text
 Source Ledger -> session/Hearth assembly -> provider-presentation Scrub
@@ -27,7 +27,9 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Tool-history fitting | `src/context/tool-pairs.js` | Declared old completed tool-exchange omission and source-reference projection |
 | Spine | `src/spine/store.js` | Exact provider request and bounded raw-return custody, including one admitted-body SSE frame appended at termination |
 | Forest | `src/forest/` | Home/Wild admission, custody, backfill, and verification; no exhale selector yet |
+| Forest health projection | `src/forest/health.js` | Domain-owned active/inactive, integrity, catch-up, Wild, and Intake health projection for transport surfaces |
 | World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, and append-only approval completion custody |
+| World builder inspection | `src/world/inspection.js` | Bounded verified or drift-safe diagnostic projection; owns direct diagnostic access to World storage |
 | Ceiling / Patch Bay | `src/world/ceiling.js`, `src/world/tools.js` | Complete World authority plus deterministic engaged-fixture schema fitting for provider attention |
 | Workshop path law | `src/workshop/path-law.js` | Shared protected-path, traversal, containment, and symlink law used by Workshop and promotion |
 | Workshop | `src/world/workshop.js`, `src/world/git.js`, `src/world/recipes.js` | Bounded repository operations, local Git, and fake/test host recipes |
@@ -111,6 +113,8 @@ Relevant keys in `src/core/config.js` are:
 - Workshop file/output ceilings under `HUB_WORKSHOP_MAX_*`.
 
 `HUB_CORNER_ALWAYS_ON_TOP` is a shell-only key read directly by `src/corner/electron-main.js` after `.env` loading; it is not part of `readConfig()` or the resident runtime configuration object.
+
+`readConfig()` validates and freezes standalone configuration. The server uses `resolveHubConfig()` to derive sibling store paths and apply explicit construction overrides in one immutable step; the composition root does not mutate configuration after parsing. HTTP transport calls Forest- and World-owned health/inspection projectors and does not query their SQLite internals.
 
 ## Constitutional invariants
 

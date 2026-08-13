@@ -99,11 +99,30 @@ function updateCard(state, kind, payload, sequence) {
   const prior = cardId ? state.cards[cardId] : null;
   const card = normalizeCard(kind, payload, sequence, prior);
   if (!card || (prior && card.revision <= prior.revision)) return state;
+  const firstAppearance = !prior;
   return {
     ...state,
     cards: { ...state.cards, [card.cardId]: card },
     cardOrder: prior ? state.cardOrder : [...state.cardOrder, card.cardId],
+    timeline: firstAppearance ? [...state.timeline, { kind: 'card', id: card.cardId }] : state.timeline,
   };
+}
+
+function phaseTimelineLabel(phase) {
+  return phase === 'orientation' ? 'Orienting' : 'Considering…';
+}
+
+function updateThinkingTimeline(state, text, { replace = false } = {}) {
+  let segmentId = state.thinkingSegmentId;
+  let timeline = state.timeline;
+  if (!segmentId) {
+    segmentId = `thinking:${state.phaseKey || 'phase'}`;
+    timeline = [...timeline, { kind: 'thinking', id: segmentId, text: '' }];
+  }
+  timeline = timeline.map(segment => segment.id === segmentId
+    ? { ...segment, text: replace ? text : `${segment.text || ''}${text}` }
+    : segment);
+  return { ...state, timeline, thinkingSegmentId: segmentId };
 }
 
 function resetForWake(state, wakeId) {
@@ -116,6 +135,9 @@ function resetForWake(state, wakeId) {
     toolCalls: {},
     cards: {},
     cardOrder: [],
+    timeline: [],
+    phaseKey: null,
+    thinkingSegmentId: null,
     terminal: null,
     status: 'assembling',
     optimisticUser: state.optimisticUser ? { ...state.optimisticUser, wakeId } : null,
@@ -134,6 +156,9 @@ export function createLiveState() {
     toolCalls: {},
     cards: {},
     cardOrder: [],
+    timeline: [],
+    phaseKey: null,
+    thinkingSegmentId: null,
     terminal: null,
     status: 'idle',
     optimisticUser: null,
@@ -165,14 +190,27 @@ export function reduceHubEvent(current, event) {
 
   if (event.kind === 'phase.started') {
     const phase = phaseName(event);
-    return { ...state, phase, status: phase === 'orientation' ? 'orienting' : 'calling provider', thinking: '', draft: '', toolCalls: {} };
+    const phaseKey = `${phase || 'phase'}:${event.sequence}`;
+    return {
+      ...state,
+      phase,
+      phaseKey,
+      thinkingSegmentId: null,
+      timeline: [...state.timeline, { kind: 'phase', id: `phase:${phaseKey}`, label: phaseTimelineLabel(phase) }],
+      status: phase === 'orientation' ? 'orienting' : 'calling provider',
+      thinking: '',
+      draft: '',
+    };
   }
-  if (event.kind === 'provider.thinking.delta') return { ...state, thinking: state.thinking + deltaText(payload), status: 'thinking' };
+  if (event.kind === 'provider.thinking.delta') {
+    const delta = deltaText(payload);
+    return { ...updateThinkingTimeline(state, delta), thinking: state.thinking + delta, status: 'thinking' };
+  }
   if (event.kind === 'provider.content.delta') return { ...state, draft: state.draft + deltaText(payload), status: 'responding' };
   if (event.kind === 'provider.tool_call.delta') {
     const index = Number.isInteger(payload.index) && payload.index >= 0 ? payload.index : null;
     if (index === null) return { ...state, resyncRequired: true };
-    const key = `${state.phase || 'phase'}:${index}`;
+    const key = `${state.phaseKey || state.phase || 'phase'}:${index}`;
     const prior = state.toolCalls[key] || { index, id: '', type: '', name: '' };
     const fn = payload.function && typeof payload.function === 'object' ? payload.function : {};
     const next = {
@@ -181,14 +219,22 @@ export function reduceHubEvent(current, event) {
       type: string(payload.type) || prior.type,
       name: prior.name + (string(fn.name) || string(payload.nameDelta) || ''),
     };
-    return { ...state, toolCalls: { ...state.toolCalls, [key]: next }, status: 'preparing tools' };
+    const firstAppearance = !state.toolCalls[key];
+    return {
+      ...state,
+      toolCalls: { ...state.toolCalls, [key]: next },
+      timeline: firstAppearance ? [...state.timeline, { kind: 'tool', id: key }] : state.timeline,
+      status: 'preparing tools',
+    };
   }
   if (event.kind === 'provider.message.ready') {
     const message = payload.message && typeof payload.message === 'object' ? payload.message : null;
+    const exactThinking = typeof message?.reasoning_content === 'string' ? message.reasoning_content : null;
+    state = exactThinking !== null ? updateThinkingTimeline(state, exactThinking, { replace: true }) : state;
     return {
       ...state,
       draft: typeof message?.content === 'string' ? message.content : state.draft,
-      thinking: typeof message?.reasoning_content === 'string' ? message.reasoning_content : state.thinking,
+      thinking: exactThinking ?? state.thinking,
       status: 'message ready',
     };
   }
@@ -256,12 +302,20 @@ export function clearLiveWake(state, wakeId) {
     toolCalls: {},
     cards: {},
     cardOrder: [],
+    timeline: [],
+    phaseKey: null,
+    thinkingSegmentId: null,
     terminal: null,
     optimisticUser: null,
   };
 }
 
 export function projectLiveState(state) {
+  const timeline = state.timeline.map(segment => {
+    if (segment.kind === 'card') return state.cards[segment.id] ? { ...segment, card: state.cards[segment.id] } : null;
+    if (segment.kind === 'tool') return state.toolCalls[segment.id] ? { ...segment, toolCall: state.toolCalls[segment.id] } : null;
+    return { ...segment };
+  }).filter(Boolean);
   return {
     wakeId: state.activeWakeId,
     status: state.status,
@@ -269,6 +323,7 @@ export function projectLiveState(state) {
     draft: state.draft,
     toolCalls: Object.values(state.toolCalls).sort((left, right) => left.index - right.index),
     cards: state.cardOrder.map(cardId => state.cards[cardId]).filter(Boolean),
+    timeline,
     optimisticUser: state.optimisticUser,
     terminal: state.terminal,
     connection: state.connection,

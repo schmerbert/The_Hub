@@ -1,6 +1,6 @@
 # The Vault v1 — A Room for What Holds
 
-> **Status: Adopted design; not implemented.** This specification records settled direction only. No Vault room, door, storage, document graph, slot/bin crossing, Forest pointer, tool, or UI is installed in the current runtime. See [`../STATUS.md`](../STATUS.md).
+> **Status: Adopted design; not implemented.** This specification records settled direction only. No Vault room, door, storage, document graph, slot/bin crossing, Forest pointer, tool, or UI is installed in the current runtime. Vault implementation and any claim of sensitive custody are gated by [`SECURITY_PRIVACY_CUSTODY_V1.md`](SECURITY_PRIVACY_CUSTODY_V1.md). See [`../STATUS.md`](../STATUS.md).
 
 ## Status and scope
 

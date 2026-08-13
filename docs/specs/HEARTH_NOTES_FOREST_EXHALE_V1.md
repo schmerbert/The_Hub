@@ -1,6 +1,6 @@
 # Hearth Notes and Forest Exhale v1
 
-> **Status: Adopted downstream direction; revision required; not implemented.** Glass Casting v1 now owns provider-presentation anatomy. This document preserves the accepted Hearth-note and exact-exhale intent, but it is not the next implementation slice and must be revised to fit Glass bands and receipts before code is authorized. It does not install Hearth-note storage/rendering, a Forest selector, exhale presentation, or tests. See [`GLASS_CASTING_V1.md`](GLASS_CASTING_V1.md) and [`../STATUS.md`](../STATUS.md).
+> **Status: Adopted ancestry; Hearth presentation superseded by an unimplemented revision.** [`HOUSE_HEARTH_WAKE_V1.md`](HOUSE_HEARTH_WAKE_V1.md) now owns the adopted literal-Hearth placement, Ember header, Silver Bullet presentation, deterministic prior-session packet, and active relationship to Glass. This document continues to own the deferred semantic Forest Exhale direction where the newer specification does not supersede it. No Hearth-note storage/rendering, selector, exhale presentation, or tests are installed. See [`GLASS_CASTING_V1.md`](GLASS_CASTING_V1.md) and [`../STATUS.md`](../STATUS.md).
 
 This slice adds two small resident-facing crossings without turning memory into narration:
 

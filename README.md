@@ -1,8 +1,10 @@
 # The Hub — First Breath
 
-This repository contains one process-lived resident session. Each server start supersedes any prior open session and opens a new one; its first human message takes a native two-breath Hearth handshake, and later messages remain ordinary turns in the same complete active history. It uses Node.js, SQLite, a replaceable provider boundary, a browser Corner surface, and an Electron desktop shell.
+The Hub is a local harness for a continuing Resident: a model-mediated collaborator who can remain oriented across conversation, tools, durable records, and a material World without being falsely presented as omniscient, continuously awake, or identical to one provider invocation. It separates what happened, what entered attention, what was retained, what was said, and what can cause action.
 
-See [`docs/STATUS.md`](docs/STATUS.md) for the canonical implemented surface, specification precedence, partial adopted designs, and deferred work.
+**Start with [`docs/ORIENTATION.md`](docs/ORIENTATION.md)** for the proposition, the reasons behind the harness, its spatial and clinical shape, and where the design is going. [`docs/GLOSSARY.md`](docs/GLOSSARY.md) maps the lived language to conventional machinery. [`docs/STATUS.md`](docs/STATUS.md) is the canonical implemented surface, and [`docs/README.md`](docs/README.md) provides the complete documentation index and authority order.
+
+The runtime currently opens one process-lived Resident session per server start. Its first human message takes a native two-breath Hearth handshake; later messages remain ordinary turns in the same complete active history. The implementation uses Node.js, SQLite, a replaceable provider boundary, a browser Corner surface, and an Electron desktop shell.
 
 ## Run an explicit fake-mode demonstration
 
@@ -96,6 +98,6 @@ npm test
 
 The suite exercises the real HTTP and SQLite path in temporary databases, including empty and oversized input, missing live credentials, empty provider output, provider HTTP failure, fake-mode labeling, context ceilings, and visible nonterminal wakes.
 
-The current World Graph implements Center and Workshop only: packed sand, a stone bench, an unspecified tin cup, one bidirectional Workshop door, per-lifespan location, and the five Workshop fixtures. Center mounts movement only; Workshop mounts its complete coding catalog. The kiln runs named recipes asynchronously and survives room changes within the lifespan; the timer likewise remains visible through room presence. Result Rack captures ordinary tool/refusal/approval crossings and async recipe completion, while deterministic projections keep exact large results behind fitted pointers. Corner projects deterministic phase, thinking, action, pending-approval, completion, and refusal slips without placing host machinery in the utterance rail.
+The current World Graph implements the Hub container, Center, Workshop, Garden, House, and Threshold; a stateful House front door; a Center/Garden opening and House/Threshold passage; visible non-traversable Forest/Road boundaries; per-lifespan location; and the installed fixtures and objects described in Status. Center mounts movement only; Workshop mounts its complete coding catalog. The kiln runs named recipes asynchronously and survives room changes within the lifespan; the timer likewise remains visible through room presence. Result Rack captures ordinary tool/refusal/approval crossings and async recipe completion, while deterministic projections keep exact large results behind fitted pointers. Corner projects deterministic chronological phase, thinking, action, pending-approval, completion, and refusal slips without placing host machinery in the utterance rail.
 
 The adopted Vault and Hearth Notes/Forest Exhale designs are not implemented. Other deferred work includes free-form shell, companion/delegation bridges, reset UI, context-limit lifespan closure, summaries, embeddings and semantic retrieval, autonomous model wakes, user cancellation, authentication, desktop installers/packaging, general file or artifact opening/highlighting, external publishing, deployment, and network Git operations.
