@@ -61,6 +61,7 @@ let liveEventSource = null;
 let unregisterLiveEvents = null;
 let liveRecoveryTimer = null;
 let liveUnloading = false;
+let liveRenderFrame = null;
 const openThinkingDisclosures = new Set();
 
 function node(tag, className, content) {
@@ -252,6 +253,14 @@ function renderLive({ scrollSnapshot = null, forceTail = false } = {}) {
 
   renderLiveTimeline(projection);
   restoreConversationScroll(conversationScroller, preservedScroll);
+}
+
+function scheduleLiveRender() {
+  if (liveRenderFrame !== null) return;
+  liveRenderFrame = requestAnimationFrame(() => {
+    liveRenderFrame = null;
+    renderLive();
+  });
 }
 
 function reconcileOptimisticUser(thread) {
@@ -569,7 +578,7 @@ function receiveHubEvent(messageEvent) {
   if (next === liveState) return;
   liveState = next;
   const projection = projectLiveState(liveState);
-  renderLive();
+  scheduleLiveRender();
   setState(projection.status);
   if (projection.resyncRequired) void resyncLiveEvents();
   if (projection.terminal) void reconcileTerminal(projection.terminal);

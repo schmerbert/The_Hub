@@ -222,6 +222,8 @@ test('Corner opens one same-origin EventSource and renders events through textCo
   assert.match(app, /captureConversationScroll\(conversationScroller\)/);
   assert.match(app, /renderLive\(\{ scrollSnapshot: preservedScroll \}\)/);
   assert.match(app, /renderLive\(\{ forceTail: true \}\)/);
+  assert.match(app, /function scheduleLiveRender\(\)/);
+  assert.match(app, /requestAnimationFrame/);
   assert.match(app, /for \(const segment of projection\.timeline\)/);
   assert.match(app, /openThinkingDisclosures/);
   assert.match(app, /gap wake-timeline/);

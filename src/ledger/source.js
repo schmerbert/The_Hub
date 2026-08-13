@@ -595,7 +595,7 @@ export class HubDatabase {
       FROM session_history WHERE session_id=? ORDER BY ordinal`).all(sessionId);
   }
 
-  appendSessionHistory({ sessionId = this.session.id, wakeId, message, messageKind, sourceEventId = null, returnScrub = null, hostReturnScrub = null }) {
+  appendSessionHistory({ sessionId = this.session.id, wakeId, message, messageKind, sourceEventId = null, traceSourceEventId = sourceEventId, returnScrub = null, hostReturnScrub = null }) {
     const history = this.getSessionHistory(sessionId);
     const ordinal = history.length + 1;
     const raw = JSON.stringify(message);
@@ -612,7 +612,7 @@ export class HubDatabase {
     const historyId = id('history');
     this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at, scrub_receipt_id, raw_return_record_id, source_record_hash)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(historyId, sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now(), scrubReceipt?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
-    this.appendScrollTraceManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId, scrubReceipt });
+    this.appendScrollTraceManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId: traceSourceEventId, scrubReceipt });
     return ordinal;
   }
 
@@ -713,7 +713,7 @@ export class HubDatabase {
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
-      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', sourceEventId: eventId, hostReturnScrub });
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', traceSourceEventId: eventId, hostReturnScrub });
       this.persistHostReturnScrub({ sessionId, wakeId, toolName: 'tend_hearth', hostReturnScrub });
       this.sqlite.prepare(`INSERT INTO hearth_receipts(id, session_id, wake_id, tool_call_id, return_json, return_hash, scroll_markdown, scroll_hash, action_event_id, return_event_id, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(id('hearth'), sessionId, wakeId, toolCallId, JSON.stringify(returnValue), returnHash, scrollMarkdown, scrollHash, actionEventId, eventId, now());
@@ -737,7 +737,7 @@ export class HubDatabase {
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
-      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', sourceEventId: eventId, hostReturnScrub });
+      this.appendSessionHistory({ sessionId, wakeId, message, messageKind: 'tool_result', traceSourceEventId: eventId, hostReturnScrub });
       this.persistHostReturnScrub({ sessionId, wakeId, toolName, hostReturnScrub });
     });
     return eventId;

@@ -57,6 +57,13 @@ Ceiling -> room Patch Bay -> fitted tool schemas             |
                            v
                         Provider
                            |
+                           v
+              bounded raw intake collector
+              (memory only; request/phase/channel separated)
+                           |
+                           v
+                 provisional stream Scrub
+                           |
               +------------+-------------+
               |                          |
               v                          v
@@ -85,7 +92,7 @@ Ceiling -> room Patch Bay -> fitted tool schemas             |
                        session continuation
 ```
 
-The provisional display branch is deliberately terminal: provisional thinking, content, and tool-name deltas may reach Corner after credential suppression, but never enter session history, Forest, tool execution, or a later provider request.
+The provisional display branch is deliberately terminal. Raw provider fragments pause outside the Marble in a bounded memory-only collector. Consecutive fragments are coalesced only within one request, phase, kind, and tool index; channel changes flush in arrival order. Normal phase completion flushes, while failure or cancellation discards anything still paused. Only after the coalesced batch crosses provisional stream Scrub may safe thinking, content, and tool-name deltas enter the append-only wake journal and reach Corner. Raw fragments never enter SQLite, logs, Corner, session history, Forest, tool execution, or a later provider request. Corner folds arriving safe events into at most one render per animation frame.
 
 ## Crossing register
 
@@ -96,6 +103,7 @@ The provisional display branch is deliberately terminal: provisional thinking, c
 | Language enters a provider request | Glass validation + provider-presentation Scrub | Glass cast receipt, Scrub receipt, Spine request frame | Provider-visible messages |
 | Capabilities enter a provider request | Ceiling catalog + room Patch Bay + attention fitting | Exact request body in Spine; mount/profile inspection | Provider-visible tool schemas |
 | Provider bytes return | Capture ceiling + Spine admitted-body append | Spine raw-return frame and outcome | Provider-return Scrub |
+| Raw provisional fragments seek display | Bounded memory-only collector + provisional cross-fragment Scrub | Coalesced safe wake-journal event, or explicit suppressed-channel event | Corner only |
 | Provider return becomes tool intent or resident speech | Provider-return Scrub | Return Scrub receipt | Gateway or canonical history |
 | Tool intent requests authority | World Gateway | Action receipt; approval receipt when applicable | World, Workshop, or refusal |
 | World reality changes | Versioned World event reducer | Hash-linked World event and derived projection pointer | Verified materialized World |
@@ -156,7 +164,7 @@ These are tracked architecture gaps, not implied capabilities:
 7. Recursive Forest frames, scale-relative Home/Wild relationships, Mycelium, cross-Forest portals, and projection into an experiential `place.forest` do not yet exist. The installed Forest remains one configured custody substrate with its current exact Home and Wild intake laws.
 8. Current Source, Spine, Forest, World, Result Rack, and wake stores do not have application-level encryption at rest. Authentication, sealed-pointer custody, key lifecycle, direct Vault intake, cryptographic erasure, remote-device admission, and independent security review are not installed.
 9. The adopted [`FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md) waterfall and traversal crossings are not installed. Current attention fitting can omit declared older tool exchanges but cannot generate a rolling fold, lay Resident-chosen paths, preserve latent branch offers, enter Forest attention, or walk exact prior conversation terrain through a warm return tether.
-10. The trace epoch currently closes new Session Scroll rows only. Glass ground items still lack first-class durable source pointers, presentation omissions do not yet name plain Scroll coordinates, Forest Exhale is absent, and provisional stream batches do not yet carry closure-era batch manifests.
+10. The trace epoch currently closes new Session Scroll rows only. Glass ground items still lack first-class durable source pointers, presentation omissions do not yet name plain Scroll coordinates, and Forest Exhale is absent. The provisional collector is installed and safe batches have hash-linked wake-journal custody, but they do not yet carry trace-epoch manifests joining their collector/Scrub disposition to the broader closure calendar.
 
 Loose wires remain visible until a tested crossing removes them. Documentation must not smooth over them.
 

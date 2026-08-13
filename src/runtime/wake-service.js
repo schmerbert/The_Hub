@@ -10,6 +10,7 @@ import { HEARTH_TOOL, HEARTH_TOOL_CHOICE, hearthReturnHash, validateOrientationR
 import { renderHearthPacket } from '../hearth/packet.js';
 import { residentToolProfile, schemasForResidentSession } from '../world/tools.js';
 import { AttentionMeter } from '../world/results.js';
+import { ProvisionalCollector } from './provisional-collector.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -111,11 +112,18 @@ export class WakeService {
       payload,
       source: { providerRequestId: requestId, spineRecordId: requestFrame?.record_id || null },
     };
-    try { this.eventBus?.publish(event); }
+    return event;
+  }
+
+  publishCollectedDelta(event) {
+    const requestId = event.source.providerRequestId;
+    const channel = `${requestId}:${event.kind}:${event.kind === 'provider.tool_call.delta' ? (event.payload?.index ?? 'unknown') : 'text'}`;
+    if (this.suppressedDeltaChannels.has(channel)) return null;
+    try { return this.eventBus?.publish(event); }
     catch (error) {
       if (error?.code !== 'wake_stream_delta_secret_refused') throw error;
       this.suppressedDeltaChannels.add(channel);
-      this.eventBus?.publish({ ...event, payload: { omitted: true, omittedReason: 'credential_boundary', channelSuppressed: true } });
+      return this.eventBus?.publish({ ...event, payload: { omitted: true, omittedReason: 'credential_boundary', channelSuppressed: true } });
     }
   }
 
@@ -368,6 +376,7 @@ export class WakeService {
       let rawReturnFrame = null;
       let dispatchObserved = false;
       let providerCallbacksOpen = true;
+      const provisionalCollector = new ProvisionalCollector({ emit: event => this.publishCollectedDelta(event) });
       const onBeforeDispatch = requestFrame ? () => providerCallbacksOpen ? this.registerPresentationBoundary(created.wakeId, requestFrame, requestBodyString, presentation, sourceMessages, presentedRefs) : undefined : undefined;
       const onDispatch = requestFrame ? () => {
         if (!providerCallbacksOpen) return undefined;
@@ -380,7 +389,11 @@ export class WakeService {
         return rawReturnFrame;
       } : undefined;
       const onOutcome = requestFrame ? outcome => { if (providerCallbacksOpen) observedOutcome = outcome; } : undefined;
-      const onDelta = delta => { if (providerCallbacksOpen) this.publishDelta(created, phase, requestId, requestFrame, delta); };
+      const onDelta = delta => {
+        if (!providerCallbacksOpen) return;
+        const event = this.publishDelta(created, phase, requestId, requestFrame, delta);
+        if (event) provisionalCollector.collect(event);
+      };
       const providerAbortController = new AbortController();
       this.activeProviderAbortController = providerAbortController;
       try {
@@ -388,6 +401,7 @@ export class WakeService {
         try {
           const operation = completeProvider(provider, { presentation, model: config.model, phase, requestBodyString, onBeforeDispatch, onDispatch, onRawReturn, onDelta, onOutcome, signal: providerAbortController.signal });
           result = await awaitProviderWithAbort(operation, providerAbortController.signal);
+          provisionalCollector.flush();
         } finally {
           providerCallbacksOpen = false;
           if (this.activeProviderAbortController === providerAbortController) this.activeProviderAbortController = null;
@@ -427,6 +441,7 @@ export class WakeService {
         this.clearSuppressedRequest(requestId);
         return { result, returnScrub, requestFrame, requestId, refs, glassReceipt: { ...persistedGlass, receipt: glassReceipt } };
       } catch (error) {
+        provisionalCollector.discard();
         this.clearSuppressedRequest(requestId);
         const terminalError = providerAbortController.signal.aborted ? providerCancellation() : error;
         if (terminalError?.code === 'provider_cancelled' && requestFrame && observedOutcome?.network_code !== 'aborted') observedOutcome = { kind: 'network_error', network_code: 'aborted' };

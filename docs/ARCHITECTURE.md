@@ -4,6 +4,8 @@ This document describes the implemented runtime and code ownership. New readers 
 
 Source also owns the forward-only Session Scroll trace epoch. The append-only boundary records the exact inherited head without backfilling it. After that boundary, each Scroll row and its trace manifest are committed atomically; the manifest connects authoritative source, Scrub or intake gate, durable witness, exact Scroll coordinate, and retained disposition. See [`TRACE_EPOCH_V1.md`](specs/TRACE_EPOCH_V1.md).
 
+Provider streaming has a bounded pre-Scrub pause. Raw fragments remain only in a memory collector, separated by provider request, phase, delta kind, and tool index. The collector coalesces consecutive same-channel fragments, flushes on channel changes and normal phase completion, and discards paused material on failure or cancellation. Only coalesced batches that pass wake-stream credential Scrub enter the hash-linked wake journal and SSE; Corner renders accumulated safe events at most once per animation frame.
+
 ```text
 Source Ledger -> session/Hearth assembly -> provider-presentation Scrub
               -> Spine exact request -> provider SSE -> Spine exact admitted-body return
