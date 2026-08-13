@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -39,7 +39,7 @@ test('intent parsing and facade mount refusal preserve exact public errors', asy
   await assert.rejects(dispatchWorldTool('not_installed', {}), error => error.code === 'world_tool_unknown' && error.message === 'The requested capability is not installed.');
 
   const dir = await mkdtemp(join(tmpdir(), 'hub-gateway-dispatch-'));
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('session-center');
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(dir) });
   try {

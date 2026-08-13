@@ -2,8 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, id, sha256 } from '../core/hash.js';
 import { installedTopologyHash, installedTopologyManifest } from './topology.js';
 import { extendedTopologyHash, extendedTopologyManifest } from './topology-b1.js';
+import { hearthTopologyHash, hearthTopologyManifest } from './topology-hearth.js';
 
-export const WORLD_PROJECTOR_VERSION = 3;
+export const WORLD_PROJECTOR_VERSION = 4;
 export const WORLD_EVENT_GENESIS_HASH = '0'.repeat(64);
 
 function deepFreeze(value) {
@@ -33,6 +34,7 @@ export const WORLD_EVENT_KINDS = deepFreeze({
   'approval.cancelled/v1': { schemaVersion: 1, stretch: 'A2' },
   'approval.reconciliation_required/v1': { schemaVersion: 1, stretch: 'A2' },
   'topology.extended/v1': { schemaVersion: 1, stretch: 'B1' },
+  'topology.hearth_installed/v1': { schemaVersion: 1, stretch: 'H1' },
   'location.crossed/v1': { schemaVersion: 1, stretch: 'B1' },
   'passage.operated/v1': { schemaVersion: 1, stretch: 'B1' },
   'fixture.turned/v1': { schemaVersion: 1, stretch: 'B1' },
@@ -144,7 +146,7 @@ export function installWorldEventSchema(sqlite) {
   }
 }
 
-export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], passages: [], objectStates: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, rootBoundary: null, operationalBoundary: null, topologyExtension: null }; }
+export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], passages: [], objectStates: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, rootBoundary: null, operationalBoundary: null, topologyExtension: null, hearthExtension: null }; }
 function copyState(state) {
   return {
     nodes: state.nodes.map(row => ({ ...row })), edges: state.edges.map(row => ({ ...row })), locations: state.locations.map(row => ({ ...row })),
@@ -153,6 +155,7 @@ function copyState(state) {
     legacyCustody: { actionReceipts: state.legacyCustody.actionReceipts.map(row => ({ ...row })), approvalReceipts: state.legacyCustody.approvalReceipts.map(row => ({ ...row })) },
     operationalBoundary: state.operationalBoundary ? { ...state.operationalBoundary } : null,
     topologyExtension: state.topologyExtension ? { ...state.topologyExtension } : null,
+    hearthExtension: state.hearthExtension ? { ...state.hearthExtension } : null,
     rootBoundary: state.rootBoundary || null,
   };
 }
@@ -239,6 +242,26 @@ function topologyExtensionRows(payload, event, priorState) {
   });
   if (new Set(objectStates.map(row => row.object_id)).size !== objectStates.length) throw new Error('Topology extension contains duplicate object states.');
   return { nodes, edges, passages, objectStates };
+}
+
+function hearthExtensionRows(payload, event, priorState) {
+  exactKeys(payload, ['manifestSha256', 'nodes', 'edges'], 'Hearth topology payload');
+  const manifest = { nodes: payload.nodes, edges: payload.edges };
+  if (payload.manifestSha256 !== sha256(canonicalize(manifest)) || payload.manifestSha256 !== hearthTopologyHash() || canonicalize(manifest) !== canonicalize(hearthTopologyManifest())) throw new Error('Hearth topology does not match the code-owned manifest.');
+  const installedIds = new Set(priorState.nodes.map(row => row.id));
+  const nodes = payload.nodes.map(node => {
+    exactKeys(node, ['id', 'nodeType', 'residentText', 'state', 'lifecycle', 'revision'], 'Hearth node');
+    if (node.id !== 'fixture.hearth' || node.nodeType !== 'fixture' || node.lifecycle !== 'standing' || node.revision !== 1 || installedIds.has(node.id)) throw new Error('Hearth node is invalid.');
+    canonicalObject(node.state, 'Hearth node state'); installedIds.add(node.id);
+    return { id: node.id, node_type: node.nodeType, resident_text: node.residentText, state_json: canonicalize(node.state), lifecycle: node.lifecycle, revision: 1, created_at: event.occurred_at, ...pointer(event) };
+  });
+  const edgeIds = new Set(priorState.edges.map(row => row.id));
+  const edges = payload.edges.map(edge => {
+    exactKeys(edge, ['id', 'edgeType', 'fromNodeId', 'toNodeId', 'doorIdentity', 'label'], 'Hearth edge');
+    if (edge.id !== 'edge.contains.house_hearth' || edge.edgeType !== 'contains' || edge.fromNodeId !== 'place.house' || edge.toNodeId !== 'fixture.hearth' || edge.doorIdentity !== null || edgeIds.has(edge.id) || !installedIds.has(edge.fromNodeId) || !installedIds.has(edge.toNodeId)) throw new Error('Hearth containment is invalid.');
+    return { id: edge.id, edge_type: edge.edgeType, from_node_id: edge.fromNodeId, to_node_id: edge.toNodeId, door_identity: null, label: edge.label, created_at: event.occurred_at, ...pointer(event) };
+  });
+  return { nodes, edges };
 }
 
 function legacyRows(payload, event) {
@@ -379,6 +402,14 @@ export function reduceWorldEvent(priorState, event) {
     const extension = topologyExtensionRows(payload, event, state);
     state.nodes.push(...extension.nodes); state.edges.push(...extension.edges); state.passages = extension.passages; state.objectStates = extension.objectStates;
     state.topologyExtension = { sequence: event.sequence, eventHash: event.event_hash };
+  } else if (event.event_kind === 'topology.hearth_installed/v1') {
+    exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'Hearth topology causation');
+    if (causation.boundary !== 'house_hearth_wake_v1' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Hearth topology boundary causation is invalid.');
+    if (event.aggregate_kind !== 'topology_extension' || event.aggregate_id !== 'hearth' || event.aggregate_revision !== 1 || event.session_id !== null || event.wake_id !== null || event.command_id !== null || !['world_bootstrap', 'world_migration'].includes(event.actor)) throw new Error('Hearth topology aggregate envelope is invalid.');
+    if (!state.topologyExtension || state.hearthExtension) throw new Error('Hearth topology requires B1 and may be installed only once.');
+    const extension = hearthExtensionRows(payload, event, state);
+    state.nodes.push(...extension.nodes); state.edges.push(...extension.edges);
+    state.hearthExtension = { sequence: event.sequence, eventHash: event.event_hash };
   } else if (event.event_kind === 'operational_snapshot.imported/v1') {
     exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'operational snapshot causation');
     if (causation.boundary !== 'pre_a2_operational_projection' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Operational snapshot boundary causation is invalid.');
@@ -393,7 +424,9 @@ export function reduceWorldEvent(priorState, event) {
     requiredString(event.session_id, 'lifespan session'); requiredString(payload.roomNodeId, 'starting room');
     if (findBy(state.locations, 'session_id', event.session_id)) throw new Error('Lifespan is already initialized.');
     const startingRoom = findBy(state.nodes, 'id', payload.roomNodeId);
-    if (!startingRoom || startingRoom.node_type !== 'room' || startingRoom.lifecycle !== 'standing') throw new Error('Starting room is not an installed standing room.');
+    const expectedStart = state.hearthExtension ? 'place.house' : 'room.center';
+    const occupiable = startingRoom && startingRoom.lifecycle === 'standing' && (startingRoom.node_type === 'room' || (startingRoom.node_type === 'place' && JSON.parse(startingRoom.state_json).occupiable === true));
+    if (!occupiable || payload.roomNodeId !== expectedStart) throw new Error('Starting location does not match the installed lifespan law.');
     state.locations.push({ session_id: event.session_id, room_node_id: payload.roomNodeId, inspected_source: null, engaged_fixture_id: null, revision: event.aggregate_revision, started_at: event.occurred_at, updated_at: event.occurred_at, ...pointer(event) });
   } else if (WORLD_EVENT_KINDS[event.event_kind].stretch === 'A1') {
     requiredString(event.session_id, 'event session');
@@ -817,7 +850,18 @@ function verifyCustody(sqlite, events, state, mismatches, limit) {
   }
 }
 
-export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1' } = {}) {
+export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', requireHearth = true } = {}) {
+  if (scope === 'b1' && requireHearth && tableExists(sqlite, 'world_event_journal')) {
+    let hearth = null;
+    try { hearth = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.hearth_installed/v1' LIMIT 1").get(); } catch {}
+    if (!hearth) {
+      const b1 = verifyWorldSqlite(sqlite, { mismatchLimit, scope, requireHearth: false });
+      if (b1.verified) return {
+        ...b1, verified: false, status: 'upgrade_required', upgradeRequired: true, projectorVersion: WORLD_PROJECTOR_VERSION,
+        mismatches: [{ code: 'hearth_upgrade_required', message: 'The exact B1 World requires the explicit backup-confirmed House Hearth migration.' }],
+      };
+    }
+  }
   if (scope === 'b1' && tableExists(sqlite, 'world_event_journal')) {
     let extension = null;
     try { extension = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.extended/v1' LIMIT 1").get(); } catch {}
@@ -892,6 +936,7 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1' } =
     if (!registration || registration.installed === false) addMismatch(mismatches, mismatchLimit, { code: 'event_kind_unknown', sequence: event.sequence, eventKind: event.event_kind });
     else if (scope === 'a1' && registration.stretch !== 'A1') addMismatch(mismatches, mismatchLimit, { code: 'later_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (scope === 'a2' && registration.stretch === 'B1') addMismatch(mismatches, mismatchLimit, { code: 'b1_event_present', sequence: event.sequence, eventKind: event.event_kind });
+    else if (!requireHearth && registration.stretch === 'H1') addMismatch(mismatches, mismatchLimit, { code: 'hearth_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (registration.schemaVersion !== event.event_schema_version) addMismatch(mismatches, mismatchLimit, { code: 'event_schema_version_unknown', sequence: event.sequence, eventKind: event.event_kind, version: event.event_schema_version });
     const aggregateKey = `${event.aggregate_kind}:${event.aggregate_id}`;
     const expectedRevision = (aggregateRevisions.get(aggregateKey) || 0) + 1;
@@ -987,7 +1032,7 @@ export function inspectWorldB1UpgradeDatabase(path, { mismatchLimit = 50 } = {})
       status: 'legacy_journal_migration_required', upgradeRequired: false,
       backupExpectation: 'Keep a verified byte-for-byte backup. Journal-less legacy admission occurs only on a disposable or intentionally maintained World database.',
     };
-    const current = verifyWorldSqlite(sqlite, { mismatchLimit });
+    const current = verifyWorldSqlite(sqlite, { mismatchLimit, requireHearth: false });
     if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
     const extension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.extended/v1' ORDER BY sequence LIMIT 1").get();
     const partialArtifacts = ['world_passages', 'world_object_states', 'world_passages_append_only_update', 'world_passages_append_only_delete']
@@ -1004,11 +1049,12 @@ export function inspectWorldB1UpgradeDatabase(path, { mismatchLimit = 50 } = {})
   } finally { sqlite?.close(); }
 }
 
-export function assertWorldVerified(sqlite) {
-  const verification = verifyWorldSqlite(sqlite);
+export function assertWorldVerified(sqlite, options = {}) {
+  const verification = verifyWorldSqlite(sqlite, options);
   if (!verification.verified) {
     const upgrade = verification.status === 'upgrade_required';
-    throw Object.assign(new Error(upgrade ? 'World B1 topology migration is required.' : 'World event journal and physical projection have drifted.'), { code: upgrade ? 'world_b1_upgrade_required' : 'world_projection_drift', verification });
+    const hearth = verification.mismatches?.some(item => item.code === 'hearth_upgrade_required');
+    throw Object.assign(new Error(upgrade ? (hearth ? 'House Hearth World migration is required.' : 'World B1 topology migration is required.') : 'World event journal and physical projection have drifted.'), { code: upgrade ? (hearth ? 'world_hearth_upgrade_required' : 'world_b1_upgrade_required') : 'world_projection_drift', verification });
   }
   return verification;
 }

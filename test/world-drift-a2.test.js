@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,7 @@ import { WorkshopAdapter } from '../src/world/workshop.js';
 async function fixture(options) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-a2-'));
   const path = join(dir, 'world.sqlite');
-  const world = new WorldGraphStore(path, options);
+  const world = new WorldGraphStore(path, { topologyVersion: 'b1', ...options });
   return { dir, path, world, close: async () => { world.close(); await rm(dir, { recursive: true, force: true }); } };
 }
 
@@ -109,7 +109,7 @@ test('A1 journal upgrade is explicit, backup-gated, transactional, and admits le
   f.world.actionReceipt({ sessionId: 'life', roomNodeId: 'room.center', toolName: 'workshop_list', arguments: {}, result: { kind: 'workshop_list' }, outcome: 'committed' });
   f.world.close();
   const sqlite = new DatabaseSync(f.path); downgradeOperationalTablesToA1(sqlite); sqlite.close();
-  const upgrade = new WorldGraphStore(f.path);
+  const upgrade = new WorldGraphStore(f.path, { topologyVersion: 'b1' });
   try {
     assert.equal(upgrade.inspectA2Upgrade().status, 'upgrade_required');
     assert.throws(() => upgrade.migrateA2(), error => error.code === 'world_a2_backup_required');
@@ -309,7 +309,7 @@ test('A1 to A2 migration refuses orphan custody, weakened schemas, and altered i
         CREATE TRIGGER world_action_receipts_append_only_update BEFORE UPDATE ON world_action_receipts BEGIN SELECT CASE WHEN 0 THEN RAISE(ABORT, 'append-only table') END; END;`);
     }
     sqlite.close();
-    const upgrade = new WorldGraphStore(f.path);
+    const upgrade = new WorldGraphStore(f.path, { topologyVersion: 'b1' });
     try {
       const expectedCode = mode === 'orphan' ? 'world_a2_legacy_foreign_key_invalid' : mode === 'schema' ? 'world_a2_legacy_schema_invalid' : 'world_a2_legacy_trigger_invalid';
       assert.throws(() => upgrade.migrateA2({ backupConfirmed: true }), error => error.code === expectedCode);
@@ -365,8 +365,8 @@ test('missing, extra, pointer, duplicate, and approval-count operational drift f
 
 test('restart reconciliation replaces a running kiln with one causal cancellation event', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-a2-restart-')); const root = join(dir, 'repo'); await mkdir(root); const path = join(dir, 'world.sqlite');
-  const first = new WorldGraphStore(path); first.ensureLifespan('life'); first.setFixtureRuntime(KILN_FIXTURE_ID, { status: 'running', recipe: 'node_test' }, { sessionId: 'life', action: 'recipe_started' }); first.close();
-  const second = new WorldGraphStore(path); const recipes = { active: null, status: () => ({ running: false }), cancel: () => ({ cancelled: false }), close: () => ({ cancelled: false }) };
+  const first = new WorldGraphStore(path, { topologyVersion: 'b1' }); first.ensureLifespan('life'); first.setFixtureRuntime(KILN_FIXTURE_ID, { status: 'running', recipe: 'node_test' }, { sessionId: 'life', action: 'recipe_started' }); first.close();
+  const second = new WorldGraphStore(path, { topologyVersion: 'b1' }); const recipes = { active: null, status: () => ({ running: false }), cancel: () => ({ cancelled: false }), close: () => ({ cancelled: false }) };
   const gateway = new WorldActionGateway({ world: second, workshop: new WorkshopAdapter(root), recipeRunner: recipes, approvalMode: 'auto' });
   try {
     const before = second.verification().eventCount; gateway.reconcileStartup('life');
@@ -384,7 +384,7 @@ test('restart reconciliation gives an imported legacy-running kiln one determini
   const sqlite = new DatabaseSync(f.path); downgradeOperationalTablesToA1(sqlite);
   sqlite.prepare('INSERT INTO world_fixture_runtime(fixture_id,state_json,updated_at) VALUES(?,?,?)').run(KILN_FIXTURE_ID, canonicalize({ status: 'running', recipe: 'node_test' }), '2026-08-11T12:00:00.000Z');
   sqlite.close();
-  const upgrade = new WorldGraphStore(f.path); const root = join(f.dir, 'repo'); await mkdir(root);
+  const upgrade = new WorldGraphStore(f.path, { topologyVersion: 'b1' }); const root = join(f.dir, 'repo'); await mkdir(root);
   try {
     upgrade.migrateA2({ backupConfirmed: true });
     upgrade.migrateB1({ backupConfirmed: true });

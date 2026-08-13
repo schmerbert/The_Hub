@@ -55,10 +55,11 @@ test('context ordering and hashes match actual adapter input', async () => {
     const presented = f.hub.provider.calls[0].messages;
     assert.equal(presented[0].content, STABLE_GLASS_TEXT);
     assert.equal(presented.at(-1).content, 'Exact words.');
-    assert.match(presented[1].content, /^Prior horizon:/);
-    assert.match(presented[2].content, /^Current crossing ground:/);
-    assert.equal(presented[2].content.includes(result.body.sessionId), false);
-    assert.equal(presented[2].content.includes(result.body.id), false);
+    assert.match(presented[1].content, /^Current crossing ground:/);
+    assert.match(presented[2].content, /^Current location: place\.house\./);
+    assert.match(presented[2].content, /fixture\.hearth/);
+    assert.equal(presented[1].content.includes(result.body.sessionId), false);
+    assert.equal(presented[1].content.includes(result.body.id), false);
     assert.deepEqual(included.map(item => item.content), [STABLE_GLASS_TEXT, 'Exact words.']);
     assert.equal(result.body.glassCasts.length, 2);
     for (const item of result.body.context) assert.equal(item.contentHash, sha256(item.content));

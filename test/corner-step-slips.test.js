@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,7 @@ import { WorldGraphStore } from '../src/world/graph.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { projectWakeSlips } from '../src/corner/slips.js';
+import { placeInCenterFromHouse } from './support/house-navigation.js';
 
 async function fixture(provider) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-slips-'));
@@ -58,6 +59,7 @@ test('slips project thinking and multi-tool actions without polluting utterances
   };
   const f = await fixture(provider);
   try {
+    await placeInCenterFromHouse(f.hub.world, f.hub.gateway, f.hub.db.session.id);
     const result = await post(f.base, 'Go to the Workshop.');
     assert.equal(result.response.status, 200);
     const slips = await (await fetch(`${f.base}/api/wakes/${encodeURIComponent(result.body.id)}/slips`)).json();
@@ -83,10 +85,10 @@ test('journal-bearing sensory drift is not silently normalized', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-sensory-seed-'));
   const path = join(dir, 'world.sqlite');
   try {
-    const first = new WorldGraphStore(path);
+    const first = new WorldGraphStore(path, { topologyVersion: 'b1' });
     first.withNodeMutations(() => first.sqlite.prepare('UPDATE world_nodes SET resident_text=? WHERE id=?').run('old workshop text', 'room.workshop'));
     first.close();
-    const migrated = new WorldGraphStore(path);
+    const migrated = new WorldGraphStore(path, { topologyVersion: 'b1' });
     assert.equal(migrated.node('room.workshop').resident_text, 'old workshop text');
     assert.equal(migrated.verification().verified, false);
     assert.throws(() => migrated.ensureLifespan('life'), error => error.code === 'world_projection_drift');
@@ -104,7 +106,7 @@ test('resolved approvals no longer project stale decidable pending slips', async
   await mkdir(join(root, 'src'), { recursive: true });
   await writeFile(join(root, 'src', 'reject.txt'), 'reject me\n', 'utf8');
   await writeFile(join(root, 'src', 'confirm.txt'), 'confirm me\n', 'utf8');
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root), approvalMode: 'confirm' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', wakeId: 'wake', doorId: 'door.workshop' });
@@ -139,7 +141,7 @@ test('resolved approvals no longer project stale decidable pending slips', async
 
 test('Garden passage and turning-stone receipts receive human step labels', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-slips-garden-'));
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(process.cwd()), approvalMode: 'confirm' });
   const wake = { id: 'wake-garden', status: 'committed', phases: [{ id: 'provider-garden', phase: 'ordinary', createdAt: '2026-08-11T00:00:00.000Z' }] };
   const execute = (id, name, args) => gateway.execute({

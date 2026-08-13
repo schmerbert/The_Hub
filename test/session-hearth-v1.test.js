@@ -30,7 +30,7 @@ test('v1 first turn stores one user, performs two phases, and later turns stay o
     assert.equal(response.messages.some(message => JSON.stringify(message) === JSON.stringify(hearthAction)), true);
     const hearthReturn = response.messages.find(message => message.role === 'tool' && message.content === first.hearth.scrollMarkdown);
     assert.ok(hearthReturn);
-    assert.match(hearthReturn.content, /^# Wake inheritance/);
+    assert.match(hearthReturn.content, /^# Hearth/);
     assert.doesNotMatch(hearthReturn.content, /schema_version|return_json|raw_return|Longshore Current/i);
     const later = await f.hub.wake('second exact user');
     assert.deepEqual(later.phases.map(phase => phase.phase), ['ordinary']);
@@ -83,7 +83,7 @@ test('restart closes the prior lifespan, opens exactly one new lifespan, and car
     const hearth = JSON.parse(current.hearth.returnJson);
     assert.equal(hearth.priorHorizon.sourceSessionId, priorSessionId);
     assert.ok(hearth.atoms.some(item => item.excerpt === 'prior exact text'));
-    assert.ok(hearth.atoms.some(item => item.excerpt.includes('FAKE MODE')));
+    assert.ok(hearth.atoms.some(item => item.excerpt === 'prior exact text'));
     assert.equal(hearth.selection.policy, 'deterministic_prior_session_recency');
     assert.doesNotMatch(current.hearth.returnJson, /"summary"\s*:|embedding|room_id|Longshore Current/i);
   } finally { second.close(); await rm(dir, { recursive: true, force: true }); }

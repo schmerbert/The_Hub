@@ -7,6 +7,7 @@ import { assertScrubbedPresentation, scrubProviderHistory, verifyScrubbedProject
 import { scrubProviderReturn } from '../scrub/provider-return.js';
 import { scrubHostReturn } from '../scrub/host-return.js';
 import { HEARTH_TOOL, HEARTH_TOOL_CHOICE, hearthReturnHash, validateOrientationResult } from '../hearth/handshake.js';
+import { renderHearthPacket } from '../hearth/packet.js';
 import { residentToolProfile, schemasForResidentSession } from '../world/tools.js';
 import { AttentionMeter } from '../world/results.js';
 
@@ -265,16 +266,16 @@ export class WakeService {
       }
     }
     db.markCalling(created.wakeId);
-    let wakeInheritance = firstTurn ? null : db.getSessionGlassInheritance(created.sessionId);
+    let wakeInheritance = null;
     const callPhase = async (phase, historyRows, options = {}) => {
       if (this.closing) throw providerCancellation();
       const thinking = options.orientation ? 'disabled' : config.thinking;
       const tools = options.orientation ? [HEARTH_TOOL] : options.tools;
-      const continuityMode = options.orientation ? 'pending' : options.causalHearth ? 'causal_hearth' : 'direct';
+      const continuityMode = options.orientation ? 'pending' : options.causalHearth ? 'causal_hearth' : 'none';
       let omissionPlan = options.orientation
         ? { omissions: [], manifest: [], omittedExchangeCount: 0, omittedMessageCount: 0, disclosure: null }
         : planOldToolExchangeOmissions(historyRows, { currentWakeId: created.wakeId, retainExchanges: config.retainedToolPairs, sourceOffset: 0 });
-      if (continuityMode === 'direct') {
+      if (continuityMode === 'direct' || continuityMode === 'none') {
         const promotion = planPromotedHearthOmissions(historyRows);
         const byIndex = new Map([...omissionPlan.omissions, ...promotion.omissions].map(item => [item.sourceIndex, item]));
         omissionPlan = {
@@ -298,7 +299,7 @@ export class WakeService {
       const assemble = () => {
         const historyRefs = historyRows.map(row => {
           const message = JSON.parse(row.messageJson);
-          const isCausalHearthReturn = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'tool_result' && typeof message.content === 'string' && message.content.startsWith('# Wake inheritance');
+          const isCausalHearthReturn = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'tool_result' && typeof message.content === 'string' && message.content.startsWith('# Hearth');
           const isCausalHearthAction = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'assistant_tool_call' && message.tool_calls?.some(call => call.function?.name === 'tend_hearth');
           return {
             kind: isCausalHearthReturn ? 'hearth_return' : isCausalHearthAction ? 'hearth_action' : row.messageKind,
@@ -496,10 +497,9 @@ export class WakeService {
     };
     let canonicalCommitted = false;
     try {
-      if (!firstTurn && !wakeInheritance) throw { code: 'glass_cast_invalid', message: 'The active lifespan is missing its persisted Glass wake inheritance.' };
       world.assertVerified();
       if (firstTurn) {
-        const orientation = await callPhase('orientation', db.getSessionHistory(created.sessionId), { orientation: true, roomPresence: false });
+        const orientation = await callPhase('orientation', db.getSessionHistory(created.sessionId), { orientation: true });
         const action = validateOrientationResult(orientation.result);
         const actionEventId = db.recordHearthAction({ wakeId: created.wakeId, sessionId: created.sessionId, message: action.message, returnScrub: orientation.returnScrub });
         this.publish('tool_call.ready', {
@@ -515,8 +515,9 @@ export class WakeService {
         const prior = db.priorSessionTail({ sessionId: created.sessionId, ceiling: config.messageCeiling });
         const inheritance = buildGlassWakeInheritance({ prior, forest, budgetBytes: config.hearthScrollBudget, excerptLimitUtf16: config.hearthExcerptLimit, sourceAncestry: { orientationSpineRecordId: orientation.requestFrame?.record_id || null, orientationReturnScrub: orientation.returnScrub.receipt } });
         wakeInheritance = { wakeAnchor: inheritance.receipt.wakeAnchor, atoms: inheritance.atoms, priorHorizon: inheritance.priorHorizon };
-        const hearthScrub = scrubHostReturn({ toolName: 'tend_hearth', toolCallId: action.toolCallId, arguments: {}, result: { markdown: inheritance.markdown, glassInheritance: inheritance.receipt }, content: inheritance.markdown, renderPolicy: 'glass_wake_inheritance_markdown_v1' });
-        const hearthReturnRecord = db.recordHearthReturn({ wakeId: created.wakeId, sessionId: created.sessionId, toolCallId: action.toolCallId, returnValue: inheritance.receipt, scrollMarkdown: inheritance.markdown, scrollHash: inheritance.markdownHash, actionEventId, returnHash: hearthReturnHash(inheritance.receipt), hostReturnScrub: hearthScrub });
+        const packet = renderHearthPacket({ atoms: inheritance.atoms, priorHorizon: inheritance.priorHorizon, selection: inheritance.receipt.selection, budgetBytes: config.hearthScrollBudget });
+        const hearthScrub = scrubHostReturn({ toolName: 'tend_hearth', toolCallId: action.toolCallId, arguments: {}, result: { markdown: packet.markdown, hearthPacket: packet.receipt }, content: packet.markdown, renderPolicy: 'house_hearth_packet_markdown_v1' });
+        const hearthReturnRecord = db.recordHearthReturn({ wakeId: created.wakeId, sessionId: created.sessionId, toolCallId: action.toolCallId, returnValue: packet.receipt, scrollMarkdown: packet.markdown, scrollHash: packet.markdownHash, actionEventId, returnHash: hearthReturnHash(packet.receipt), hostReturnScrub: hearthScrub });
         this.publish('tool.completed', {
           sessionId: created.sessionId, wakeId: created.wakeId, phase: 'orientation',
           payload: this.toolCardPayload(action.toolCallId, 'tend_hearth', 'completed', { status: 'completed' }),

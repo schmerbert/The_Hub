@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,7 +24,7 @@ async function slowRepo() {
 
 test('async kiln starts immediately and settles in background', async () => {
   const { dir, root } = await slowRepo();
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root), approvalMode: 'auto', recipeTimeoutMs: 30000 });
@@ -44,7 +44,7 @@ test('async kiln starts immediately and settles in background', async () => {
 
 test('leave Workshop keeps kiln firing; disengage does not cancel', async () => {
   const { dir, root } = await slowRepo();
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root), approvalMode: 'auto', recipeTimeoutMs: 30000 });
@@ -68,7 +68,7 @@ test('leave Workshop keeps kiln firing; disengage does not cancel', async () => 
 
 test('explicit recipe cancel smothers kiln', async () => {
   const { dir, root } = await slowRepo();
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root), approvalMode: 'auto', recipeTimeoutMs: 30000 });
@@ -84,7 +84,7 @@ test('explicit recipe cancel smothers kiln', async () => {
 test('timer arms, fires with fake clock, survives room move, Center cannot set', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-timer-'));
   let now = 1_000_000;
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { now: () => now });
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { now: () => now, topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(dir), approvalMode: 'auto' });

@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,7 +15,7 @@ import { WorldActionGateway } from '../src/world/gateway.js';
 async function fixture(options) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-drift-'));
   const path = join(dir, 'world.sqlite');
-  const world = new WorldGraphStore(path, options);
+  const world = new WorldGraphStore(path, { topologyVersion: 'b1', ...options });
   return { dir, path, world, close: async () => { world.close(); await rm(dir, { recursive: true, force: true }); } };
 }
 
@@ -157,7 +157,7 @@ test('journal-less material state receives one exact legacy boundary without fab
     ALTER TABLE world_locations_historical RENAME TO world_locations;
     PRAGMA foreign_keys=ON;`);
   sqlite.close();
-  const migrated = new WorldGraphStore(f.path);
+  const migrated = new WorldGraphStore(f.path, { topologyVersion: 'b1' });
   try {
     const rows = migrated.sqlite.prepare('SELECT event_kind,payload_json FROM world_event_journal ORDER BY sequence').all();
     assert.equal(rows.length, 3);
@@ -229,7 +229,7 @@ test('journal-bearing reopen never repairs missing or inert integrity triggers',
     f.world.sqlite.exec('DROP TRIGGER world_event_journal_append_only_update;');
     if (inert) f.world.sqlite.exec("CREATE TRIGGER world_event_journal_append_only_update BEFORE UPDATE ON world_event_journal BEGIN SELECT CASE WHEN 0 THEN RAISE(ABORT,'never') END; END;");
     f.world.close();
-    const reopened = new WorldGraphStore(f.path);
+    const reopened = new WorldGraphStore(f.path, { topologyVersion: 'b1' });
     try {
       const verification = reopened.verification();
       assert.equal(verification.verified, false);
@@ -395,7 +395,7 @@ test('legacy boundary refuses an altered or extra topology instead of blessing i
     DROP TRIGGER world_edges_append_only_update;
     UPDATE world_edges SET label='Counterfeit Legacy Door' WHERE id='edge.door.workshop.center_to_workshop';`);
   sqlite.close();
-  try { assert.throws(() => new WorldGraphStore(f.path), error => error.code === 'world_legacy_topology_invalid'); }
+  try { assert.throws(() => new WorldGraphStore(f.path, { topologyVersion: 'b1' }), error => error.code === 'world_legacy_topology_invalid'); }
   finally { await rm(f.dir, { recursive: true, force: true }); }
 });
 
@@ -423,7 +423,7 @@ test('canonical rehashed movement clearing and causation lies fail replay', asyn
 test('approval decisions refuse drift before host mutation or approval change', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-approval-drift-')); const root = join(dir, 'repo'); await mkdir(root);
   const path = join(root, 'target.txt'); await writeFile(path, 'before', 'utf8');
-  const world = new WorldGraphStore(join(dir, 'world.sqlite')); world.ensureLifespan('life'); world.move({ sessionId: 'life', doorId: 'door.workshop' });
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' }); world.ensureLifespan('life'); world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root), approvalMode: 'confirm' });
   const approval = world.createApproval({ sessionId: 'life', kind: 'write_file', payload: { path: 'target.txt', content: 'after' }, preview: { path: 'target.txt' } });
   world.sqlite.prepare("UPDATE world_locations SET room_node_id='room.center' WHERE session_id='life'").run();

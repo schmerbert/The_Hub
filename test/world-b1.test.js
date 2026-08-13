@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -23,7 +23,7 @@ const execFileAsync = promisify(execFile);
 
 async function fixture(options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-b1-')); const path = join(dir, 'world.sqlite');
-  const world = new WorldGraphStore(path, options); const root = join(dir, 'repo'); await mkdir(root);
+  const world = new WorldGraphStore(path, { topologyVersion: 'b1', ...options }); const root = join(dir, 'repo'); await mkdir(root);
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root) });
   return { dir, path, root, world, gateway, close: async () => { await gateway.close(); world.close(); await rm(dir, { recursive: true, force: true }); } };
 }
@@ -94,7 +94,7 @@ test('front-door side and transition laws are exact, global across lifespans, an
     assert.deepEqual(({ locked: f.world.getObjectState('object.front_door').locked, open: f.world.getObjectState('object.front_door').open }), { locked: true, open: false });
     f.world.ensureLifespan('second'); assert.equal(f.world.current('second').room_node_id, 'room.center');
     await f.gateway.close(); f.world.close();
-    const reopened = new WorldGraphStore(f.path);
+    const reopened = new WorldGraphStore(f.path, { topologyVersion: 'b1' });
     try { assert.deepEqual(({ locked: reopened.getObjectState('object.front_door').locked, open: reopened.getObjectState('object.front_door').open }), { locked: true, open: false }); assert.equal(reopened.current('second').room_node_id, 'room.center'); }
     finally { reopened.close(); }
   } finally { await rm(f.dir, { recursive: true, force: true }); }
@@ -135,7 +135,7 @@ test('B1 command mutations and custody are atomic; refusals and injected failure
 
 test('A2 opens upgrade-required without writes and B1 migration is backup-gated and transactional', async () => {
   const f = await fixture(); await f.gateway.close(); f.world.close(); downgradeFreshB1ToExactA2(f.path);
-  const before = await readFile(f.path); const world = new WorldGraphStore(f.path, { eventFailureInjector: ({ phase }) => { if (phase === 'after_projection_apply') throw new Error('b1 migration rollback'); } });
+  const before = await readFile(f.path); const world = new WorldGraphStore(f.path, { topologyVersion: 'b1', eventFailureInjector: ({ phase }) => { if (phase === 'after_projection_apply') throw new Error('b1 migration rollback'); } });
   try {
     assert.equal(world.verification().status, 'upgrade_required'); assert.equal(world.inspectB1Upgrade().status, 'upgrade_required');
     for (const backupConfirmed of [undefined, false, null, 'false', {}]) assert.throws(() => world.migrateB1({ backupConfirmed }), error => error.code === 'world_b1_backup_required');
@@ -169,7 +169,7 @@ test('B1 migration CLI is read-only by default and requires backup confirmation 
     await assert.rejects(() => execFileAsync(process.execPath, ['src/scripts/world-migrate-b1.js', '--apply'], { cwd: process.cwd(), env }), error => error.code === 2);
     assert.deepEqual(await readFile(f.path), before);
     const applied = await execFileAsync(process.execPath, ['src/scripts/world-migrate-b1.js', '--apply', '--backup-confirmed'], { cwd: process.cwd(), env });
-    assert.match(applied.stdout, /"status": "migrated"/); const current = new WorldGraphStore(f.path); try { assert.equal(current.verification().verified, true); } finally { current.close(); }
+    assert.match(applied.stdout, /"status": "migrated"/); const current = new WorldGraphStore(f.path, { topologyVersion: 'b1' }); try { assert.equal(current.verification().verified, true); } finally { current.close(); }
     const currentInspect = await execFileAsync(process.execPath, ['src/scripts/world-migrate-b1.js'], { cwd: process.cwd(), env }); assert.match(currentInspect.stdout, /"status": "current"/);
     const help = await execFileAsync(process.execPath, ['src/scripts/world-migrate-b1.js', '--help'], { cwd: process.cwd(), env }); assert.match(help.stdout, /read-only/); assert.match(help.stdout, /--apply --backup-confirmed/);
   } finally { await rm(f.dir, { recursive: true, force: true }); }
@@ -180,7 +180,7 @@ test('B1 migration CLI refuses missing and corrupt stores without creating or ch
   try {
     const env = { ...process.env, HUB_WORLD_PATH: missing };
     await assert.rejects(() => execFileAsync(process.execPath, ['src/scripts/world-migrate-b1.js'], { cwd: process.cwd(), env })); assert.equal(existsSync(missing), false);
-    const path = join(dir, 'corrupt.sqlite'); const world = new WorldGraphStore(path); world.sqlite.prepare("UPDATE world_object_states SET state_json='{}' WHERE object_id='object.front_door'").run(); world.close();
+    const path = join(dir, 'corrupt.sqlite'); const world = new WorldGraphStore(path, { topologyVersion: 'b1' }); world.sqlite.prepare("UPDATE world_object_states SET state_json='{}' WHERE object_id='object.front_door'").run(); world.close();
     const before = await readFile(path); await assert.rejects(() => execFileAsync(process.execPath, ['src/scripts/world-migrate-b1.js', '--apply', '--backup-confirmed'], { cwd: process.cwd(), env: { ...process.env, HUB_WORLD_PATH: path } })); assert.deepEqual(await readFile(path), before);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -188,7 +188,7 @@ test('B1 migration CLI refuses missing and corrupt stores without creating or ch
 test('partial B1 schema is drift, not clean A2 upgrade-required', async () => {
   const f = await fixture(); await f.gateway.close(); f.world.close(); downgradeFreshB1ToExactA2(f.path);
   const sqlite = new DatabaseSync(f.path); sqlite.exec('CREATE TABLE world_passages (edge_id TEXT);'); sqlite.close();
-  const world = new WorldGraphStore(f.path);
+  const world = new WorldGraphStore(f.path, { topologyVersion: 'b1' });
   try { const verification = world.verification(); assert.equal(verification.verified, false); assert.notEqual(verification.status, 'upgrade_required'); assert.equal(world.inspectB1Upgrade().status, 'corrupt_or_incomplete_b1'); }
   finally { world.close(); await rm(f.dir, { recursive: true, force: true }); }
 });
@@ -294,7 +294,7 @@ test('copied configured legacy World migrates to B1 while source remains read-on
       const columns = sourceDb.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name);
       return [table, { columns, rows: sourceDb.prepare(`SELECT ${columns.join(',')} FROM ${table}`).all().map(row => ({ ...row })) }];
     })); sourceDb.close();
-    await copyFile(source, copy); const world = new WorldGraphStore(copy);
+    await copyFile(source, copy); const world = new WorldGraphStore(copy, { topologyVersion: 'b1' });
     try {
       assert.equal(world.verification().verified, true); assert.equal(world.verification().eventCount, 3);
       for (const [table, snapshot] of Object.entries(before)) {

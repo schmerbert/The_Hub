@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHub } from '../src/server/app.js';
 import { FakeResidentProvider } from '../src/providers/fake.js';
+import { placeInWorkshopFromHouse } from './support/house-navigation.js';
 
 function deferred() {
   let resolve;
@@ -251,7 +252,7 @@ test('tool, approval, and host-projected cards publish only after their custody 
   const f = await fixture(new ApprovalProvider());
   try {
     assert.equal((await f.hub.wake('Orient.')).status, 'committed');
-    f.hub.world.move({ sessionId: f.hub.db.session.id, wakeId: 'host-move', doorId: 'door.workshop' });
+    await placeInWorkshopFromHouse(f.hub.world, f.hub.gateway, f.hub.db.session.id, 'host-move');
     f.hub.eventBus.subscribe(() => { throw new Error('isolated listener'); });
     const wake = await f.hub.wake('Delete the disposable file.');
     assert.equal(wake.status, 'committed');

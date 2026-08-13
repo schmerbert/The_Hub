@@ -25,7 +25,7 @@ if (!args.has('--apply')) {
   console.error(JSON.stringify({ worldPath: config.worldPath, status: 'migration_refused', inspection }, null, 2));
   process.exitCode = 1;
 } else {
-  const world = new WorldGraphStore(config.worldPath);
+  const world = new WorldGraphStore(config.worldPath, { topologyVersion: 'b1' });
   try {
     const result = world.migrateB1({ backupConfirmed: true });
     console.log(JSON.stringify({ worldPath: config.worldPath, mode: 'apply', ...result }, null, 2));

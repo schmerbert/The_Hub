@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { ResultRackStore } from '../src/world/results.js';
 import { WorldGraphStore } from '../src/world/graph.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
+import { placeInWorkshopFromHouse } from './support/house-navigation.js';
 
 async function rootFixture() {
   const dir = await mkdtemp(join(tmpdir(), 'hub-runtime-integration-'));
@@ -20,7 +21,7 @@ async function rootFixture() {
 
 test('ordinary Workshop returns use fitted Result Rack content with resolvable exact custody', async () => {
   const f = await rootFixture();
-  const world = new WorldGraphStore(join(f.dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(f.dir, 'world.sqlite'), { topologyVersion: 'b1' });
   const results = new ResultRackStore(join(f.dir, 'results.sqlite'), { projectionMaxBytes: 700, projectionMaxLines: 12 });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(f.repo, { maxBytes: 100000, maxLines: 200 }), resultRack: results, approvalMode: 'auto' });
   try {
@@ -42,7 +43,7 @@ test('provider dispatch persists attention measurement and presents only the fit
   const f = await rootFixture();
   const hub = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: join(f.dir, 'hub.sqlite'), HUB_WORKSHOP_ROOT: f.repo } });
   try {
-    hub.world.move({ sessionId: hub.db.session.id, wakeId: 'host-setup', doorId: 'door.workshop' });
+    await placeInWorkshopFromHouse(hub.world, hub.gateway, hub.db.session.id, 'host-setup');
     const wake = await hub.wake('Show me the Workshop.');
     assert.equal(wake.status, 'committed');
     const responsePhase = wake.phases.find(phase => phase.phase === 'response');

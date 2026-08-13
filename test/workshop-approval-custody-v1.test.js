@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -12,7 +12,7 @@ async function fixture(prefix = 'hub-approval-custody-') {
   const dir = await mkdtemp(join(tmpdir(), prefix));
   const root = join(dir, 'repo');
   await mkdir(root, { recursive: true });
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', wakeId: 'move', doorId: 'door.workshop' });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root), approvalMode: 'confirm' });
@@ -252,7 +252,7 @@ test('post-effect custody failure leaves a durable non-retryable applying approv
     assert.equal(f.world.verification().verified, true);
 
     await f.gateway.close(); f.world.close(); originalClosed = true;
-    reopenedWorld = new WorldGraphStore(join(f.dir, 'world.sqlite'));
+    reopenedWorld = new WorldGraphStore(join(f.dir, 'world.sqlite'), { topologyVersion: 'b1' });
     reopenedGateway = new WorldActionGateway({ world: reopenedWorld, workshop: new WorkshopAdapter(f.root), approvalMode: 'confirm' });
     const reconciled = reopenedGateway.reconcileStartup('life-next');
     assert.equal(reconciled.lifespan.cancelledApprovalIds.includes(approvalId), false);

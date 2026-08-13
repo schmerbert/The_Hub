@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -9,6 +9,7 @@ import { KILN_FIXTURE_ID, WorldGraphStore } from '../src/world/graph.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { schemasForSession } from '../src/world/tools.js';
+import { placeInCenterFromHouse } from './support/house-navigation.js';
 
 const WORKSHOP_FIXTURES = [
   'fixture.workshop_clipboard',
@@ -35,7 +36,7 @@ test('fixtures seed, engage, and presence omit tool scaffolding', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-fixture-seed-'));
   const path = join(dir, 'world.sqlite');
   try {
-    const world = new WorldGraphStore(path);
+    const world = new WorldGraphStore(path, { topologyVersion: 'b1' });
     assert.equal(world.sqlite.prepare('SELECT COUNT(*) AS count FROM world_nodes').get().count, 22);
     assert.equal(world.sqlite.prepare('SELECT COUNT(*) AS count FROM world_edges').get().count, 25);
     assert.deepEqual(world.sqlite.prepare("SELECT id FROM world_nodes WHERE node_type='fixture' AND lifecycle='standing' AND id LIKE 'fixture.workshop_%' ORDER BY id").all().map(row => row.id), WORKSHOP_FIXTURES);
@@ -74,7 +75,7 @@ test('ceiling flat mount auto-applies patch; delete waits on workbench', async (
   const root = join(dir, 'repo');
   await mkdir(join(root, 'src'), { recursive: true });
   await writeFile(join(root, 'src', 'sample.txt'), 'alpha\nbeta\n', 'utf8');
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const workshop = new WorkshopAdapter(root, { maxBytes: 10000, maxLines: 40 });
@@ -107,7 +108,7 @@ test('clipboard brief tools and kiln ambient state after recipe', async () => {
   await mkdir(join(root, 'test'), { recursive: true });
   await writeFile(join(root, 'test', 'ok.test.js'), "const test = require('node:test');\ntest('ok', () => {});", 'utf8');
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fixture', private: true }), 'utf8');
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   world.engageFixture({ sessionId: 'life', fixtureId: 'fixture.workshop_clipboard' });
@@ -149,6 +150,7 @@ test('HTTP world and approvals expose fixture mount state', async () => {
   };
   const f = await fixture(provider);
   try {
+    await placeInCenterFromHouse(f.hub.world, f.hub.gateway, f.hub.db.session.id);
     const result = await post(f.base, 'Enter Workshop and engage the workbench.');
     assert.equal(result.response.status, 200);
     assert.equal(f.hub.world.current(result.body.sessionId).engaged_fixture_id, 'fixture.workshop_workbench');
@@ -167,7 +169,7 @@ test('fixture inspection is read-only and exposes bounded fixture truth', async 
   const root = join(dir, 'repo');
   await mkdir(join(root, 'src'), { recursive: true });
   await writeFile(join(root, 'src', 'sample.txt'), 'alpha\n', 'utf8');
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   const workshop = new WorkshopAdapter(root);
   const gateway = new WorldActionGateway({ world, workshop, approvalMode: 'confirm' });
@@ -233,7 +235,7 @@ test('tree truncation, Control Panel supersession, and inspect slips are explici
     const controlPanel = await readFile(join(process.cwd(), 'docs', 'specs', 'WORKSHOP_CONTROL_PANEL_V1.md'), 'utf8');
     assert.match(controlPanel.slice(0, 250), /superseded.*HUB-016/i);
 
-    const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+    const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
     world.ensureLifespan('life');
     world.move({ sessionId: 'life', doorId: 'door.workshop' });
     const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(root) });

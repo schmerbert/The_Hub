@@ -129,11 +129,12 @@ export function planPromotedHearthOmissions(historyRows) {
     let action; let returned;
     try { action = JSON.parse(actionRow.messageJson); returned = JSON.parse(returnRow.messageJson); } catch { continue; }
     const hearthCall = Array.isArray(action?.tool_calls) && action.tool_calls.length === 1 && action.tool_calls[0]?.function?.name === 'tend_hearth' ? action.tool_calls[0] : null;
-    if (!hearthCall?.id || returned?.tool_call_id !== hearthCall.id || typeof returned.content !== 'string' || !returned.content.startsWith('# Wake inheritance')) continue;
+    if (!hearthCall?.id || returned?.tool_call_id !== hearthCall.id || typeof returned.content !== 'string' || !(returned.content.startsWith('# Wake inheritance') || returned.content.startsWith('# Hearth'))) continue;
+    const houseHearth = returned.content.startsWith('# Hearth');
     return {
-      omissions: [index, index + 1].map(sourceIndex => ({ sourceIndex, omitMessage: true, reason: 'Causal Hearth action and return omitted after exact inheritance promotion to the Glass continuity-anchors band.' })),
+      omissions: [index, index + 1].map(sourceIndex => ({ sourceIndex, omitMessage: true, reason: houseHearth ? 'Completed House Hearth action and return are not reinjected after the first response; exact session custody remains.' : 'Causal Hearth action and return omitted after exact inheritance promotion to the Glass continuity-anchors band.' })),
       manifest: { wakeId: actionRow.wakeId, actionHistoryOrdinal: actionRow.ordinal, returnHistoryOrdinal: returnRow.ordinal, toolCallId: hearthCall.id, messageHashes: [sha256(actionRow.messageJson), sha256(returnRow.messageJson)] },
-      disclosure: 'Glass continuity disclosure: the completed causal Hearth action and return are omitted from the living edge because their exact wake inheritance is now presented in continuity anchors; exact session history remains in host custody.',
+      disclosure: houseHearth ? 'Hearth disclosure: the completed first-wake action and packet are not reinjected; exact session history remains in host custody.' : 'Glass continuity disclosure: the completed causal Hearth action and return are omitted from the living edge because their exact wake inheritance is now presented in continuity anchors; exact session history remains in host custody.',
     };
   }
   return { omissions: [], manifest: null, disclosure: null };
@@ -199,13 +200,13 @@ function priorHorizonBand(priorHorizon = null) {
 export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = [], inheritance = null, continuityMode = 'direct', priorHorizon = null } = {}) {
   if (!['orientation', 'response', 'ordinary'].includes(phase)) throw glassError('Glass cast phase is invalid.');
   if (!Array.isArray(livingEdgeRefs) || !Array.isArray(livingEdgeOmissions)) throw glassError('Glass living edge and omissions must be arrays.');
-  if (!['pending', 'causal_hearth', 'direct'].includes(continuityMode)) throw glassError('Glass continuity mode is invalid.');
+  if (!['pending', 'causal_hearth', 'direct', 'none'].includes(continuityMode)) throw glassError('Glass continuity mode is invalid.');
 
   const glassRef = { kind: 'stable_glass', authority: 'host_ground', message: { role: 'system', content: STABLE_GLASS_TEXT } };
   const directContinuityRefs = continuityMode === 'direct' ? continuityRefs(inheritance) : [];
   const providerContinuityRefs = directContinuityRefs.map(ref => ({ ...ref, glassSourceEventId: ref.sourceEventId || null, sourceEventId: null }));
   const priorRef = priorHorizonBand(priorHorizon).items[0];
-  const prefixRefs = [glassRef, ...providerContinuityRefs, { ...priorRef, message: priorRef.message }];
+  const prefixRefs = [glassRef, ...providerContinuityRefs, ...(continuityMode === 'direct' ? [{ ...priorRef, message: priorRef.message }] : [])];
   const shiftedOmissions = livingEdgeOmissions.map(omission => {
     if (!omission || !Number.isInteger(omission.sourceIndex) || omission.sourceIndex < 0) throw glassError('Glass living-edge omission index is invalid.');
     return { ...omission, sourceIndex: omission.sourceIndex + prefixRefs.length };
@@ -230,6 +231,7 @@ export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = 
     }),
     (() => {
       const horizon = priorHorizonBand(priorHorizon);
+      if (continuityMode !== 'direct') return band('prior_horizon', 'empty', []);
       horizon.items[0].sourceMessageOrdinal = prefixRefs.length;
       return horizon;
     })(),

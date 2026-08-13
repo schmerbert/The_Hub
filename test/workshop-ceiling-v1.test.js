@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -24,7 +24,7 @@ async function repo() {
 
 test('flat mount exposes full workshop catalog without station engagement', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-ceiling-mount-'));
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   try {
     world.ensureLifespan('life');
     assert.deepEqual(world.availableTools('life'), ['move_through_door', 'move_through_passage', 'inspect_fixture']);
@@ -40,7 +40,7 @@ test('flat mount exposes full workshop catalog without station engagement', asyn
 
 test('patch bay separates full ceiling catalog from room profiles and presence', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-patch-bay-'));
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   try {
     world.ensureLifespan('life');
     const catalog = ceilingCatalog();
@@ -86,7 +86,7 @@ test('explore wires: glob, tree, stat, hash, regex', async () => {
 
 test('mutate wires auto-apply write/create/rename/diff; delete stays confirm', async () => {
   const { dir, root } = await repo();
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const workshop = new WorkshopAdapter(root);
@@ -127,7 +127,7 @@ test('recipes list/run/cancel and catalog/approval_list', async () => {
   const { dir, root } = await repo();
   await mkdir(join(root, 'test'), { recursive: true });
   await writeFile(join(root, 'test', 'ok.test.js'), "const test = require('node:test');\ntest('ok', () => {});", 'utf8');
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', doorId: 'door.workshop' });
   const workshop = new WorkshopAdapter(root);

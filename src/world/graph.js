@@ -5,6 +5,7 @@ import { canonicalize, id, sha256 } from '../core/hash.js';
 import { mountProfile, mountedToolNames, profilePresenceLine } from './ceiling.js';
 import { INSTALLED_WORLD_EDGES, INSTALLED_WORLD_NODES, topologyEventPayload } from './topology.js';
 import { topologyExtensionEventPayload } from './topology-b1.js';
+import { hearthTopologyEventPayload } from './topology-hearth.js';
 import {
   ACTION_RECEIPT_COLUMNS, APPROVAL_COLUMNS, APPROVAL_RECEIPT_COLUMNS, BRIEF_COLUMNS, EDGE_COLUMNS, FIXTURE_RUNTIME_COLUMNS,
   LOCATION_COLUMNS, NODE_COLUMNS, OBJECT_STATE_COLUMNS, PASSAGE_COLUMNS, TIMER_COLUMNS, assertWorldVerified, createWorldEvent, custodyRowHash, emptyWorldState,
@@ -72,11 +73,13 @@ function engagedColumn(row) {
 function fixtureName(id) { return String(id).replace(/^fixture\./, '').replace(/^workshop_/, '').replaceAll('_', ' '); }
 
 export class WorldGraphStore {
-  constructor(path, { now = () => Date.now(), eventFailureInjector = null } = {}) {
+  constructor(path, { now = () => Date.now(), eventFailureInjector = null, topologyVersion = 'hearth' } = {}) {
+    if (!['b1', 'hearth'].includes(topologyVersion)) throw new Error('World topology version is invalid.');
     mkdirSync(dirname(path), { recursive: true });
     this.path = path;
     this.nowMs = now;
     this.eventFailureInjector = eventFailureInjector;
+    this.topologyVersion = topologyVersion;
     this.transactionDepth = 0;
     this.transactionNeedsVerification = false;
     this.sqlite = new DatabaseSync(path);
@@ -94,6 +97,7 @@ export class WorldGraphStore {
         this.bootstrapLegacyBoundary();
         this._migrateA2Boundary({ requireBoundary: true });
         this.#migrateB1Boundary({ admittedLegacy: true });
+        if (this.topologyVersion === 'hearth') this.#bootstrapHearthExtension('world_migration');
       } else this.bootstrapFreshTopology();
     } catch (error) {
       this.sqlite.close();
@@ -209,12 +213,12 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       if (verify) this.transactionNeedsVerification = true;
       return fn();
     }
-    if (verify) assertWorldVerified(this.sqlite);
+    if (verify) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion === 'hearth' });
     this.sqlite.exec('BEGIN IMMEDIATE'); this.transactionDepth += 1;
     this.transactionNeedsVerification = verify;
     try {
       const result = fn();
-      if (this.transactionNeedsVerification) assertWorldVerified(this.sqlite);
+      if (this.transactionNeedsVerification) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion === 'hearth' });
       this.sqlite.exec('COMMIT');
       return result;
     } catch (error) {
@@ -227,8 +231,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const row = this.sqlite.prepare('SELECT MAX(aggregate_revision) AS revision FROM world_event_journal WHERE aggregate_kind=? AND aggregate_id=?').get(aggregateKind, aggregateId);
     return Math.max(row?.revision || 0, projectionRevision || 0);
   }
-  verification(options) { return verifyWorldSqlite(this.sqlite, options); }
-  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite); }
+  verification(options = {}) { return verifyWorldSqlite(this.sqlite, { requireHearth: this.topologyVersion === 'hearth', ...options }); }
+  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion === 'hearth' }); }
   _withTopologyProjectionWrites(fn) {
     for (const trigger of ['world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) this.sqlite.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
     try { return fn(); }
@@ -325,12 +329,21 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       actor: 'world_bootstrap', causation: { boundary: 'fresh_database' }, payload: topologyEventPayload(), skipVerification: true, replayPrior: emptyWorldState(),
     });
     this.#bootstrapB1Extension('world_bootstrap');
+    if (this.topologyVersion === 'hearth') this.#bootstrapHearthExtension('world_bootstrap');
   }
   #bootstrapB1Extension(actor = 'world_migration') {
     const head = this.eventHead();
     return this._appendPhysicalEvent({
       eventKind: 'topology.extended/v1', aggregateKind: 'topology_extension', aggregateId: 'installed', aggregateRevision: 1,
       actor, causation: { boundary: 'b1_topology_extension', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: topologyExtensionEventPayload(), skipVerification: true,
+      replayPrior: replayWorldEvents(this.sqlite),
+    });
+  }
+  #bootstrapHearthExtension(actor = 'world_migration') {
+    const head = this.eventHead();
+    return this._appendPhysicalEvent({
+      eventKind: 'topology.hearth_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'hearth', aggregateRevision: 1,
+      actor, causation: { boundary: 'house_hearth_wake_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: hearthTopologyEventPayload(), skipVerification: true,
       replayPrior: replayWorldEvents(this.sqlite),
     });
   }
@@ -497,7 +510,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     } finally { this.sqlite.exec('PRAGMA foreign_keys=ON;'); }
   }
   inspectB1Upgrade() {
-    const current = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+    const current = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: false });
     if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
     const extension = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.extended/v1' ORDER BY sequence LIMIT 1").get();
     const partialArtifacts = ['world_passages', 'world_object_states', 'world_passages_append_only_update', 'world_passages_append_only_delete']
@@ -513,6 +526,34 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
   migrateB1({ backupConfirmed = false } = {}) {
     if (backupConfirmed !== true) throw Object.assign(new Error('B1 migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_b1_backup_required' });
     return this.#migrateB1Boundary({ admittedLegacy: false });
+  }
+  inspectHearthUpgrade() {
+    const current = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+    if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
+    const hearth = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.hearth_installed/v1' ORDER BY sequence LIMIT 1").get();
+    if (hearth) return { status: 'corrupt_or_incomplete_hearth', upgradeRequired: false, hearth, verification: current };
+    const b1 = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: false });
+    if (!b1.verified) return { status: 'corrupt_b1', upgradeRequired: false, verification: b1 };
+    return { status: 'upgrade_required', upgradeRequired: true, verification: b1, backupExpectation: 'Create and verify a byte-for-byte backup of the World database before applying the House Hearth migration.' };
+  }
+  migrateHearth({ backupConfirmed = false } = {}) {
+    if (backupConfirmed !== true) throw Object.assign(new Error('House Hearth migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_hearth_backup_required' });
+    const inspection = this.inspectHearthUpgrade();
+    if (!inspection.upgradeRequired) {
+      if (inspection.status === 'current') return inspection;
+      throw Object.assign(new Error('House Hearth migration refused because the B1 journal is corrupt or a partial Hearth extension exists.'), { code: 'world_hearth_migration_refused', inspection });
+    }
+    this.sqlite.exec('BEGIN IMMEDIATE;');
+    try {
+      const prior = replayWorldEvents(this.sqlite); const head = this.eventHead();
+      const event = createWorldEvent({ head, eventKind: 'topology.hearth_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'hearth', aggregateRevision: 1, actor: 'world_migration', causation: { boundary: 'house_hearth_wake_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: hearthTopologyEventPayload(), occurredAt: new Date(this.nowMs()).toISOString() });
+      const next = reduceWorldEvent(prior, event); insertWorldEvent(this.sqlite, event); this.eventFailureInjector?.({ phase: 'after_event_append', event }); this._materializeProjection(next, prior); this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
+      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+      if (!verification.verified) throw Object.assign(new Error('House Hearth migration did not produce a verified projection.'), { code: 'world_hearth_migration_verification_failed', verification });
+      this.sqlite.exec('COMMIT;');
+      this.topologyVersion = 'hearth';
+      return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
+    } catch (error) { try { this.sqlite.exec('ROLLBACK;'); } catch {} throw error; }
   }
   #rebuildTopologySchemaForB1() {
     const nodes = this.sqlite.prepare(`SELECT ${NODE_COLUMNS.join(',')} FROM world_nodes ORDER BY id`).all();
@@ -551,7 +592,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
       const foreignKeyViolations = this.sqlite.prepare('PRAGMA foreign_key_check').all();
       if (foreignKeyViolations.length) throw Object.assign(new Error('World B1 migration produced foreign-key violations.'), { code: 'world_b1_migration_foreign_key_failed', violations: foreignKeyViolations });
-      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50 });
+      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: false });
       if (!verification.verified) throw Object.assign(new Error('World B1 migration did not produce a verified projection.'), { code: 'world_b1_migration_verification_failed', verification });
       this.sqlite.exec('COMMIT;');
       return { status: 'migrated', upgradeRequired: false, admittedLegacy, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
@@ -589,7 +630,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     if (existing) { this.assertVerified(); return existing; }
     this._appendPhysicalEvent({
       eventKind: 'lifespan.started/v1', aggregateKind: 'lifespan', aggregateId: sessionId, aggregateRevision: 1,
-      sessionId, actor: 'world_lifespan', causation: { reason: 'lifespan_initialized' }, payload: { roomNodeId: 'room.center' },
+      sessionId, actor: 'world_lifespan', causation: { reason: 'lifespan_initialized' }, payload: { roomNodeId: this.topologyVersion === 'hearth' ? 'place.house' : 'room.center' },
+      replayPrior: replayWorldEvents(this.sqlite),
     });
     return this.sqlite.prepare('SELECT * FROM world_locations WHERE session_id=?').get(sessionId);
   }

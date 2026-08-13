@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -10,6 +10,7 @@ import { KILN_FIXTURE_ID, WorldGraphStore } from '../src/world/graph.js';
 import { buildRecipeEnvironment, buildRecipeInvocation, RecipeRunner } from '../src/world/recipes.js';
 import { WorkshopAdapter } from '../src/world/workshop.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
+import { placeInWorkshopFromHouse } from './support/house-navigation.js';
 
 function hubEnv(dir, workshopRoot) {
   return {
@@ -206,7 +207,7 @@ test('graceful Hub close cancels an active recipe and persists kiln cancellation
   const env = hubEnv(dir, repo);
   const hub = createHub({ env });
   const sessionId = hub.db.session.id;
-  hub.world.move({ sessionId, wakeId: 'wake-move', doorId: 'door.workshop' });
+  await placeInWorkshopFromHouse(hub.world, hub.gateway, sessionId, 'wake-move');
   const started = await hub.gateway.execute({
     sessionId,
     wakeId: 'wake-recipe',
@@ -294,7 +295,7 @@ test('confirmed delete is bound to approved identity, hash, and type', async () 
   await mkdir(root);
   const target = join(root, 'target.txt');
   await writeFile(target, 'approved', 'utf8');
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   world.move({ sessionId: 'life', wakeId: 'move', doorId: 'door.workshop' });
   const workshop = new WorkshopAdapter(root);

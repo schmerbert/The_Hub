@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ import { residentToolProfile, schemasForResidentSession } from '../src/world/too
 
 async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'hub-attention-mount-'));
-  const world = new WorldGraphStore(join(dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(dir, 'world.sqlite'), { topologyVersion: 'b1' });
   world.ensureLifespan('life');
   return { world, close: async () => { world.close(); await rm(dir, { recursive: true, force: true }); } };
 }

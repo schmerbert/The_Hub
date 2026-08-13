@@ -149,10 +149,10 @@ test('runtime persists exact casts, promotes Hearth inheritance once, and keeps 
     assert.equal(causal.cast.bands[1].state, 'empty');
     assert.equal(causal.cast.bands[1].representedIn, 'living_edge_causal_hearth');
     const causalMessages = JSON.parse(first.phases[1].requestBody).messages;
-    assert.equal(causalMessages.some(message => message.role === 'tool' && message.content.startsWith('# Wake inheritance')), true);
+    assert.equal(causalMessages.some(message => message.role === 'tool' && message.content.startsWith('# Hearth')), true);
     assert.doesNotMatch(JSON.stringify(causalMessages), /The Longshore Current|drawn to this shore/);
     const inheritanceHostReceipt = secondHub.db.sqlite.prepare("SELECT receipt_json AS receiptJson FROM host_return_scrub_receipts WHERE wake_id=? AND tool_name='tend_hearth'").get(first.id);
-    assert.equal(JSON.parse(inheritanceHostReceipt.receiptJson).policy, 'glass_wake_inheritance_markdown_v1');
+    assert.equal(JSON.parse(inheritanceHostReceipt.receiptJson).policy, 'house_hearth_packet_markdown_v1');
 
     const inheritedAtom = JSON.parse(first.hearth.returnJson).atoms.find(item => item.excerpt.includes('ancestral exact human words'));
     assert.ok(inheritedAtom);
@@ -163,15 +163,15 @@ test('runtime persists exact casts, promotes Hearth inheritance once, and keeps 
     assert.equal(later.status, 'committed');
     const ordinary = later.phases[0];
     const direct = ordinary.glassCast.receipt;
-    assert.equal(direct.cast.bands[1].state, 'present');
-    assert.equal(direct.cast.bands[1].items.some(item => item.sourceEventId === inheritedAtom.sourceEventId && item.messageRole === 'system' && typeof item.messageSha256 === 'string'), true);
+    assert.equal(direct.cast.bands[1].state, 'empty');
+    assert.equal(direct.cast.bands[1].mode, 'none');
     const ordinaryMessages = JSON.parse(ordinary.requestBody).messages;
     assert.equal(ordinaryMessages.some(message => message.role === 'tool' && message.content.startsWith('# Wake inheritance')), false);
     assert.equal(ordinaryMessages.some(message => message.tool_calls?.some(call => call.function?.name === 'tend_hearth')), false);
-    assert.equal(ordinaryMessages.some(message => message.role === 'system' && message.content.endsWith(inheritedAtom.excerpt)), true);
+    assert.equal(ordinaryMessages.some(message => message.role === 'system' && message.content.endsWith(inheritedAtom.excerpt)), false);
     assert.equal(ordinaryMessages.some(message => message.content === 'first words in the new lifespan'), true);
     assert.equal(ordinaryMessages.some(message => typeof message.content === 'string' && message.content.startsWith('FAKE MODE')), true);
-    assert.equal(direct.presentationScrub.omissions.filter(item => /inheritance promotion/.test(item.reason)).length, 2);
+    assert.equal(direct.presentationScrub.omissions.filter(item => /not reinjected/.test(item.reason)).length, 2);
     assert.equal(direct.requestBodySha256, sha256(ordinary.requestBody));
     assert.equal(direct.presentedMessagesSha256, sha256(JSON.stringify(ordinaryMessages)));
     assert.equal(direct.crossing.sessionId, later.sessionId);
@@ -189,7 +189,7 @@ test('runtime persists exact casts, promotes Hearth inheritance once, and keeps 
   }
 });
 
-test('missing persisted Glass inheritance fails an ordinary wake honestly before provider dispatch', async () => {
+test('ordinary wakes do not depend on persisted passive Glass inheritance', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-glass-missing-inheritance-'));
   const env = {
     HUB_RESIDENT_MODE: 'fake',
@@ -204,20 +204,12 @@ test('missing persisted Glass inheritance fails an ordinary wake honestly before
     hub = createHub({ env });
     const first = await hub.wake('establish the persisted Glass inheritance');
     assert.equal(first.status, 'committed');
-    const providerRequestsBefore = hub.db.sqlite.prepare('SELECT COUNT(*) AS count FROM provider_requests').get().count;
     hub.db.getSessionGlassInheritance = () => null;
 
-    const failed = await hub.wake('this crossing must fail honestly');
-    assert.equal(failed.status, 'failed');
-    assert.equal(failed.failureCode, 'glass_cast_invalid');
-    assert.match(failed.failureMessage, /missing its persisted Glass wake inheritance/);
-    assert.equal(hub.db.sqlite.prepare('SELECT COUNT(*) AS count FROM provider_requests').get().count, providerRequestsBefore);
-    const failureEvents = failed.events.filter(event => event.eventKind === 'failure');
-    assert.equal(failureEvents.length, 1);
-    assert.match(failureEvents[0].content, /missing its persisted Glass wake inheritance/);
-    const stream = hub.db.listWakeStreamEventsByWake(failed.id);
-    assert.equal(stream.at(-1)?.kind, 'wake.failed');
-    assert.equal(stream.at(-1)?.payload?.code, 'glass_cast_invalid');
+    const ordinary = await hub.wake('this crossing remains causal and ordinary');
+    assert.equal(ordinary.status, 'committed');
+    assert.deepEqual(ordinary.phases.map(item => item.phase), ['ordinary']);
+    assert.equal(ordinary.phases[0].glassCast.receipt.cast.bands[1].mode, 'none');
   } finally {
     if (hub) await hub.close().catch(() => {});
     await rm(dir, { recursive: true, force: true });

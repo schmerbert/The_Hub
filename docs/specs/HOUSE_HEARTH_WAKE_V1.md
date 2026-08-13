@@ -1,6 +1,6 @@
 # House Hearth Wake v1
 
-> **Status: Adopted revising design; not implemented.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. It revises the initial-location law, the meaning of Glass continuity inheritance, and the deferred Hearth Notes presentation. It installs no fixture, World event, migration, Silver Bullet store, selector, or changed provider request today. [`../STATUS.md`](../STATUS.md) remains runtime authority.
+> **Status: Implemented.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, first Silver Bullet, and revised Glass presentation. Bullet mutation tools, semantic Exhale, and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
 
 ## 1. Purpose
 

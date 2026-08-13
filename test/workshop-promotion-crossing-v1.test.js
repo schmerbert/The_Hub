@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -118,7 +118,7 @@ test('promotion refuses changing .gitignore while adding .env', async () => {
 
 test('Gateway promotion is always confirmation-gated and appends completion custody', async () => {
   const f = await repository();
-  const world = new WorldGraphStore(join(f.dir, 'world.sqlite'));
+  const world = new WorldGraphStore(join(f.dir, 'world.sqlite'), { topologyVersion: 'b1' });
   const runner = new SandboxRecipeRunner(f.repo, { sandboxBay: f.bay, timeoutMs: 10000 });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(f.repo), recipeRunner: runner, approvalMode: 'auto' });
   try {
@@ -169,7 +169,7 @@ test('Gateway promotion is always confirmation-gated and appends completion cust
 
 test('promotion reset rejection resolves as confirmed but explicitly not fully complete', async () => {
   const f = await repository();
-  const world = new WorldGraphStore(join(f.dir, 'world-reset-failure.sqlite'));
+  const world = new WorldGraphStore(join(f.dir, 'world-reset-failure.sqlite'), { topologyVersion: 'b1' });
   const runner = new SandboxRecipeRunner(f.repo, { sandboxBay: f.bay, timeoutMs: 10000 });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(f.repo), recipeRunner: runner, approvalMode: 'auto' });
   try {
@@ -202,7 +202,7 @@ test('promotion reset rejection resolves as confirmed but explicitly not fully c
 
 test('oversized promotion preview exposes fitted content and an immutable patch-hash pointer', async () => {
   const f = await repository();
-  const world = new WorldGraphStore(join(f.dir, 'world-preview-overflow.sqlite'));
+  const world = new WorldGraphStore(join(f.dir, 'world-preview-overflow.sqlite'), { topologyVersion: 'b1' });
   const results = new ResultRackStore(join(f.dir, 'results-preview-overflow.sqlite'), { captureMaxBytes: 512000 });
   const runner = new SandboxRecipeRunner(f.repo, { sandboxBay: f.bay, timeoutMs: 10000 });
   const gateway = new WorldActionGateway({ world, workshop: new WorkshopAdapter(f.repo), recipeRunner: runner, resultRack: results, approvalMode: 'auto' });
