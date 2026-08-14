@@ -290,9 +290,17 @@ export class HubDatabase {
 
   priorSessionTail({ sessionId = this.session.id, ceiling }) {
     const active = this.sqlite.prepare('SELECT predecessor_session_id AS predecessorSessionId FROM sessions WHERE id=?').get(sessionId);
-    const priorId = active?.predecessorSessionId || SESSION_ZERO_ID;
-    const priorSession = this.sqlite.prepare('SELECT id, label, kind FROM sessions WHERE id=?').get(priorId);
-    const utterances = this.listSessionUtterances(priorId);
+    let priorId = active?.predecessorSessionId || SESSION_ZERO_ID;
+    let priorSession = this.sqlite.prepare('SELECT id, label, kind, predecessor_session_id AS predecessorSessionId FROM sessions WHERE id=?').get(priorId);
+    let utterances = this.listSessionUtterances(priorId);
+    const visited = new Set([sessionId]);
+    while (priorId !== SESSION_ZERO_ID && utterances.length === 0) {
+      if (visited.has(priorId)) throw new Error('Session predecessor ancestry contains a cycle.');
+      visited.add(priorId);
+      priorId = priorSession?.predecessorSessionId || SESSION_ZERO_ID;
+      priorSession = this.sqlite.prepare('SELECT id, label, kind, predecessor_session_id AS predecessorSessionId FROM sessions WHERE id=?').get(priorId);
+      utterances = this.listSessionUtterances(priorId);
+    }
     const tail = utterances.slice(-ceiling);
     return {
       sessionId: priorId,

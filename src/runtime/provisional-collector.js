@@ -1,6 +1,9 @@
 const DEFAULT_MAX_BYTES = 16 * 1024;
 const DEFAULT_MAX_FRAGMENTS = 128;
-const DEFAULT_FLUSH_MS = 24;
+// Human-visible provisional display does not need token-rate persistence. A
+// 200 ms cadence keeps the Corner lively while preventing synchronous SQLite
+// custody writes from starving Electron's main event loop on verbose streams.
+const DEFAULT_FLUSH_MS = 200;
 
 function fail(message) { throw Object.assign(new Error(message), { code: 'provisional_collector_invalid' }); }
 function bytes(value) { return Buffer.byteLength(JSON.stringify(value), 'utf8'); }

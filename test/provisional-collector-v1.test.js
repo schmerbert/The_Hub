@@ -33,6 +33,12 @@ test('collector coalesces only one exact request/phase/kind/channel and preserve
   assert.equal(emitted[3].payload.index, 1);
 });
 
+test('default collector cadence is human-visible rather than token-rate durable publication', () => {
+  const collector = new ProvisionalCollector({ emit: () => {} });
+  assert.equal(collector.flushMs, 200);
+  collector.discard();
+});
+
 test('collector is bounded, flushes at the fragment ceiling, and discard exposes nothing', () => {
   const emitted = [];
   const collector = new ProvisionalCollector({ emit: item => emitted.push(item), maxBytes: 4096, maxFragments: 2, flushMs: 1000 });

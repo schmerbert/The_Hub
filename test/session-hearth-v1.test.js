@@ -89,6 +89,24 @@ test('restart closes the prior lifespan, opens exactly one new lifespan, and car
   } finally { second.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('Hearth walks past an empty restart lifespan to the nearest non-empty ancestry', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hub-session-empty-restart-v1-'));
+  const dbPath = join(dir, 'hub.sqlite');
+  const spinePath = join(dir, 'spine.jsonl');
+  const first = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: dbPath, HUB_SPINE_PATH: spinePath } });
+  const ancestral = await first.wake('ancestral exact text');
+  await first.close();
+  const empty = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: dbPath, HUB_SPINE_PATH: spinePath } });
+  await empty.close();
+  const current = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: dbPath, HUB_SPINE_PATH: spinePath } });
+  try {
+    const wake = await current.wake('after empty restart');
+    const hearth = JSON.parse(wake.hearth.returnJson);
+    assert.equal(hearth.priorHorizon.sourceSessionId, ancestral.sessionId);
+    assert.ok(hearth.atoms.some(atom => atom.excerpt === 'ancestral exact text'));
+  } finally { await current.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('a response-phase failure never repeats Hearth on the next wake', async () => {
   let responseFailed = false;
   const provider = {
