@@ -19,6 +19,7 @@ import { projectWakeSlips } from '../corner/slips.js';
 import { ResultRackStore } from '../result-rack/store.js';
 import { WakeService } from '../runtime/wake-service.js';
 import { HubEventBus } from '../runtime/hub-event-bus.js';
+import { establishInstalledRoomReceipts } from '../rooms/installation-runtime.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PUBLIC = join(ROOT, 'public');
@@ -72,8 +73,10 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     } else forest = forestOverride || null;
     spine = spineOverride || new SpineStore(config.spinePath);
     world = worldOverride || new WorldGraphStore(config.worldPath);
+    const worldVerified = world.verification({ mismatchLimit: 50 }).verified;
+    if (worldVerified) establishInstalledRoomReceipts(world);
     results = new ResultRackStore(config.resultPath, { projectionMaxBytes: config.resultProjectionMaxBytes, projectionMaxLines: config.resultProjectionMaxLines });
-    if (world.verification({ mismatchLimit: 50 }).verified) world.ensureLifespan(db.session.id);
+    if (worldVerified) world.ensureLifespan(db.session.id);
   } catch (error) {
     forest?.close(); spine?.close(); world?.close(); results?.close(); db.close(); throw { code: error?.code === 'wake_ritual_invalid' ? 'wake_ritual_invalid' : 'forest_activation_refused', message: error?.code === 'wake_ritual_invalid' ? error.message : error?.code === 'forest_activation_refused' ? error.message : 'Existing Forest validation failed.' };
   }

@@ -1,6 +1,6 @@
 # Room Installation Contract v1
 
-> **Status: Adopted and partially installed.** The manifest contract, Workshop reference manifest, and deterministic host-owned Workshop installation witness are implemented and verified. Generic discovery, signature/provenance verification, installation transactions, dynamic Ceiling/Gateway composition, lifecycle persistence, removal tooling, and any marketplace are not implemented.
+> **Status: Adopted and partially installed.** The manifest contract, Workshop reference manifest, deterministic host-owned Workshop installation witness, and forward-only installation-receipt boundary are implemented and verified. Generic discovery, signature/provenance verification, installation transactions, dynamic Ceiling/Gateway composition, lifecycle persistence, removal tooling, and any marketplace are not implemented.
 
 ## Purpose
 
@@ -80,7 +80,7 @@ Market-facing security work must define publisher identity, signatures, reproduc
 
 The host produces `room-installation-witness.v1` from the exact manifest bytes and independently inspected installed surfaces. The witness includes topology, parent containment, entrance, fixtures, schema hashes, Ceiling and mounting presence, Gateway handlers, approval classes, socket bindings, and custody bindings. It has a deterministic hash and is verified only when `gaps` is empty. Required missing wires fail verification; declared optional Forest Wild wiring may remain honestly `optional_unwired`.
 
-The bounded Builder World inspection exposes this witness. It is a diagnostic projection, not an installation receipt journal: persistence of admission and installation decisions remains deferred.
+The bounded Builder World inspection exposes this witness. The installation-receipt boundary binds an exact verified witness to one exact World event, package and manifest hashes, host bindings, an admission statement, and installation time. Workshop predates this boundary, so its receipt honestly records `inherited_pre_boundary` and `admission.status: not_recorded`; it does not invent a historical admission decision. A future room installed after the boundary must use `forward_installation` and record the actual host admission. The receipt journal witnesses history; it does not yet perform installation or make multi-surface wiring transactional.
 
 The Spotlight capsule remains an experiment. Its `room-capsule.v1` laboratory contract proves inert discovery and activation for observational code; it is not silently promoted to this production contract. Adoption requires an explicit migration once the production host exists.
 
@@ -89,7 +89,7 @@ The Spotlight capsule remains an experiment. Its `room-capsule.v1` laboratory co
 - a standard package archive and dependency format;
 - a trusted room directory and inert discovery service;
 - content/signature verification and provenance receipts;
-- admission, install, disable, update, rollback, and uninstall journals;
+- generic admission plus disable, update, rollback, and uninstall journals;
 - generic World topology and door composition;
 - dynamic Ceiling, schema, Patch Bay, and Gateway registration;
 - socket negotiation and capability adapters;

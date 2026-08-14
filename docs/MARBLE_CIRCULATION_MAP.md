@@ -12,6 +12,8 @@ Glass has its own forward boundary under the same law. [`GLASS_TRACE_EPOCH_V1.md
 
 Roots has a forward non-respiratory boundary. [`ROOTS_BOUNDARY_V1.md`](specs/ROOTS_BOUNDARY_V1.md) retains every new Hearth wake packet as causal evidence and links successful presentation to the exact response Glass cast. Historical packets remain exact without invented rooted custody.
 
+Room installation has a forward material boundary. A durable installation receipt binds the exact manifest and verified host witness to the exact World event that made the topology real. Workshop is marked inherited pre-boundary with its original admission decision honestly unrecorded; new rooms must carry a forward admission statement. This is the slow anatomy-changing plane, not a respiratory path.
+
 ## One-passage law
 
 No material enters resident attention, becomes resident speech, changes World reality, or enters continuity custody through an unnamed path.
@@ -118,6 +120,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | Utterance seeks continuity | Forest Intake Ledger + admission Scrub | Body-free offer, decision history, Scrub receipt, Source link | Home entry or held crossing |
 | Outside source seeks continuity | Forest Intake Ledger + typed Wild admission | Body-free offer, decision history, action/source ancestry | Wild entry or held crossing |
 | Live activity reaches the interface | Append-before-broadcast wake journal | Hash-linked wake event | Corner display |
+| A room becomes standing anatomy | Host admission + World installation event + verified witness | Append-only installation receipt joining manifest, bindings, witness, and exact World event | Installed World/Ceiling/Gateway/custody surfaces |
 
 ## Authority stores are not interchangeable
 
@@ -132,6 +135,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | Spine | What exact bytes crossed the provider boundary? |
 | Result Rack | What exact machine result or artifact was retained? |
 | Wake event journal | What safe live display events were published, and in what order? |
+| Room installation ledger | Which exact package and host bindings became standing anatomy at which World event? |
 
 A pointer may connect stores. One store must never be treated as a substitute for another. A resident statement does not mutate World; a World projection does not become Forest merely because it was shown; a Corner card does not prove provider or action custody.
 
