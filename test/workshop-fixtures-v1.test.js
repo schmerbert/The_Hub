@@ -130,8 +130,9 @@ test('clipboard brief tools and kiln ambient state after recipe', async () => {
     const projection = world.projection('life');
     const kilnFixture = projection.fixtures.find(item => item.id === KILN_FIXTURE_ID);
     assert.equal(kilnFixture.state.status, 'settled');
-    assert.match(world.presenceMessage('life'), /fixture\.workshop_kiln \[settled:node_test\]/);
-    assert.match(world.presenceMessage('life'), /Heartbeat: kiln settled:node_test/);
+    assert.match(world.presenceMessage('life'), /fixture\.workshop_kiln \[settled\]/);
+    assert.match(world.presenceMessage('life'), /Kiln: settled\./);
+    assert.doesNotMatch(world.presenceMessage('life'), /node_test/);
     const status = await gateway.execute({ sessionId: 'life', wakeId: 'w3', intent: { id: 'g', type: 'function', function: { name: 'workshop_git_status', arguments: '{}' } } });
     assert.equal(status.result.kind, 'workshop_git_status');
   } finally { world.close(); await rm(dir, { recursive: true, force: true }); }
@@ -189,6 +190,8 @@ test('fixture inspection is read-only and exposes bounded fixture truth', async 
     const engaged = await call('engage', 'engage_fixture', { fixture_id: 'fixture.workshop_clipboard' });
     assert.equal(engaged.result.fixtureId, 'fixture.workshop_clipboard');
     assert.equal(engaged.result.contents.kind, 'clipboard');
+    assert.equal(engaged.result.engagedFixtureId, 'fixture.workshop_clipboard');
+    assert.equal(Object.hasOwn(engaged.result, 'projection'), false);
     assert.equal(world.current('life').engaged_fixture_id, 'fixture.workshop_clipboard');
 
     await call('brief', 'workshop_brief_upsert', { objective: 'Expose the clipboard' });
@@ -199,7 +202,8 @@ test('fixture inspection is read-only and exposes bounded fixture truth', async 
     assert.equal(pending.result.status, 'pending_approval');
     const workbench = await call('workbench', 'inspect_fixture', { fixture_id: 'fixture.workshop_workbench' });
     assert.equal(workbench.result.state.pendingApprovals, 1);
-    assert.equal(workbench.result.projection.pendingApprovals, 1);
+    assert.equal(workbench.result.pendingApprovals, 1);
+    assert.equal(Object.hasOwn(workbench.result, 'projection'), false);
     assert.deepEqual(workbench.result.contents.pending, [{ approvalId: pending.result.approvalId, kind: 'delete_path', status: 'pending' }]);
 
     const { projectWakeSlips } = await import('../src/corner/slips.js');
@@ -214,8 +218,9 @@ test('fixture inspection is read-only and exposes bounded fixture truth', async 
     assert.match(pendingSlip?.label || '', /Delete waiting/);
 
     const presence = world.presenceMessage('life');
-    assert.match(presence, /Engageable:/);
-    assert.match(presence, /Workshop tools are mounted without engaging; engage is orientation only\./);
+    assert.match(presence, /Focusable fixtures:/);
+    assert.match(presence, /One fixture may be in working focus; engaging another moves focus directly/);
+    assert.doesNotMatch(presence, /orientation only|workshop_apply_patch/);
   } finally {
     world.close();
     await rm(dir, { recursive: true, force: true });

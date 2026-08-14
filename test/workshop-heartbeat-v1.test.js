@@ -35,10 +35,10 @@ test('async kiln starts immediately and settles in background', async () => {
     assert.equal(world.getFixtureRuntime(KILN_FIXTURE_ID).status, 'running');
     const status = await gateway.execute({ sessionId: 'life', wakeId: 'w2', intent: { id: '2', type: 'function', function: { name: 'workshop_recipe_status', arguments: '{}' } } });
     assert.equal(status.result.running, true);
-    assert.match(world.presenceMessage('life'), /Heartbeat: kiln running:node_test/);
+    assert.match(world.presenceMessage('life'), /Kiln: running\./);
     await waitIdle(gateway);
     assert.equal(world.getFixtureRuntime(KILN_FIXTURE_ID).status, 'settled');
-    assert.match(world.presenceMessage('life'), /Heartbeat: kiln settled:node_test/);
+    assert.match(world.presenceMessage('life'), /Kiln: settled\./);
   } finally { world.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -59,10 +59,10 @@ test('leave Workshop keeps kiln firing; disengage does not cancel', async () => 
     assert.deepEqual(world.availableTools('life'), ['move_through_door', 'move_through_passage', 'inspect_fixture']);
     assert.ok(gateway.recipes.active);
     assert.equal(world.getFixtureRuntime(KILN_FIXTURE_ID).status, 'running');
-    assert.match(world.presenceMessage('life'), /Heartbeat: kiln running:node_test/);
+    assert.match(world.presenceMessage('life'), /Kiln: running\./);
     await waitIdle(gateway);
     assert.equal(world.getFixtureRuntime(KILN_FIXTURE_ID).status, 'settled');
-    assert.match(world.presenceMessage('life'), /Heartbeat: kiln settled/);
+    assert.match(world.presenceMessage('life'), /Kiln: settled\./);
   } finally { world.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -92,19 +92,19 @@ test('timer arms, fires with fake clock, survives room move, Center cannot set',
     const armed = await gateway.execute({ sessionId: 'life', wakeId: 'w', intent: { id: '1', type: 'function', function: { name: 'workshop_timer_set', arguments: JSON.stringify({ seconds: 60 }) } } });
     assert.equal(armed.result.status, 'armed');
     assert.equal(armed.result.remainingSeconds, 60);
-    assert.match(world.presenceMessage('life'), /Heartbeat: timer 60s/);
+    assert.match(world.presenceMessage('life'), /Timer: armed\./);
     await gateway.execute({ sessionId: 'life', wakeId: 'w2', intent: { id: '2', type: 'function', function: { name: 'move_through_door', arguments: JSON.stringify({ door_id: 'door.workshop' }) } } });
     assert.equal(world.current('life').room_node_id, 'room.center');
     assert.equal(world.availableTools('life').includes('workshop_timer_set'), false);
-    assert.match(world.presenceMessage('life'), /Heartbeat: timer 60s/);
+    assert.match(world.presenceMessage('life'), /Timer: armed\./);
     now += 61_000;
     assert.equal(world.getTimer('life').status, 'fired');
-    assert.match(world.presenceMessage('life'), /Heartbeat: timer fired/);
+    assert.match(world.presenceMessage('life'), /Timer: fired\./);
     assert.equal(world.projection('life').heartbeat.timer.status, 'fired');
     world.move({ sessionId: 'life', doorId: 'door.workshop' });
     const cleared = await gateway.execute({ sessionId: 'life', wakeId: 'w3', intent: { id: '3', type: 'function', function: { name: 'workshop_timer_cancel', arguments: '{}' } } });
     assert.equal(cleared.result.cancelled, true);
     assert.equal(world.getTimer('life').status, 'none');
-    assert.equal(world.presenceMessage('life').includes('Heartbeat:'), false);
+    assert.equal(world.presenceMessage('life').includes('Timer:'), false);
   } finally { world.close(); await rm(dir, { recursive: true, force: true }); }
 });

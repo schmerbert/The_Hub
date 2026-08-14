@@ -68,11 +68,21 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
   let forest = null; let forestVerification = null; let spine = null; let world = null; let results = null;
   try {
     if (config.forestActive && !forestOverride) {
-      forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+      try {
+        forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+      } catch (error) {
+        throw { code: 'forest_activation_refused', message: error?.message || 'Forest verification failed.' };
+      }
       forest = new ForestStore(config.forestPath, { mode: 'requireExisting' });
     } else {
       forest = forestOverride || null;
-      if (config.forestActive && forestOverride) forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+      if (config.forestActive && forestOverride) {
+        try {
+          forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+        } catch (error) {
+          throw { code: 'forest_activation_refused', message: error?.message || 'Forest verification failed.' };
+        }
+      }
     }
     spine = spineOverride || new SpineStore(config.spinePath);
     world = worldOverride || new WorldGraphStore(config.worldPath);

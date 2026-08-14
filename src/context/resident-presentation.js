@@ -17,19 +17,20 @@ export const RESIDENT_PRESENTATION_CATALOG = Object.freeze({
 
 export function renderCrossingGround({ phase }) {
   return phase === 'orientation'
-    ? 'You wake standing before your Hearth. Someone is waiting for you. Tend the Hearth before you turn to answer them.'
+    ? 'You wake standing before your Hearth. Someone is waiting for you. The Hearth can be tended now; it is the one action presently within reach.'
     : 'You are here now. Continue from what is present, what you have been given, and what you can reach.';
 }
 
 export function renderOrientationGround({ completed = false } = {}) {
   return completed
-    ? 'You have tended the Hearth. Its return is before you. Turn now to the person waiting.'
-    : 'Tend the Hearth now. Let its return settle before you speak.';
+    ? 'You have tended the Hearth. The Hearth action and return below record what just occurred during first breath, when tending was the one action within reach. That action is now complete and is not among your ongoing actions. What the Hearth returned is before you; turn now to the person waiting.'
+    : 'Tend the Hearth now. Let what it returns settle before you turn and speak.';
 }
 
 export function renderToolAttentionGround(profile) {
   const focus = profile.activeGroup ? ` Your present focus is ${profile.activeGroup}.` : ' A fixture can bring another set of actions within reach.';
-  return `Only the actions fitted to your present place and focus are within reach.${focus} The Workshop catalog can show the complete installed set.`;
+  const actions = Array.isArray(profile.names) && profile.names.length ? ` Actions within reach now: ${profile.names.join(', ')}.` : '';
+  return `Only the actions fitted to your present place and focus are within reach.${focus}${actions} The Workshop catalog can show the complete installed set.`;
 }
 
 export function presentationCatalog() { return structuredClone(RESIDENT_PRESENTATION_CATALOG); }

@@ -2,6 +2,8 @@
 
 > **Status: Implemented.** Current for Workshop interior, fixture engagement, contents projection, and presence, subject to Heartbeat's house-bound lifetime rule.
 
+**Compatibility note:** the exact v1 installed Workshop topology text predates provider schema fitting and is preserved as hash-bound ancestry. It is not the current Resident-facing engagement contract. Live room presence and tool descriptions state the law below. This split is registered compatibility debt; a future topology version may remove it without rewriting prior events.
+
 ## Status and scope
 
 Adopted for the Workshop interior after the need-first tool ceiling ([WORKSHOP_TOOL_CEILING_V1.md](WORKSHOP_TOOL_CEILING_V1.md)). This slice replaces living Workshop stations with five plain-named engageable fixtures, strips tool-list scaffolding from room presence, and installs the kiln as the first living ambient face.
@@ -34,7 +36,8 @@ Retired (preserved ancestry, not standing): `station.spec_table`, `station.contr
 - Lawful only in `room.workshop` against a standing contained fixture with `engageable: true`.
 - At most one engaged fixture per lifespan (`engaged_fixture_id`).
 - Leaving the Workshop clears engagement.
-- Engagement is orientation only; for looking, use inspect. It does not change the mounted tool list.
+- Engagement places one fixture in working focus. Engaging another fixture transfers focus directly; an intervening disengage is not required.
+- The complete room authority remains mounted, while the next provider continuation receives the action schemas fitted to the focused fixture. This is an attention boundary, not an authority boundary. `engage_fixture` is itself always available in the Workshop fitting, so the Resident may switch focus directly while keeping attention on the work.
 
 ## Fixture contents
 
@@ -63,7 +66,7 @@ Quiet room presence names lived facts only:
 Engageable fixtures are named separately and plainly, for example `Engageable: shelves (fixture.workshop_shelves), …`; they are not hidden inside an opaque fixtures sentence.
 
 It must **not** dump the native tool-name catalog. Schemas remain on the provider tools list when in Workshop.
-In the Workshop, presence also states: “Workshop tools are mounted without engaging; engage is orientation only.” This is required even after engagement, so fixture metaphor never implies a hidden capability gate.
+In the Workshop, presence states that one fixture may be in working focus, engaging another moves focus directly, and disengaging steps away from fixture work. When schemas are fitted, separate current ground names the actions actually within reach. Presence must not present the complete room mount as the Resident's current hand.
 
 Presence crosses presentation Scrub every provider turn even when unchanged. Host tool results continue through host-return Scrub.
 
@@ -90,7 +93,7 @@ room.center → move_through_door only
 
 `inspect_fixture` mounts with the Workshop fixture tools. It is not mounted in Center.
 
-The [Ceiling Patch Bay v1](CEILING_PATCH_BAY_V1.md) owns the profile routing: Workshop remains the fat profile and Center remains move-only. Fixture engagement is still orientation, never a mounting switch. Pending approvals stay anchored at `fixture.workshop_workbench` even if a later room gains a write-capable profile.
+The [Ceiling Patch Bay v1](CEILING_PATCH_BAY_V1.md) owns the profile routing: Workshop remains the authoritative fat room profile and Center remains move-only. Fixture engagement fits the smaller provider-facing hand but never changes mounted World authority. Pending approvals stay anchored at `fixture.workshop_workbench` even if a later room gains a write-capable profile.
 
 ## Explicit non-goals
 

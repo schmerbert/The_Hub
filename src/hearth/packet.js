@@ -19,7 +19,7 @@ export function renderHearthPacket({ atoms = [], priorHorizon = null, selection 
     sections.push('', '## Past Session', '', '### Context');
     for (const atom of atoms) {
       sections.push('', `**${atom.actor === 'resident' ? 'Resident' : 'Human'}**${atom.omittedPrefixUtf16 ? ' (near the end)' : ''}`, '', quote(atom.excerpt));
-      if (atom.forestEntryId) sections.push('', `Forest: \`${atom.forestEntryId}\``);
+      if (atom.forestEntryId) sections.push('', `Source pointer — exact Forest record: \`${atom.forestEntryId}\``);
     }
   }
   if (priorHorizon?.omittedEarlierCount > 0) sections.push('', `${priorHorizon.omittedEarlierCount} earlier attributable utterance${priorHorizon.omittedEarlierCount === 1 ? '' : 's'} remain in canonical custody.`);

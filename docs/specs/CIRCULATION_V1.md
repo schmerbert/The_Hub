@@ -58,7 +58,7 @@ The return-side Scrub then:
 1. verifies the raw-body pointer, byte length, and hash;
 2. parses without changing the recorded bytes;
 3. selects the exact provider assistant-message subtree;
-4. preserves every selected provider field in exact return custody, roots reasoning once, and materializes provider-required reasoning only for the active causal tool continuation;
+4. preserves every selected provider field in exact return custody, roots reasoning once, and carries only a provider-required empty reasoning field through the active causal tool continuation;
 5. produces a versioned receipt naming the structured selection and input/output hashes;
 6. yields the only message object eligible to enter cleaned session history.
 

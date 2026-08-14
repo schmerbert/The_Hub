@@ -40,7 +40,9 @@ The host sends the bootstrap, empty active-session history, and the waiting huma
 
 `tend_hearth({})`
 
-The model must return exactly one tool call for `tend_hearth`, with valid empty arguments and no conversational answer. This assistant tool-call message is a model-signed operational action, not an utterance. Its visible action and provider tool-call ID enter the Session Scroll; any provider reasoning is retained exactly once in Roots and linked by pointer. The exact reasoning may be materialized for the immediately following same-wake continuation, but it does not enter the Forest or display as the resident's answer.
+The model must return exactly one tool call for `tend_hearth`, with semantically empty arguments and no conversational answer. Direct `{}` and a single provider-added `{ "params": {} }` envelope are accepted as the same empty action; the exact raw return remains in custody and any carried value still fails closed. This assistant tool-call message is a model-signed operational action, not an utterance. Its visible action and provider tool-call ID enter the Session Scroll; any provider reasoning is retained exactly once in Roots and linked by pointer. A provider-required empty reasoning carrier may accompany the immediately following same-wake continuation, but the reasoning body is not reinjected, does not enter the Forest, and does not display as the resident's answer.
+
+The causal response ground states that the visible Hearth action/result pair occurred under the immediately preceding first-breath affordance and that the action is now closed. Prior-session Hearth selection excludes utterances belonging to failed wakes; those source events remain in exact custody but are not presented as settled conversational ancestry.
 
 Missing, duplicated, malformed, substituted, or prose-bearing orientation calls fail closed. They do not fabricate a Hearth return or final resident response.
 

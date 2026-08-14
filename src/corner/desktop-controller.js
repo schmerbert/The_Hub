@@ -19,6 +19,7 @@ function pageAddress(baseUrl) {
 export function createDesktopController({
   BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain,
   baseUrl, preloadPath, requestQuit, alwaysOnTop = true, margin = CORNER_MARGIN,
+  loadRetries = 4, loadRetryDelayMs = 100,
 } = {}) {
   if (![BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain].every(Boolean)) throw new TypeError('Electron desktop adapters are required.');
   if (typeof requestQuit !== 'function') throw new TypeError('A desktop quit handler is required.');
@@ -90,6 +91,18 @@ export function createDesktopController({
       else expand();
     });
   }
+  async function loadCornerPage() {
+    let lastError;
+    for (let attempt = 0; attempt <= loadRetries; attempt += 1) {
+      try { return await window.loadURL(pageUrl.href); }
+      catch (error) {
+        lastError = error;
+        if (attempt === loadRetries || error?.code !== 'ERR_FAILED') throw error;
+        await new Promise(resolve => setTimeout(resolve, loadRetryDelayMs));
+      }
+    }
+    throw lastError;
+  }
   async function create() {
     if (window && !window.isDestroyed()) return window;
     window = new BrowserWindow({
@@ -123,7 +136,7 @@ export function createDesktopController({
       if (!window.isDestroyed()) { window.setBounds(boundsFor(mode), false); window.show(); }
     });
     createTray();
-    await window.loadURL(pageUrl.href);
+    await loadCornerPage();
     return window;
   }
   function setQuitting(value = true) { quitting = Boolean(value); }

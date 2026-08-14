@@ -30,6 +30,8 @@ The Hearth receipt, Session Scroll tool-result row, host-return Scrub receipt, r
 
 For a new provider assistant return, provider-return Scrub and Spine retain the exact selected return. If it contains `reasoning_content`, Roots stores that text once and appends causal edges to the producing Spine record, wake, and Session Scroll row. The new Scroll row retains visible speech or tool intent plus a typed `reasoning_ref`; it does not duplicate the reasoning body.
 
+During a continuing tool chain, a provider-required `reasoning_content` field is carried as an empty string. The exact rooted body is not materialized back into Resident attention; action, result, and visible speech carry the causal continuation.
+
 When a same-wake tool chain must continue, the context assembler may dereference only that wake's assistant tool-call pointer and temporarily restore the exact reasoning field. Completed reasoning and every Roots pointer are absent from later provider crossings. Historical inline reasoning is projected out before Glass assembly and remains recoverable through its rooted edge. No reasoning artifact is Forest-eligible or generally Resident-browsable.
 
 Sensitivity classification is recorded, but v1 does not define the Vault, encryption, operator authorization, or deletion policy. Those require later law.

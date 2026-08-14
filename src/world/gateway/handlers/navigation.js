@@ -1,5 +1,15 @@
 function outcome(result, { changedRoom = false } = {}) { return { result, source: null, changedRoom }; }
 
+function residentFixtureResult(result) {
+  const { projection, ...exact } = result;
+  return {
+    ...exact,
+    currentRoomId: projection?.roomId || null,
+    engagedFixtureId: projection?.engagedFixtureId || null,
+    pendingApprovals: projection?.pendingApprovals ?? null,
+  };
+}
+
 export const NAVIGATION_HANDLERS = Object.freeze({
   move_through_door: ({ world, sessionId, wakeId, commandId, args }) => outcome(
     world.move({ sessionId, wakeId, commandId, doorId: args.door_id }),
@@ -16,12 +26,12 @@ export const NAVIGATION_HANDLERS = Object.freeze({
     world.turnFixture({ sessionId, wakeId, commandId, fixtureId: args.fixture_id }),
   ),
   inspect_fixture: ({ world, sessionId, args, fixtureContents }) => {
-    const result = world.inspectFixture({ sessionId, fixtureId: args.fixture_id });
+    const result = residentFixtureResult(world.inspectFixture({ sessionId, fixtureId: args.fixture_id }));
     result.contents = fixtureContents(sessionId, args.fixture_id);
     return outcome(result);
   },
   engage_fixture: ({ world, sessionId, wakeId, commandId, args, fixtureContents }) => {
-    const result = world.engageFixture({ sessionId, wakeId, commandId, fixtureId: args.fixture_id });
+    const result = residentFixtureResult(world.engageFixture({ sessionId, wakeId, commandId, fixtureId: args.fixture_id }));
     result.contents = fixtureContents(sessionId, args.fixture_id);
     return outcome(result);
   },

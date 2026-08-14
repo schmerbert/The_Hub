@@ -15,7 +15,7 @@ export const HEARTH_TOOL = Object.freeze({
   type: 'function',
   function: {
     name: HEARTH_TOOL_NAME,
-    description: 'Tend the resident Hearth before the first response of a new session.',
+    description: 'The Hearth is directly before you. Tend it now, before turning to the person waiting for you.',
     parameters: { type: 'object', properties: {}, additionalProperties: false },
   },
 });
@@ -33,8 +33,11 @@ export function validateOrientationResult(result) {
   if (typeof call.function.arguments !== 'string') throw invalid('Orientation tool arguments are not JSON text.');
   let args;
   try { args = JSON.parse(call.function.arguments); } catch { throw invalid('Orientation tool arguments are malformed JSON.'); }
-  if (!args || Array.isArray(args) || typeof args !== 'object' || Object.keys(args).length !== 0) throw invalid('Orientation tend_hearth arguments must be exactly {}.');
-  return { ...result, message, toolCall: call, toolCallId: call.id };
+  const keys = args && !Array.isArray(args) && typeof args === 'object' ? Object.keys(args) : null;
+  const directEmpty = keys?.length === 0;
+  const wrappedEmpty = keys?.length === 1 && keys[0] === 'params' && args.params && !Array.isArray(args.params) && typeof args.params === 'object' && Object.keys(args.params).length === 0;
+  if (!directEmpty && !wrappedEmpty) throw invalid('Orientation tend_hearth arguments must be semantically empty.');
+  return { ...result, message, toolCall: call, toolCallId: call.id, normalizedArguments: {} };
 }
 
 export function hearthReturn({ sessionId, threadId, provider, model, prior, sourceEvent, clinicalGround, environmentImplemented = false, roomProjection = null }) {

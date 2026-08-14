@@ -142,6 +142,17 @@ Choose the path that matches your question:
 
 Active specifications and status govern implementation. `PREBUILD.md` and `docs/lineage/` preserve ancestry; resemblance to an active idea does not adopt their claims.
 
+### Four layers of truth
+
+When code and prose appear to disagree, first identify which layer is being read:
+
+1. **Installed ancestry** is the exact topology, event, request, or return that existed at a historical crossing. It is preserved so hashes and reconstruction remain honest; preservation does not make its wording current guidance.
+2. **Current runtime state** is the verified World projection, mounted Ceiling authority, Gateway behavior, and durable custody that hold now.
+3. **Resident presentation** is the bounded language and action grammar actually placed in Resident attention. [`RESIDENT_PRESENTATION.md`](RESIDENT_PRESENTATION.md) names every kind and its adjustment point.
+4. **Adopted law** is the current owning specification and status declaration governing the next lawful implementation.
+
+These layers should agree in meaning, but they are not interchangeable evidence. A historical topology string may remain byte-exact while a later, witnessed presentation corrects what the Resident is told. That seam must be registered and eventually removed through a versioned topology change; it must never be left for a reader to discover by experiment. For current behavior, begin with [`STATUS.md`](STATUS.md), follow its owning specification, then inspect the runtime owner named by [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ## The change discipline
 
 The Hub grows by installing one truthful crossing at a time. A new source, room, tool, channel, store, or projection must name:

@@ -8,8 +8,8 @@ export const B1_TOOLS = [
 ];
 export const FIXTURE_TOOLS = [
   { type: 'function', function: { name: 'inspect_fixture', description: 'Inspect a fixture or object contained by the current location without mutating it.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'engage_fixture', description: 'Engage a Workshop fixture for orientation only; use inspect_fixture for looking. Does not gate tools.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'disengage_fixture', description: 'Leave the currently engaged Workshop fixture.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'engage_fixture', description: 'Bring one Workshop fixture into working focus. Engaging another fixture moves focus directly without an intervening disengage; its fitted actions are available on the next continuation.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'disengage_fixture', description: 'Step away from the currently focused Workshop fixture without leaving the room.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
 ];
 
 export const WORKSHOP_TOOLS = [
@@ -111,6 +111,9 @@ export function residentToolProfile(world, sessionId) {
   const groupNames = activeGroup
     ? CEILING_WIRES.filter(wire => wire.groupId === activeGroup || (activeGroup === 'kiln' && wire.groupId === 'heartbeat')).map(wire => wire.name)
     : [];
+  // Promotion is anchored at the workbench; its exact sandbox preview belongs
+  // beside the confirming action even though recipe execution lives at the kiln.
+  if (activeGroup === 'workbench' && available.includes('workshop_sandbox_diff')) groupNames.push('workshop_sandbox_diff');
   const selected = new Set([...RESIDENT_CORE_NAMES, ...groupNames]);
   const names = available.filter(name => selected.has(name));
   return { names, activeGroup, completeCount: available.length, omittedCount: available.length - names.length };

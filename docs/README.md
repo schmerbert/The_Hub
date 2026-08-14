@@ -28,4 +28,6 @@ Start with [`ORIENTATION.md`](ORIENTATION.md). It is the repository front door: 
 - `PREBUILD.md` and `docs/lineage/` are ancestry, not active requirements.
 - `experiments/` contains isolated propositions, not installed Hub capability.
 
+Exact installed ancestry, current runtime state, Resident presentation, and adopted law are separate evidence layers. Preserved historical text may explain or verify an earlier crossing without describing what the Resident receives now. [`ORIENTATION.md`](ORIENTATION.md#four-layers-of-truth) owns this reading rule; intentional seams belong in the compatibility register until a versioned migration removes them.
+
 New documents must label implemented, adopted, experimental, exploratory, and ancestral claims rather than blending them.

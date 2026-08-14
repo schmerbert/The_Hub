@@ -10,7 +10,7 @@ import {
   routeDesktopSecondInstance,
 } from '../src/corner/electron-main.js';
 
-function fixture({ alwaysOnTop = true } = {}) {
+function fixture({ alwaysOnTop = true, loadFailures = 0 } = {}) {
   const windows = [];
   const trays = [];
   const handlers = new Map();
@@ -40,7 +40,11 @@ function fixture({ alwaysOnTop = true } = {}) {
       this.webContents = new WebContents(); this.visible = false; this.hidden = false; this.destroyed = false; this.topLevels = [];
       windows.push(this);
     }
-    async loadURL(url) { this.loadedUrl = url; this.webContents.url = url; this.emit('ready-to-show'); }
+    async loadURL(url) {
+      this.loadAttempts = (this.loadAttempts || 0) + 1;
+      if (this.loadAttempts <= loadFailures) throw Object.assign(new Error('not ready'), { code: 'ERR_FAILED' });
+      this.loadedUrl = url; this.webContents.url = url; this.emit('ready-to-show');
+    }
     getBounds() { return this.bounds; }
     setBounds(bounds, animate) { this.bounds = bounds; this.animate = animate; }
     setAlwaysOnTop(value, level) { this.topLevels.push({ value, level }); }
@@ -77,6 +81,7 @@ function fixture({ alwaysOnTop = true } = {}) {
     preloadPath: 'C:\\hub\\preload.cjs',
     requestQuit: async () => { quitCalls += 1; },
     alwaysOnTop,
+    loadRetryDelayMs: 0,
   });
   return { controller, windows, trays, handlers, quitCalls: () => quitCalls };
 }
@@ -101,6 +106,13 @@ test('desktop controller creates a secure opaque compact window and tray', async
   assert.equal(f.trays[0].tooltip, 'The Hub — Corner');
   f.controller.destroy();
   assert.equal(f.handlers.size, 0);
+});
+
+test('desktop controller retries the local page while the new host becomes reachable', async () => {
+  const f = fixture({ loadFailures: 2 });
+  await f.controller.create();
+  assert.equal(f.windows[0].loadAttempts, 3);
+  assert.equal(f.windows[0].loadedUrl, 'http://127.0.0.1:3123/?shell=desktop');
 });
 
 test('desktop controller validates IPC sender, synchronizes modes, and hides ordinary close', async () => {

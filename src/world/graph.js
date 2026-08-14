@@ -16,6 +16,7 @@ import {
 const NOW = () => new Date().toISOString();
 
 export const WORKSHOP_ROOM_TEXT = 'The Workshop. Shelves hold the repository close to a scarred workbench; a kiln, ledger, and clipboard keep their separate places. Tools are mounted here without engaging; engagement is orientation only.';
+const WORKSHOP_PRESENCE_TEXT = 'The Workshop. Shelves hold the repository close to a scarred workbench; a kiln, ledger, and clipboard keep their separate places. One fixture may be brought into working focus at a time; choosing another moves focus directly.';
 export const KILN_FIXTURE_ID = 'fixture.workshop_kiln';
 
 const SEED_NODES = INSTALLED_WORLD_NODES.filter(([, nodeType]) => nodeType !== 'station');
@@ -786,7 +787,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const fixtures = projection.fixtures.length
       ? projection.fixtures.map(item => {
         const kiln = item.id === KILN_FIXTURE_ID && item.state?.status && item.state.status !== 'idle'
-          ? ` [${item.state.status}${item.state.recipe ? `:${item.state.recipe}` : ''}]`
+          ? ` [${item.state.status}]`
           : '';
         return `${item.id}${kiln}`;
       }).join(', ')
@@ -795,15 +796,24 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       .map(item => `${fixtureName(item.id)} (${item.id})`).join(', ') || 'none';
     const pending = projection.pendingApprovals > 0 ? ' Work waiting on the workbench.' : '';
     const engaged = projection.engagedFixtureId || 'none';
-    const beat = projection.heartbeat?.line ? ` Heartbeat: ${projection.heartbeat.line}.` : '';
-    const workshopHonesty = projection.roomId === 'room.workshop' ? ' Workshop tools are mounted without engaging; engage is orientation only.' : '';
-    const patched = ` ${profilePresenceLine(projection.roomId)}`;
+    const kilnState = projection.heartbeat?.kiln?.status && projection.heartbeat.kiln.status !== 'idle'
+      ? ` Kiln: ${projection.heartbeat.kiln.status}.`
+      : '';
+    const timerState = projection.heartbeat?.timer?.status && projection.heartbeat.timer.status !== 'none'
+      ? ` Timer: ${projection.heartbeat.timer.status}.`
+      : '';
+    const beat = `${kilnState}${timerState}`;
+    const workshopHonesty = projection.roomId === 'room.workshop' ? ' One fixture may be in working focus; engaging another moves focus directly, while disengaging steps away from fixture work.' : '';
+    const patched = projection.roomId === 'room.workshop' ? '' : ` ${profilePresenceLine(projection.roomId).replace(/^Patched:/, 'Actions within reach:')}`;
     const passages = projection.passages.length ? projection.passages.map(item => {
-      const state = item.state && item.governedObjectId === 'object.front_door' ? ` [${item.state.open ? 'open' : 'closed'}, ${item.state.locked ? 'locked' : 'unlocked'}]` : '';
+      const state = item.state && item.governedObjectId === 'object.front_door'
+        ? ` [${item.state.open ? 'open' : 'closed'}, ${item.state.locked ? 'locked' : 'unlocked'}]`
+        : ' [open]';
       return `${item.label} (${item.passageId})${state}`;
     }).join(', ') : 'none';
     const boundaries = projection.boundaries.length ? projection.boundaries.map(item => `${item.label}: ${item.text}`).join(' ') : 'none';
-    return `Current location: ${projection.roomId}. ${projection.text} Fixtures: ${fixtures}. Engageable: ${engageable}. Engaged: ${engaged}. Exits: ${exits}. Passages: ${passages}. Boundaries: ${boundaries}.${workshopHonesty}${patched}${pending}${beat}`;
+    const roomText = projection.roomId === 'room.workshop' ? WORKSHOP_PRESENCE_TEXT : projection.text;
+    return `Current location: ${projection.roomId}. ${roomText} Nearby fixtures and objects: ${fixtures}. Focusable fixtures: ${engageable}. Working focus: ${engaged}. Direct room exits: ${exits}. Stateful passages: ${passages}. Boundaries: ${boundaries}.${workshopHonesty}${patched}${pending}${beat}`;
   }
   move({ sessionId, wakeId, commandId = null, doorId, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     if (typeof doorId !== 'string' || !doorId) throw Object.assign(new Error('A door identity is required.'), { code: 'world_invalid_argument' });

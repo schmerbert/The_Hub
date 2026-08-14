@@ -303,12 +303,14 @@ export class HubDatabase {
     return Boolean(this.sqlite.prepare('SELECT 1 FROM hearth_receipts WHERE session_id=? LIMIT 1').get(sessionId));
   }
 
-  listSessionUtterances(sessionId) {
+  listSessionUtterances(sessionId, { committedOnly = false } = {}) {
     const where = sessionId === SESSION_ZERO_ID ? 'e.session_id IS NULL' : 'e.session_id=?';
     const args = sessionId === SESSION_ZERO_ID ? [this.threadId] : [this.threadId, sessionId];
     return this.sqlite.prepare(`SELECT e.id, e.thread_id AS threadId, e.wake_id AS wakeId, e.actor_kind AS actorKind,
       e.authority, e.content, e.created_at AS createdAt
-      FROM events e WHERE e.thread_id=? AND ${where} AND e.event_kind='utterance' AND e.actor_kind IN ('user','resident')
+      FROM events e LEFT JOIN wakes w ON w.id=e.wake_id
+      WHERE e.thread_id=? AND ${where} AND e.event_kind='utterance' AND e.actor_kind IN ('user','resident')
+      ${committedOnly ? "AND (e.wake_id IS NULL OR w.status='committed')" : ''}
       ORDER BY e.created_at, e.id`).all(...args);
   }
 
@@ -316,14 +318,14 @@ export class HubDatabase {
     const active = this.sqlite.prepare('SELECT predecessor_session_id AS predecessorSessionId FROM sessions WHERE id=?').get(sessionId);
     let priorId = active?.predecessorSessionId || SESSION_ZERO_ID;
     let priorSession = this.sqlite.prepare('SELECT id, label, kind, predecessor_session_id AS predecessorSessionId FROM sessions WHERE id=?').get(priorId);
-    let utterances = this.listSessionUtterances(priorId);
+    let utterances = this.listSessionUtterances(priorId, { committedOnly: true });
     const visited = new Set([sessionId]);
     while (priorId !== SESSION_ZERO_ID && utterances.length === 0) {
       if (visited.has(priorId)) throw new Error('Session predecessor ancestry contains a cycle.');
       visited.add(priorId);
       priorId = priorSession?.predecessorSessionId || SESSION_ZERO_ID;
       priorSession = this.sqlite.prepare('SELECT id, label, kind, predecessor_session_id AS predecessorSessionId FROM sessions WHERE id=?').get(priorId);
-      utterances = this.listSessionUtterances(priorId);
+      utterances = this.listSessionUtterances(priorId, { committedOnly: true });
     }
     const tail = utterances.slice(-ceiling);
     return {
@@ -383,7 +385,11 @@ export class HubDatabase {
     delete message.reasoning_content;
     delete message.reasoning_ref;
     if (materializeActiveToolReasoning && row.wakeId === activeWakeId && row.messageKind === 'assistant_tool_call') {
-      if (rooted || materializeMissingAsEmpty) message.reasoning_content = rooted?.text || '';
+      // DeepSeek requires the field on continued tool-call messages, but the
+      // exact private deliberation is already retained once in Roots. An empty
+      // carrier preserves protocol continuity without making the Resident
+      // recursively reconsider every prior thought in the active chain.
+      if (rooted || materializeMissingAsEmpty) message.reasoning_content = '';
     }
     return message;
   }

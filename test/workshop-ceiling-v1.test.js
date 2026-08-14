@@ -50,13 +50,14 @@ test('patch bay separates full ceiling catalog from room profiles and presence',
     assert.deepEqual(world.availableTools('life'), ['move_through_door', 'move_through_passage', 'inspect_fixture']);
     assert.deepEqual(world.projection('life').mountProfile, mountProfile('room.center'));
     assert.match(profilePresenceLine('room.center'), /^Patched: move \(through_door, through_passage\); fixtures \(inspect\)\.$/);
-    assert.match(world.presenceMessage('life'), /Patched: move \(through_door, through_passage\); fixtures \(inspect\)\./);
+    assert.match(world.presenceMessage('life'), /Actions within reach: move \(through_door, through_passage\); fixtures \(inspect\)\./);
 
     world.move({ sessionId: 'life', doorId: 'door.workshop' });
     assert.deepEqual(world.availableTools('life'), CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture'].includes(name)));
     assert.deepEqual(world.projection('life').mountProfile, mountProfile('room.workshop'));
     const presence = world.presenceMessage('life');
-    assert.match(presence, /Patched: .*fixtures \(inspect, engage, disengage\); explore \(list, read, search, …\)/);
+    assert.match(presence, /One fixture may be in working focus; engaging another moves focus directly/);
+    assert.doesNotMatch(presence, /Patched:|orientation only/);
     assert.equal(presence.includes('workshop_apply_patch'), false);
     assert.equal(presence.match(/Patched:[^.]*workshop_/), null);
   } finally { world.close(); await rm(dir, { recursive: true, force: true }); }

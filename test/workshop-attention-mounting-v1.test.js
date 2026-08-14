@@ -44,5 +44,10 @@ test('resident schema fitting is an attention boundary, not a World authority bo
     assert.equal(kiln.names.includes('workshop_run_recipe'), true);
     assert.equal(kiln.names.includes('workshop_timer_set'), true);
     assert.equal(kiln.names.includes('workshop_git_status'), false);
+
+    f.world.engageFixture({ sessionId: 'life', wakeId: 'wake', fixtureId: 'fixture.workshop_workbench' });
+    const workbench = residentToolProfile(f.world, 'life');
+    assert.equal(workbench.names.includes('workshop_sandbox_diff'), true);
+    assert.equal(workbench.names.includes('workshop_sandbox_promote'), true);
   } finally { await f.close(); }
 });
