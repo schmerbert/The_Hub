@@ -1,5 +1,7 @@
 # The Hub — Orientation
 
+The exact inventory of what can enter Resident attention, why it is shown, and where its language is owned lives in [`RESIDENT_PRESENTATION.md`](RESIDENT_PRESENTATION.md).
+
 > **Start here. This is the repository front door.** It is the authoritative introduction to what the Hub is, why the Marble has this shape, what distinctions govern it, and where every deeper question belongs. [`STATUS.md`](STATUS.md) is the exact current-runtime capability register. [`specs/README.md`](specs/README.md) names the limited set of specifications that still own active feature contracts; unlisted specifications are implementation ancestry, not competing introductions.
 
 ## The proposition

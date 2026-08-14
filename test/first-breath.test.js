@@ -55,8 +55,8 @@ test('context ordering and hashes match actual adapter input', async () => {
     const presented = f.hub.provider.calls[0].messages;
     assert.equal(presented[0].content, STABLE_GLASS_TEXT);
     assert.equal(presented.at(-1).content, 'Exact words.');
-    assert.match(presented[1].content, /^Current crossing ground:/);
-    assert.match(presented[2].content, /forced the available native tend_hearth/);
+    assert.match(presented[1].content, /standing before your Hearth/);
+    assert.match(presented[2].content, /Tend the Hearth now/);
     assert.match(presented[3].content, /^Current location: place\.house\./);
     assert.match(presented[3].content, /fixture\.hearth/);
     assert.equal(presented[1].content.includes(result.body.sessionId), false);

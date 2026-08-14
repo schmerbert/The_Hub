@@ -333,7 +333,7 @@ export class HubDatabase {
       this.appendScrollTraceManifest({ historyId, sessionId: session.id, wakeId, ordinal: historyOrdinal, messageKind: 'user', sourceEventId: eventId, scrubReceipt: null });
       this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
       for (const item of [
-        { ordinal: 1, itemKind: 'clinical_anchor', actorRole: 'system', content: STABLE_GLASS_TEXT, sourceDescription: 'Stable clinical Glass v1', authority: 'host_receipt', included: true },
+        { ordinal: 1, itemKind: 'clinical_anchor', actorRole: 'system', content: STABLE_GLASS_TEXT, sourceDescription: 'Stable Glass v2', authority: 'host_receipt', included: true },
         { ordinal: 2, itemKind: 'utterance', actorRole: 'user', content, sourceEventId: eventId, sourceDescription: 'Current session human message', authority: 'ground', included: true },
       ]) {
         this.sqlite.prepare(`INSERT INTO wake_context_items
@@ -462,7 +462,7 @@ export class HubDatabase {
       const omission = omitted.get(sourceIndex);
       if (!omission) presentedOrdinal += 1;
       let source;
-      if (ref.kind === 'stable_glass') source = { authority: 'code_owned_glass', version: 1, contentHash: sha256(ref.message.content) };
+      if (ref.kind === 'stable_glass') source = { authority: 'code_owned_glass', version: 2, contentHash: sha256(ref.message.content) };
       else if (ref.historyId) source = { authority: 'Session Scroll', historyId: ref.historyId, sessionId: ref.historySessionId, ordinal: ref.historyOrdinal, sourceEventId: ref.sourceEventId || null, messageHash: ref.historyMessageHash };
       else if (ref.sourceEventId || ref.glassSourceEventId) source = { authority: 'Source', eventId: ref.sourceEventId || ref.glassSourceEventId, contentHash: ref.sourceContentHash || null };
       else {

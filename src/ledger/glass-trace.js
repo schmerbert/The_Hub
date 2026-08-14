@@ -1,5 +1,7 @@
 import { canonicalize, id, sha256 } from '../core/hash.js';
-import { STABLE_GLASS_TEXT } from '../context/glass-cast.js';
+import { STABLE_GLASS_TEXT, STABLE_GLASS_V1_TEXT } from '../context/glass-cast.js';
+
+const GLASS_HASH_BY_VERSION = new Map([[1, sha256(STABLE_GLASS_V1_TEXT)], [2, sha256(STABLE_GLASS_TEXT)]]);
 
 function now() { return new Date().toISOString(); }
 function row(value) { return value ? { ...value } : null; }
@@ -57,7 +59,7 @@ export class GlassTraceLedger {
         } else if (item.source?.authority === 'Source') {
           const event = this.sqlite.prepare('SELECT content FROM events WHERE id=?').get(item.source.eventId);
           if (!event || (item.source.contentHash && sha256(event.content) !== item.source.contentHash)) add({ code: 'glass_trace_source_unresolved', sourceOrdinal: item.sourceOrdinal });
-        } else if (item.source?.authority === 'code_owned_glass' && (item.source.version !== 1 || item.source.contentHash !== sha256(STABLE_GLASS_TEXT))) add({ code: 'glass_trace_stable_glass_mismatch', sourceOrdinal: item.sourceOrdinal });
+        } else if (item.source?.authority === 'code_owned_glass' && GLASS_HASH_BY_VERSION.get(item.source.version) !== item.source.contentHash) add({ code: 'glass_trace_stable_glass_mismatch', sourceOrdinal: item.sourceOrdinal });
         else if (!['code_owned_glass','glass_ground_receipt','Session Scroll','Source'].includes(item.source?.authority)) add({ code: 'glass_trace_authority_unknown', sourceOrdinal: item.sourceOrdinal });
       }
     }

@@ -1,4 +1,5 @@
 import { ceilingCatalog } from './ceiling.js';
+import { presentationCatalog } from '../context/resident-presentation.js';
 import { schemasForSession } from './tools.js';
 import { workshopInstallationWitness } from '../rooms/workshop-witness.js';
 import { installedRoomReceipts } from '../rooms/installation-runtime.js';
@@ -109,6 +110,7 @@ export function projectWorldBuilderInspection(world, sessionId) {
     graph: { nodes: nodes.rows, edges: edges.rows, passages: passages.rows, objectStates: objectStates.rows },
     verification,
     ceiling: ceilingCatalog(),
+    residentPresentation: presentationCatalog(),
     installations: [workshopInstallationWitness()],
     installationReceipts: installedRoomReceipts(world),
     approvals,

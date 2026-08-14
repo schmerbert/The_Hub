@@ -10,6 +10,7 @@ import { HEARTH_TOOL, HEARTH_TOOL_CHOICE, hearthReturnHash, validateOrientationR
 import { renderHearthPacket } from '../hearth/packet.js';
 import { residentToolProfile, schemasForResidentSession } from '../world/tools.js';
 import { AttentionMeter } from '../context/attention-meter.js';
+import { renderCrossingGround, renderOrientationGround, renderToolAttentionGround } from '../context/resident-presentation.js';
 import { ProvisionalCollector } from './provisional-collector.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
@@ -300,20 +301,19 @@ export class WakeService {
       }
       const currentGround = [{
         kind: 'crossing_ground', authority: 'host_receipt', sourceEventId: null,
-        message: { role: 'system', content: `Current crossing ground: provider ${providerName}; requested model ${config.model}; phase ${phase}; an active lifespan is in progress. These request-time facts are attributable current ground, not stable Glass or continuity ancestry.` },
+        message: { role: 'system', content: renderCrossingGround({ phase }) },
       }];
       if (options.orientation) currentGround.push({
         kind: 'orientation_ground', authority: 'host_receipt', sourceEventId: null,
-        message: { role: 'system', content: 'This orientation crossing has forced the available native tend_hearth function. Return exactly one tend_hearth action with empty arguments and no prose. The host will return the Hearth packet before the waiting human message receives a response.' },
+        message: { role: 'system', content: renderOrientationGround() },
       });
       if (options.causalHearth) currentGround.push({
         kind: 'orientation_ground', authority: 'host_receipt', sourceEventId: null,
-        message: { role: 'system', content: 'The stable Glass tend_hearth clause applied to the preceding orientation crossing. The host forced it, the action completed, and the Hearth packet below is its return. tend_hearth is intentionally not mounted during this response phase. Do not reinterpret the completed action as a voluntary mistake; answer the waiting human using the returned orientation.' },
+        message: { role: 'system', content: renderOrientationGround({ completed: true }) },
       });
       if (options.roomPresence !== false) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: world.presenceMessage(created.sessionId) } });
       if (options.toolProfile?.omittedCount) {
-        const group = options.toolProfile.activeGroup ? ` Active fixture group: ${options.toolProfile.activeGroup}.` : ' Engage a fixture to present its group.';
-        currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: `Tool attention disclosure: ${options.toolProfile.names.length} of ${options.toolProfile.completeCount} World-mounted schemas are presented.${group} The full catalog remains available through workshop_tool_catalog.` } });
+        currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: renderToolAttentionGround(options.toolProfile) } });
       }
       if (omissionPlan.disclosure) currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: omissionPlan.disclosure } });
       const assemble = () => {
@@ -350,11 +350,9 @@ export class WakeService {
         const attention = attentionMeter.measure({ messages: presentation.messages, tools: tools || [] });
         return { refs, sourceMessages, presentation, presentedRefs, attention, glassCast: composed.cast };
       };
-      let assembled = assemble();
-      if (assembled.attention.status === 'warn') {
-        currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: `Attention meter warning: this fitted provider crossing is ${assembled.attention.totalBytes} bytes; the refusal ceiling is ${config.attentionRefuseBytes} bytes.` } });
-        assembled = assemble();
-      }
+      // Byte thresholds are host evidence, not Resident ground. The exact
+      // measure remains available in the attention receipt and Corner.
+      const assembled = assemble();
       const { refs, sourceMessages, presentation, presentedRefs } = assembled;
       const sourceAttention = attentionMeter.measure({ messages: sourceMessages, tools: tools || [] });
       const attention = {

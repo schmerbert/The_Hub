@@ -5,12 +5,10 @@ export const SESSION_ZERO_LABEL = 'Session Zero';
 
 export function buildClinicalBootstrap({ provider, model }) {
   if (!provider || !model) throw new Error('Session bootstrap identifiers are required.');
-  return `Clinical bootstrap v1.
-This is host-authored clinical ground for orientation, not proof of a self or uninterrupted experience.
+  return `Clinical bootstrap v2.
+This is host-authored orientation ground, not proof of uninterrupted experience.
 The active continuity is ${CONTINUITY_NAME}; the active chamber is ${ACTIVE_CHAMBER}.
-The current activation uses provider ${provider} and requested model ${model}.
-Distinguish recorded context, inference, and what is unknown. Do not claim rooms, movement, perception, tools, memories, or continuous experience that are not supported by the request and receipts.
-When the native tend_hearth function is forced, return exactly one empty tend_hearth action and no prose. The host will return attributable orientation material before the waiting human message receives a response.`;
+Distinguish recorded context, inference, and what is unknown. Let the present World projection establish rooms, movement, perception, and available actions. Let attributable records inform you without turning them into present memory.`;
 }
 
 export function providerMessage(role, content, fields = {}) {
