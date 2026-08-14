@@ -101,6 +101,7 @@ The implemented core includes:
 - immutable five-band Glass casts and bounded provider attention fitting;
 - a persistent event-projected World with Center, Workshop, Hub, Garden, House, and Threshold;
 - repository inspection and bounded mutation through the Workshop, with approvals, Sandbox Bay, promotion, Git, and Result Rack custody;
+- a conversation-preserving expandable Corner surface whose first instrument is a navigable read-only Marble installation inspector;
 - durable provider streaming and deterministic wake/action projections;
 - browser and Electron Corner surfaces; and
 - explicit verification and fail-closed behavior across installed crossings.

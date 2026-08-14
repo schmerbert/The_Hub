@@ -56,6 +56,7 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Wake stream | `src/ledger/wake-stream.js`, `src/ledger/source.js`, `src/runtime/hub-event-bus.js` | Append-only hash-linked event journal, provisional credential boundary, and bounded in-process replay/broadcast |
 | Provider streaming | `src/providers/sse.js`, `src/providers/deepseek.js`, `src/scrub/provider-return.js` | Strict OpenAI-compatible SSE parsing, safe provisional deltas, bounded admitted-body Spine custody, and independent exact terminal assembly |
 | Corner desktop | `src/corner/electron-main.js`, `src/corner/desktop-host.js`, `src/corner/desktop-controller.js`, `src/corner/preload.cjs`, `src/corner/window-geometry.js` | Single-instance Electron lifecycle, loopback host ownership, secure narrow bridge, tray/window behavior, and display geometry |
+| Expandable Corner surfaces | `public/app.js`, `public/styles.css` | Conversation-preserving work-surface expansion; the read-only Marble Inspector is the first navigable surface and consumes Builder installation witnesses |
 | Context compatibility | `src/context/assemble.js` | Compatibility assembly for pre-session callers |
 
 `src/core/config.js` and `src/core/hash.js` are active shared owners. The obsolete Core re-export hallways were removed after all repository callers moved to the dedicated Ledger, Forest, Spine, and Context owners. `src/providers/dispatch.js` validates a presentation before deriving the legacy `messages` argument used by injected test providers.

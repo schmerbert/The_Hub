@@ -34,6 +34,7 @@ const inspectWorldButton = document.querySelector('#inspect-world');
 const inspectApprovalsButton = document.querySelector('#inspect-approvals');
 const approvalsBadge = document.querySelector('#approvals-badge');
 const tray = document.querySelector('#tray');
+const trayHeading = document.querySelector('#tray-heading');
 const trayTabs = document.querySelector('#tray-tabs');
 const panelHost = document.querySelector('#panel-host');
 const waveCompact = new window.CornerWave(document.querySelector('#wave-compact'), { amp: .22 });
@@ -51,6 +52,9 @@ let busy = false;
 let currentWake = null;
 let currentInspectionTab = 'summary';
 let currentApprovals = [];
+let currentWorld = null;
+let currentWorldTab = 'marble';
+let currentMarbleSelection = 'overview';
 const wakeSlips = new Map();
 let slipPoll = null;
 let slipPollBusy = false;
@@ -407,6 +411,111 @@ function renderWorld(world) {
   return panel;
 }
 
+function witnessState(state) {
+  if (state === true || state === 'installed') return 'verified';
+  if (state === 'optional_unwired') return 'optional';
+  return 'missing';
+}
+
+function statusPill(label, state) {
+  return node('span', `wire-status ${witnessState(state)}`, label);
+}
+
+function renderWitnessDetail(witness, selection) {
+  const detail = node('div', 'marble-detail');
+  const heading = node('div', 'marble-detail-heading');
+  heading.append(node('span', null, selection === 'overview' ? witness.roomId : selection));
+  heading.append(statusPill(witness.verified ? 'verified' : `${witness.gaps.length} gaps`, witness.verified));
+  detail.append(heading);
+  if (selection === 'overview') {
+    appendBlock(detail, 'Installed path', `${witness.topology.requestedParent}\n→ ${witness.roomId}\n→ ${witness.topology.entranceId}`);
+    appendBlock(detail, 'Evidence', `manifest ${witness.manifestHash}\nwitness ${witness.witnessHash}`, 'inspection-code');
+    appendBlock(detail, 'Loose wires', witness.gaps.length ? witness.gaps.join('\n') : 'none', witness.gaps.length ? 'omitted' : '');
+    return detail;
+  }
+  if (selection === 'topology') {
+    for (const [label, value] of Object.entries(witness.topology)) appendBlock(detail, label, String(value), value === false ? 'omitted' : '');
+    return detail;
+  }
+  if (selection === 'sockets') {
+    for (const socket of witness.sockets) {
+      const block = node('section', 'wire-card');
+      block.append(node('div', 'wire-card-heading', socket.id), statusPill(socket.binding?.state || 'missing', socket.binding?.state));
+      block.append(node('div', 'wire-path', `${socket.capability}\n→ ${socket.binding?.implementation || 'unbound'}`));
+      detail.append(block);
+    }
+    return detail;
+  }
+  if (selection === 'custody') {
+    for (const route of witness.custody) {
+      const block = node('section', 'wire-card');
+      block.append(node('div', 'wire-card-heading', route.id), statusPill(route.binding?.state || 'missing', route.binding?.state));
+      block.append(node('div', 'wire-path', route.binding?.implementation || 'unbound'));
+      detail.append(block);
+    }
+    return detail;
+  }
+  const affordance = witness.affordances.find(item => item.id === selection);
+  if (affordance) {
+    appendBlock(detail, 'Path', `${witness.roomId}\n→ ${affordance.fixtureId}\n→ ${affordance.id}\n→ ${affordance.effect}`);
+    for (const tool of affordance.tools) {
+      const block = node('section', 'tool-wire');
+      const complete = tool.ceiling && tool.mounted && tool.schemaHash && tool.handler && tool.approvalClass;
+      block.append(node('div', 'wire-card-heading', tool.name), statusPill(complete ? 'closed' : 'loose', Boolean(complete)));
+      block.append(node('div', 'wire-path', `Ceiling ${tool.ceiling ? '✓' : '×'} → mount ${tool.mounted ? '✓' : '×'} → schema ${tool.schemaHash ? '✓' : '×'} → handler ${tool.handler ? '✓' : '×'} → approval ${tool.approvalClass || 'missing'}`));
+      if (tool.schemaHash) block.append(node('div', 'wire-hash', tool.schemaHash));
+      detail.append(block);
+    }
+    return detail;
+  }
+  return detail;
+}
+
+function renderMarbleInspector(world) {
+  const witness = world.installations?.[0];
+  const panel = node('div', 'marble-inspector');
+  if (!witness) { appendBlock(panel, 'Installation witness', 'No room installation witness is available.', 'omitted'); return panel; }
+  const summary = node('div', 'marble-summary');
+  summary.append(node('div', 'marble-orb', witness.verified ? '●' : '!'));
+  const title = node('div');
+  title.append(node('div', 'marble-title', witness.roomId), node('div', 'marble-subtitle', witness.verified ? 'All declared wires close' : `${witness.gaps.length} loose wires`));
+  summary.append(title, statusPill(witness.verified ? 'verified' : 'drift', witness.verified));
+  const body = node('div', 'marble-browser');
+  const nav = node('nav', 'marble-nav');
+  const choices = [
+    ['overview', 'Overview'], ['topology', 'Topology'],
+    ...witness.affordances.map(item => [item.id, item.id.replace('affordance.', '').replaceAll('_', ' ')]),
+    ['sockets', 'Sockets'], ['custody', 'Custody'],
+  ];
+  const detailHost = node('div', 'marble-detail-host');
+  function select(id) {
+    currentMarbleSelection = id;
+    for (const button of nav.querySelectorAll('button')) button.setAttribute('aria-current', String(button.dataset.selection === id));
+    detailHost.replaceChildren(renderWitnessDetail(witness, id));
+  }
+  for (const [id, label] of choices) {
+    const button = node('button', 'marble-nav-item', label);
+    button.type = 'button'; button.dataset.selection = id;
+    button.addEventListener('click', () => select(id));
+    nav.append(button);
+  }
+  body.append(nav, detailHost);
+  panel.append(summary, body);
+  select(choices.some(([id]) => id === currentMarbleSelection) ? currentMarbleSelection : 'overview');
+  return panel;
+}
+
+function renderWorldSurface() {
+  trayTabs.replaceChildren();
+  for (const [id, label] of [['marble', 'Marble'], ['world', 'World data']]) {
+    const tab = node('button', 'tray-tab', label);
+    tab.type = 'button'; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-selected', String(currentWorldTab === id));
+    tab.addEventListener('click', () => { currentWorldTab = id; renderWorldSurface(); });
+    trayTabs.append(tab);
+  }
+  panelHost.replaceChildren(currentWorldTab === 'marble' ? renderMarbleInspector(currentWorld) : renderWorld(currentWorld));
+}
+
 function renderApprovals(approvals) {
   const panel = node('div', 'panel');
   if (!approvals.length) {
@@ -442,7 +551,7 @@ function renderApprovals(approvals) {
 }
 
 async function inspectWorld() {
-  try { const world = await request('/api/world'); tray.hidden = false; trayTabs.replaceChildren(); panelHost.replaceChildren(renderWorld(world)); panelHost.focus({ preventScroll: true }); }
+  try { currentWorld = await request('/api/world'); currentWorldTab = 'marble'; currentMarbleSelection = 'overview'; trayHeading.textContent = 'Marble inspector'; app.dataset.surface = 'marble'; tray.hidden = false; renderWorldSurface(); panelHost.focus({ preventScroll: true }); }
   catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
 }
 
@@ -450,7 +559,7 @@ async function inspectApprovals() {
   try {
     const data = await request('/api/approvals');
     currentApprovals = data.approvals || [];
-    tray.hidden = false;
+    trayHeading.textContent = 'Approvals'; delete app.dataset.surface; tray.hidden = false;
     trayTabs.replaceChildren();
     panelHost.replaceChildren(renderApprovals(currentApprovals));
     panelHost.focus({ preventScroll: true });
@@ -458,6 +567,7 @@ async function inspectApprovals() {
 }
 
 function renderInspection() {
+  trayHeading.textContent = 'Wake inspection'; delete app.dataset.surface;
   trayTabs.replaceChildren();
   for (const tabName of ['summary', 'context', 'receipt', 'wiring']) {
     const tab = node('button', 'tray-tab', tabName);
@@ -677,7 +787,7 @@ chip.addEventListener('click', () => { void setMode('expanded'); });
 document.querySelector('#btn-compact').addEventListener('click', () => { void setMode('compact'); });
 inspectWorldButton.addEventListener('click', inspectWorld);
 inspectApprovalsButton.addEventListener('click', inspectApprovals);
-document.querySelector('#close-tray').addEventListener('click', () => { tray.hidden = true; currentWake = null; });
+document.querySelector('#close-tray').addEventListener('click', () => { tray.hidden = true; currentWake = null; currentWorld = null; delete app.dataset.surface; trayHeading.textContent = 'Wake inspection'; });
 form.addEventListener('submit', submitWake);
 
 waveCompact.start();
