@@ -19,6 +19,7 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Ceiling and capability fitting | [`CEILING_PATCH_BAY_V1.md`](CEILING_PATCH_BAY_V1.md) |
 | Room packaging and installation | [`ROOM_INSTALLATION_CONTRACT_V1.md`](ROOM_INSTALLATION_CONTRACT_V1.md) |
 | Workshop fixtures and execution | [`WORKSHOP_FIXTURES_V1.md`](WORKSHOP_FIXTURES_V1.md), [`WORKSHOP_SANDBOX_BAY_V1.md`](WORKSHOP_SANDBOX_BAY_V1.md), [`WORKSHOP_RESULT_RACK_V1.md`](WORKSHOP_RESULT_RACK_V1.md) |
+| Resident–Builder correspondence | [`BUILDER_CHANNEL_V1.md`](BUILDER_CHANNEL_V1.md) |
 | Provider streaming | [`WAKE_STREAM_V1.md`](WAKE_STREAM_V1.md) |
 | Forest/Spine intake | [`SPINE_FOREST_INGESTION.md`](SPINE_FOREST_INGESTION.md) |
 | Security direction | [`SECURITY_PRIVACY_CUSTODY_V1.md`](SECURITY_PRIVACY_CUSTODY_V1.md) |
