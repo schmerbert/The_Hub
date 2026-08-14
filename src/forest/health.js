@@ -16,10 +16,40 @@ const INACTIVE = Object.freeze({
   excludedFakeUtteranceCount: null,
 });
 
-export function projectForestHealth({ forest, source, paths }) {
+function liveCounts(forest) {
+  const intake = typeof forest.intakeStatus === 'function' ? forest.intakeStatus() : forest.sqlite.prepare(`SELECT
+    COUNT(*) AS offers,
+    SUM(CASE WHEN latest.state='held' THEN 1 ELSE 0 END) AS held,
+    SUM(CASE WHEN latest.state IS NULL THEN 1 ELSE 0 END) AS unresolved
+    FROM forest_intake_offers offer LEFT JOIN forest_intake_decisions latest ON latest.offer_id=offer.offer_id
+      AND latest.revision=(SELECT MAX(history.revision) FROM forest_intake_decisions history WHERE history.offer_id=offer.offer_id)`).get();
+  const wildCount = typeof forest.countWild === 'function' ? forest.countWild() : forest.sqlite.prepare('SELECT COUNT(*) AS count FROM wild_entries').get().count;
+  return { intake: { offers: intake.offers, held: intake.held || 0, unresolved: intake.unresolved || 0 }, wildCount, forestCount: forest.count() };
+}
+
+export function projectForestHealth({ forest, source, paths, verifiedSnapshot = null, fullVerification = false }) {
   if (!forest) return INACTIVE;
   const eligibleCount = source.listEligibleUtteranceEvents().length;
   const excludedFakeUtteranceCount = source.countExcludedFakeUtterances();
+  const current = liveCounts(forest);
+  if (!fullVerification) {
+    const caughtUp = current.forestCount === eligibleCount && current.intake.held === 0 && current.intake.unresolved === 0;
+    return {
+      forestActive: true,
+      forestEligibleCount: eligibleCount,
+      forestCount: current.forestCount,
+      forestWildEligibleCount: verifiedSnapshot?.eligibleWildCount ?? null,
+      forestWildCount: current.wildCount,
+      forestIntakeOfferCount: current.intake.offers,
+      forestIntakeHeldCount: current.intake.held,
+      forestIntakeUnresolvedCount: current.intake.unresolved,
+      forestCaughtUp: caughtUp,
+      forestIntegrity: verifiedSnapshot ? 'ok' : 'unverified',
+      forestErrorCode: caughtUp ? null : 'forest_intake_lag',
+      forestVerification: 'startup_snapshot',
+      excludedFakeUtteranceCount,
+    };
+  }
   try {
     const verification = verifyForest({
       forestPath: paths.forestPath,
@@ -43,6 +73,7 @@ export function projectForestHealth({ forest, source, paths }) {
         && verification.intakeUnresolvedCount === 0,
       forestIntegrity: 'ok',
       forestErrorCode: null,
+      forestVerification: 'full',
       excludedFakeUtteranceCount,
     };
   } catch {
@@ -67,6 +98,7 @@ export function projectForestHealth({ forest, source, paths }) {
       forestCaughtUp: false,
       forestIntegrity: 'error',
       forestErrorCode: 'forest_integrity_error',
+      forestVerification: 'full',
       excludedFakeUtteranceCount,
     };
   }

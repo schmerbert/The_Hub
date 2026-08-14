@@ -65,12 +65,15 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
   if (config.forestActive && (!existsSync(config.dbPath) || !existsSync(config.forestPath))) throw { code: 'forest_activation_refused', message: 'Forest activation requires an existing operational database and validated Forest database.' };
   const db = new HubDatabase(config.dbPath);
   const provider = createProvider(config, providerOverride);
-  let forest = null; let spine = null; let world = null; let results = null;
+  let forest = null; let forestVerification = null; let spine = null; let world = null; let results = null;
   try {
     if (config.forestActive && !forestOverride) {
-      verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+      forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
       forest = new ForestStore(config.forestPath, { mode: 'requireExisting' });
-    } else forest = forestOverride || null;
+    } else {
+      forest = forestOverride || null;
+      if (config.forestActive && forestOverride) forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+    }
     spine = spineOverride || new SpineStore(config.spinePath);
     world = worldOverride || new WorldGraphStore(config.worldPath);
     const worldVerified = world.verification({ mismatchLimit: 50 }).verified;
@@ -111,7 +114,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     try {
       if (closing) return typedError(response, 503, 'hub_closing', 'The Hub is shutting down and is not accepting new requests.');
       if (request.method === 'GET' && url.pathname === '/api/health') {
-        const custody = projectForestHealth({ forest, source: db, paths: config });
+        const custody = projectForestHealth({ forest, source: db, paths: config, verifiedSnapshot: forestVerification, fullVerification: url.searchParams.get('verify') === 'full' });
         const projection = world.projection(db.session.id);
         return json(response, 200, {
           ok: !custody.forestActive || (custody.forestIntegrity === 'ok' && custody.forestCaughtUp), schemaReady: true,
