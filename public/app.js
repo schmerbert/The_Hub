@@ -586,7 +586,7 @@ async function inspectWake(wakeId) {
 }
 
 async function refresh() {
-  const [health, thread] = await Promise.all([request('/api/health'), request('/api/thread')]);
+  const [health, thread] = await Promise.all([request('/api/health'), request('/api/thread?scope=active')]);
   modeModel.textContent = modeLabel(health);
   roomState.textContent = health.currentRoom?.roomId || 'unknown room';
   stationState.textContent = health.engagedFixtureId || health.engagedStationId ? `Engaged · ${health.engagedFixtureId || health.engagedStationId}` : 'No fixture';

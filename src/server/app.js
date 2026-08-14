@@ -119,7 +119,10 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
           model: config.model, liveCredentialsAvailable: Boolean(config.apiKey), currentRoom: projection, engagedFixtureId: projection.engagedFixtureId, engagedStationId: projection.engagedFixtureId, heartbeat: projection.heartbeat || null, mountedTools: world.availableTools(db.session.id), residentToolProfile: residentToolProfile(world, db.session.id), attention: wakeService.lastAttention, recipeRuntime: config.mode === 'live' ? 'docker_sandbox' : 'direct_host_test_only', recipeState: gateway.recipes.status(), pendingApprovals: world.listApprovals(db.session.id, { pendingOnly: true }).length, ...custody, wakeInProgress: wakeService.wakeInProgress, activeWakeId: wakeService.activeWakeId,
         });
       }
-      if (request.method === 'GET' && url.pathname === '/api/thread') return json(response, 200, { ...db.getThread(), residentMode: config.mode, model: config.model });
+      if (request.method === 'GET' && url.pathname === '/api/thread') {
+        const projection = url.searchParams.get('scope') === 'active' ? db.getActiveThreadProjection() : db.getThread();
+        return json(response, 200, { ...projection, residentMode: config.mode, model: config.model });
+      }
       if (request.method === 'GET' && url.pathname === '/api/session') return json(response, 200, { session: db.getActiveSession(), sessions: db.listSessions(), history: db.getSessionHistory(), world: world.projection(db.session.id), residentMode: config.mode, model: config.model });
       if (request.method === 'GET' && url.pathname === '/api/world') {
         return json(response, 200, projectWorldBuilderInspection(world, db.session.id));

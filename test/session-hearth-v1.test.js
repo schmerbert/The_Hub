@@ -104,6 +104,11 @@ test('Hearth walks past an empty restart lifespan to the nearest non-empty ances
     const hearth = JSON.parse(wake.hearth.returnJson);
     assert.equal(hearth.priorHorizon.sourceSessionId, ancestral.sessionId);
     assert.ok(hearth.atoms.some(atom => atom.excerpt === 'ancestral exact text'));
+    const projection = current.db.getActiveThreadProjection();
+    assert.equal(projection.projectionScope, 'active_session');
+    assert.ok(projection.events.length > 0);
+    assert.ok(projection.events.every(event => event.sessionId === wake.sessionId));
+    assert.ok(projection.wakes.every(item => item.sessionId === wake.sessionId));
   } finally { await current.close(); await rm(dir, { recursive: true, force: true }); }
 });
 

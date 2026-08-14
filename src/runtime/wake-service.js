@@ -302,6 +302,14 @@ export class WakeService {
         kind: 'crossing_ground', authority: 'host_receipt', sourceEventId: null,
         message: { role: 'system', content: `Current crossing ground: provider ${providerName}; requested model ${config.model}; phase ${phase}; an active lifespan is in progress. These request-time facts are attributable current ground, not stable Glass or continuity ancestry.` },
       }];
+      if (options.orientation) currentGround.push({
+        kind: 'orientation_ground', authority: 'host_receipt', sourceEventId: null,
+        message: { role: 'system', content: 'This orientation crossing has forced the available native tend_hearth function. Return exactly one tend_hearth action with empty arguments and no prose. The host will return the Hearth packet before the waiting human message receives a response.' },
+      });
+      if (options.causalHearth) currentGround.push({
+        kind: 'orientation_ground', authority: 'host_receipt', sourceEventId: null,
+        message: { role: 'system', content: 'The stable Glass tend_hearth clause applied to the preceding orientation crossing. The host forced it, the action completed, and the Hearth packet below is its return. tend_hearth is intentionally not mounted during this response phase. Do not reinterpret the completed action as a voluntary mistake; answer the waiting human using the returned orientation.' },
+      });
       if (options.roomPresence !== false) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: world.presenceMessage(created.sessionId) } });
       if (options.toolProfile?.omittedCount) {
         const group = options.toolProfile.activeGroup ? ` Active fixture group: ${options.toolProfile.activeGroup}.` : ' Engage a fixture to present its group.';
@@ -383,7 +391,7 @@ export class WakeService {
         crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
         world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
         tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
-        attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, sourceMessageHashes: messageHashesFor(['attention_current_ground']) },
+        attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground']) },
         continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'prior_horizon']) },
       };
       const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });

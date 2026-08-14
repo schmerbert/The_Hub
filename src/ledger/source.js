@@ -719,5 +719,13 @@ export class HubDatabase {
     return { thread: rowToObject(thread), session: this.getActiveSession(), sessions, events, wakes };
   }
 
+  getActiveThreadProjection() {
+    const thread = this.sqlite.prepare('SELECT id, created_at AS createdAt, label FROM threads WHERE id=?').get(this.threadId);
+    const session = this.getActiveSession();
+    const events = this.sqlite.prepare('SELECT id, session_id AS sessionId, wake_id AS wakeId, actor_kind AS actorKind, event_kind AS eventKind, content, authority, provider, model, created_at AS createdAt FROM events WHERE thread_id=? AND session_id=? ORDER BY created_at, id').all(this.threadId, session.id);
+    const wakes = this.sqlite.prepare('SELECT id, session_id AS sessionId, turn_ordinal AS turnOrdinal, status, provider, requested_model AS requestedModel, resolved_model AS resolvedModel, failure_code AS failureCode, failure_message AS failureMessage, custody_failure_code AS custodyFailureCode, custody_failure_message AS custodyFailureMessage, started_at AS startedAt, completed_at AS completedAt FROM wakes WHERE thread_id=? AND session_id=? ORDER BY started_at, id').all(this.threadId, session.id);
+    return { thread: rowToObject(thread), session, sessions: this.listSessions(), events, wakes, projectionScope: 'active_session' };
+  }
+
   close() { this.sqlite.close(); }
 }
