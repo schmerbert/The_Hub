@@ -1,6 +1,5 @@
 import { sha256 } from '../core/hash.js';
 import { completeProvider, prepareProviderRequest } from '../providers/dispatch.js';
-import { echoReasoningContentForContinuation } from '../providers/deepseek.js';
 import { planOldToolExchangeOmissions, projectSourceRefs } from '../context/tool-pairs.js';
 import { buildGlassWakeInheritance, composeGlassCast, finalizeGlassCast, planPromotedHearthOmissions } from '../context/glass-cast.js';
 import { assertScrubbedPresentation, scrubProviderHistory, verifyScrubbedProjection } from '../scrub/provider-presentation.js';
@@ -318,7 +317,11 @@ export class WakeService {
       if (omissionPlan.disclosure) currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: omissionPlan.disclosure } });
       const assemble = () => {
         const historyRefs = historyRows.map(row => {
-          const message = JSON.parse(row.messageJson);
+          const message = db.projectSessionHistoryMessage(row, {
+            activeWakeId: created.wakeId,
+            materializeActiveToolReasoning: !options.orientation,
+            materializeMissingAsEmpty: config.mode === 'live',
+          });
           const isCausalHearthReturn = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'tool_result' && typeof message.content === 'string' && message.content.startsWith('# Hearth');
           const isCausalHearthAction = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'assistant_tool_call' && message.tool_calls?.some(call => call.function?.name === 'tend_hearth');
           return {
@@ -333,7 +336,7 @@ export class WakeService {
             message,
           };
         });
-        const livingEdgeRefs = echoReasoningContentForContinuation([...currentGround, ...historyRefs], { thinking, tools });
+        const livingEdgeRefs = [...currentGround, ...historyRefs];
         const livingEdgeOmissions = omissionPlan.omissions.map(omission => ({ ...omission, sourceIndex: omission.sourceIndex + currentGround.length }));
         const composed = composeGlassCast({
           phase,

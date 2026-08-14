@@ -36,22 +36,6 @@ function assembleJsonCompletion(bytes, requestedModel) {
   };
 }
 
-/**
- * DeepSeek thinking + tools requires every assistant history message to carry
- * `reasoning_content` on subsequent requests. Orientation runs with thinking
- * disabled (forced tool_choice), so that turn often has no field — echo "" so
- * response/tool rounds do not 400. Never invent non-empty CoT.
- */
-export function echoReasoningContentForContinuation(refs, { thinking, tools } = {}) {
-  const needsEcho = thinking === 'enabled' || (Array.isArray(tools) && tools.length > 0);
-  if (!needsEcho || !Array.isArray(refs)) return refs;
-  return refs.map(ref => {
-    const message = ref?.message;
-    if (!message || message.role !== 'assistant' || Object.hasOwn(message, 'reasoning_content')) return ref;
-    return { ...ref, message: { ...message, reasoning_content: '' } };
-  });
-}
-
 export class DeepSeekResidentProvider {
   constructor(config) {
     const providerMaxReturnBytes = config?.providerMaxReturnBytes ?? DEFAULT_MAX_RETURN_BYTES;

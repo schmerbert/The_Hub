@@ -58,7 +58,7 @@ The return-side Scrub then:
 1. verifies the raw-body pointer, byte length, and hash;
 2. parses without changing the recorded bytes;
 3. selects the exact provider assistant-message subtree;
-4. preserves every selected provider field required for correct continuation, including tool calls and provider-required reasoning fields;
+4. preserves every selected provider field in exact return custody, roots reasoning once, and materializes provider-required reasoning only for the active causal tool continuation;
 5. produces a versioned receipt naming the structured selection and input/output hashes;
 6. yields the only message object eligible to enter cleaned session history.
 
@@ -101,7 +101,7 @@ The current Home Forest must remain bijective with eligible human/resident utter
 - Network failures do not fabricate return bodies.
 - Raw-return bytes, lengths, hashes, request ancestry, and lifecycle order verify.
 - Only return-scrub outputs enter cleaned session history.
-- Structured tool calls and required reasoning content survive exact selection.
+- Structured tool calls survive exact selection; required reasoning survives in Roots and only the active causal continuation projection.
 - No provider-visible request bypasses the presentation Scrub.
 - Existing pre-return-custody Spine frames remain valid ancestry.
 - Live Home Forest counts and source bijection remain unchanged by migration and verification.

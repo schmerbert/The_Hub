@@ -8,7 +8,7 @@ Provider streaming has a bounded pre-Scrub pause. Raw fragments remain only in a
 
 New Glass casts are governed by a separate forward-only trace epoch. Five request-ground receipts bind crossing identity, verified World state, the exact Ceiling/Patch Bay schema mount, attention/omission state, and continuity state. A per-item manifest connects these receipts—or an exact Scroll row, Source event, or stable Glass hash—to the provider-presentation Scrub disposition and exact Spine request. The bundle commits atomically and verifies before the next wake.
 
-Roots is a separate non-respiratory evidence domain in the operational store. After `roots_boundary/v1`, every new House Hearth packet is retained atomically with its Hearth/Scroll crossing, then linked to the exact response Glass cast if presented. Roots may point to Forest evidence, but Forest has no ordinary Exhale path from Roots. See [`ROOTS_BOUNDARY_V1.md`](specs/ROOTS_BOUNDARY_V1.md).
+Roots is a separate non-respiratory evidence domain in the operational store. It retains House Hearth packets and content-addressed provider reasoning. New Session Scroll assistant rows hold visible speech/action plus a typed reasoning pointer; exact reasoning is materialized only for the active same-wake tool chain when required and is absent from completed historical API context. Roots may point to Forest evidence, but Forest has no ordinary Exhale path from Roots. See [`ROOTS_BOUNDARY_V1.md`](specs/ROOTS_BOUNDARY_V1.md).
 
 ```text
 Source Ledger -> session/Hearth assembly -> provider-presentation Scrub
@@ -31,7 +31,7 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Ledger facade | `src/ledger/source.js` | Operational/source events, shared transactions, and stable public custody contract |
 | Ledger schema | `src/ledger/schema.js` | Inert operational SQLite schema; no runtime behavior |
 | Scroll / Glass traces | `src/ledger/scroll-trace.js`, `src/ledger/glass-trace.js` | Forward epochs, append-only trace custody, and verification |
-| Roots | `src/ledger/roots.js` | Append-only non-respiratory evidence registry, typed wake-packet custody, causal edges, and verification |
+| Roots | `src/ledger/roots.js` | Append-only non-respiratory evidence registry, typed wake-packet and content-addressed reasoning custody, causal edges, and verification |
 | Session | `src/session/lifespan.js` | Process-lived session identity, complete active history, and Session Zero ancestry |
 | Hearth | `src/hearth/handshake.js`, `src/hearth/scroll.js` | Native first-call action validation, exact recency extracts, and resident Scroll |
 | Provider Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Subtractive provider projection and exact provider-return selection |

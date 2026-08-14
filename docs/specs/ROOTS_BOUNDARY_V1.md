@@ -1,6 +1,6 @@
 # Roots Boundary v1
 
-> **Status: Adopted and implemented for new House Hearth wake packets.** Inherited packets remain exact and are not backfilled with invented custody.
+> **Status: Adopted and implemented for House Hearth wake packets and provider reasoning artifacts.** Inherited Hearth packets remain exact; inherited exact reasoning is rooted from its existing provider-return/Scroll evidence without rewriting the historical Scroll.
 
 ## Promise
 
@@ -26,12 +26,16 @@ The Hearth receipt, Session Scroll tool-result row, host-return Scrub receipt, r
 
 ## Storage shape
 
-`root_artifacts` is the immutable content-addressed registry. `root_wake_packets` supplies the structured domain coordinate. `root_edges` connects evidence to external authorities without copying those authorities. Every Roots table rejects update and deletion.
+`root_artifacts` is the immutable content-addressed registry. `root_wake_packets` supplies the structured Hearth coordinate. `root_reasoning_artifacts` deduplicates exact provider reasoning by SHA-256 and byte length. `root_edges` connects either artifact to external authorities without copying those authorities. Every Roots table rejects update and deletion.
 
-Sensitivity classification is recorded, but v1 does not define the Vault, encryption, operator authorization, reasoning retention, or deletion policy. Those require later law.
+For a new provider assistant return, provider-return Scrub and Spine retain the exact selected return. If it contains `reasoning_content`, Roots stores that text once and appends causal edges to the producing Spine record, wake, and Session Scroll row. The new Scroll row retains visible speech or tool intent plus a typed `reasoning_ref`; it does not duplicate the reasoning body.
+
+When a same-wake tool chain must continue, the context assembler may dereference only that wake's assistant tool-call pointer and temporarily restore the exact reasoning field. Completed reasoning and every Roots pointer are absent from later provider crossings. Historical inline reasoning is projected out before Glass assembly and remains recoverable through its rooted edge. No reasoning artifact is Forest-eligible or generally Resident-browsable.
+
+Sensitivity classification is recorded, but v1 does not define the Vault, encryption, operator authorization, or deletion policy. Those require later law.
 
 ## Verification and inspection
 
-Before each wake, verification checks boundary and law hashes, append-only triggers, every post-boundary Hearth/root binding, exact packet and Markdown hashes, and the response-Glass edge for committed wakes. Drift refuses with `roots_drift`.
+Before each wake, verification checks boundary and law hashes, append-only triggers, every post-boundary Hearth/root binding, exact packet and Markdown hashes, reasoning content/hash/length bindings, and the response-Glass edge for committed wakes. Drift refuses with `roots_drift`.
 
 Wake inspection exposes rooted artifacts and causal edges read-only. It creates neither a mutation path nor a provider injection path.

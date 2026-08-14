@@ -32,7 +32,7 @@ export class ScrollTraceLedger {
     return { status: 'established', epoch: this.epoch() };
   }
 
-  appendManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId, scrubReceipt }) {
+  appendManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId, scrubReceipt, reasoningRoot = null }) {
     const epoch = this.epoch();
     if (!epoch) return null;
     let source; let gate;
@@ -47,8 +47,13 @@ export class ScrollTraceLedger {
       source = { authority: 'Spine', recordId: scrubReceipt.receipt.source.spineRecordId, recordHash: scrubReceipt.receipt.source.recordHash || null };
       gate = { kind: 'provider-return_scrub', receiptId: scrubReceipt.receipt.receiptId };
     }
+    if (reasoningRoot) gate.reasoningProjection = {
+      policy: 'reasoning_root_pointer/v1', sourceField: 'reasoning_content',
+      artifactId: reasoningRoot.artifactId, reasoningHash: reasoningRoot.sha256, byteLength: reasoningRoot.byteLength,
+      scrollField: 'reasoning_ref',
+    };
     const manifest = { epochId: epoch.id, historyId, sessionId, wakeId, ordinal, messageKind, source, gate,
-      witness: { historyId, sourceEventId: sourceEventId || null, scrubReceiptId: scrubReceipt?.receipt?.receiptId || null },
+      witness: { historyId, sourceEventId: sourceEventId || null, scrubReceiptId: scrubReceipt?.receipt?.receiptId || null, reasoningArtifactId: reasoningRoot?.artifactId || null },
       destination: { authority: 'Session Scroll', sessionId, ordinal }, disposition: 'retained_in_session_scroll' };
     const manifestJson = canonicalize(manifest);
     this.sqlite.prepare(`INSERT INTO scroll_trace_manifests(id,epoch_id,history_id,schema_version,manifest_json,manifest_hash,created_at)

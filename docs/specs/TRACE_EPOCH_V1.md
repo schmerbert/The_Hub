@@ -44,7 +44,7 @@ No pre-boundary row receives an invented manifest. Establishment is idempotent. 
 | Row kind | Source | Gate / witness | Disposition |
 | --- | --- | --- | --- |
 | Human utterance | Source event | HTTP wake validation plus Source append | Retained in Session Scroll |
-| Resident speech or tool intent | Spine return record | Provider-return Scrub receipt | Retained in Session Scroll |
+| Resident speech or tool intent | Spine return record | Provider-return Scrub receipt; `reasoning_root_pointer/v1` when reasoning is present | Visible message/action retained in Session Scroll; exact reasoning retained once in Roots and named by pointer |
 | Host tool result | Exact host result | Host-return Scrub receipt | Retained in Session Scroll |
 
 The append-only epoch and manifest tables reject update and deletion. Future versions should add stronger verification rather than silently weakening a manifest.

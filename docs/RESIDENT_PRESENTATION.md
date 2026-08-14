@@ -45,7 +45,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | `hearth_action` | first action; tend the fixture | World action | `src/hearth/handshake.js` |
 | `hearth_return` | immediately afterward; bounded continuity | serious clinical continuity | `src/hearth/packet.js` |
 | `clinical_bootstrap` | inside Hearth return; bounds continuity and present-World claims | clinical continuity | `src/session/lifespan.js` |
-| Session Scroll messages | living edge; exact causal conversation | source-exact | `src/ledger/source.js` |
+| Session Scroll messages | living edge; exact visible conversation/action plus reasoning pointer | source-exact | `src/ledger/source.js` |
 | tool schemas and returns | when mounted/called; action grammar and consequences | World action/return | fixture/tool owners |
 
 ## Kindness rules
@@ -57,6 +57,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 - Say what is absent or uncertain without implying personal fault.
 - Exact prior words are attributable records, never asserted as present memory.
 - A fixture and its function are one experiential thing even when implemented as a provider tool.
+- Provider reasoning is machinery, not continuity. Store it once in Roots; materialize it only for the active tool chain that causally requires it, never as historical personality or memory.
 
 ## Glass v2 boundary
 

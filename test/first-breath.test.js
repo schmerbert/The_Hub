@@ -246,22 +246,6 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
   } finally { await first.close(); await second.close(); await new Promise(resolve => upstream.close(resolve)); }
 });
 
-test('echoReasoningContentForContinuation preserves exact CoT and fills missing assistants', async () => {
-  const { echoReasoningContentForContinuation } = await import('../src/providers/deepseek.js');
-  const refs = [
-    { sourceEventId: null, message: { role: 'system', content: 'ground' } },
-    { sourceEventId: null, message: { role: 'assistant', content: null, tool_calls: [{ id: 'a' }] } },
-    { sourceEventId: null, message: { role: 'assistant', content: 'hi', reasoning_content: 'exact-cot' } },
-    { sourceEventId: null, message: { role: 'user', content: 'q' } },
-  ];
-  const echoed = echoReasoningContentForContinuation(refs, { thinking: 'enabled', tools: [{ type: 'function' }] });
-  assert.equal(Object.hasOwn(echoed[1].message, 'reasoning_content'), true);
-  assert.equal(echoed[1].message.reasoning_content, '');
-  assert.equal(echoed[2].message.reasoning_content, 'exact-cot');
-  assert.equal(Object.hasOwn(echoed[3].message, 'reasoning_content'), false);
-  assert.equal(echoReasoningContentForContinuation(refs, { thinking: 'disabled', tools: undefined }), refs);
-});
-
 test('interrupted nonterminal wakes remain visible', async () => {
   const f = await fixture({ HUB_RESIDENT_MODE: 'fake' });
   try {

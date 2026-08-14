@@ -40,7 +40,7 @@ The host sends the bootstrap, empty active-session history, and the waiting huma
 
 `tend_hearth({})`
 
-The model must return exactly one tool call for `tend_hearth`, with valid empty arguments and no conversational answer. This assistant tool-call message is a model-signed operational action, not an utterance. It is preserved exactly, including provider tool-call ID and any provider-required reasoning content, but it does not enter the Forest as conversation and is not displayed as the resident's answer.
+The model must return exactly one tool call for `tend_hearth`, with valid empty arguments and no conversational answer. This assistant tool-call message is a model-signed operational action, not an utterance. Its visible action and provider tool-call ID enter the Session Scroll; any provider reasoning is retained exactly once in Roots and linked by pointer. The exact reasoning may be materialized for the immediately following same-wake continuation, but it does not enter the Forest or display as the resident's answer.
 
 Missing, duplicated, malformed, substituted, or prose-bearing orientation calls fail closed. They do not fabricate a Hearth return or final resident response.
 

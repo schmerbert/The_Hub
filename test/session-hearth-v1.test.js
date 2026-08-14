@@ -27,7 +27,9 @@ test('v1 first turn stores one user, performs two phases, and later turns stay o
     assert.equal(orientation.messages.at(-1).content, 'first exact user');
     assert.equal(response.messages.some(message => message.content === 'first exact user'), true);
     const hearthAction = JSON.parse(first.events.find(event => event.eventKind === 'state' && event.actorKind === 'resident').content);
-    assert.equal(response.messages.some(message => JSON.stringify(message) === JSON.stringify(hearthAction)), true);
+    assert.equal(response.messages.some(message => {
+      try { assert.deepEqual(message, hearthAction); return true; } catch { return false; }
+    }), true);
     const hearthReturn = response.messages.find(message => message.role === 'tool' && message.content === first.hearth.scrollMarkdown);
     assert.ok(hearthReturn);
     assert.match(hearthReturn.content, /^# Hearth/);

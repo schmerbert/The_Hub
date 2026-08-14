@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS root_wake_packets (
 );
 CREATE TRIGGER IF NOT EXISTS root_wake_packets_append_only_update BEFORE UPDATE ON root_wake_packets BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS root_wake_packets_append_only_delete BEFORE DELETE ON root_wake_packets BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TABLE IF NOT EXISTS root_reasoning_artifacts (
+  artifact_id TEXT PRIMARY KEY REFERENCES root_artifacts(id),
+  reasoning_hash TEXT NOT NULL UNIQUE, byte_length INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS root_reasoning_artifacts_append_only_update BEFORE UPDATE ON root_reasoning_artifacts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS root_reasoning_artifacts_append_only_delete BEFORE DELETE ON root_reasoning_artifacts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 `;
 
 export class RootsLedger {
@@ -69,7 +76,7 @@ export class RootsLedger {
     if (!epoch) return { verified: true, epoch: null, rootedWakePacketCount: 0, mismatches };
     if (sha256(epoch.preBoundaryHeadJson) !== epoch.preBoundaryHeadHash) add({ code: 'roots_boundary_hash_mismatch' });
     if (sha256(epoch.lawJson) !== epoch.lawHash) add({ code: 'roots_law_hash_mismatch' });
-    for (const table of ['roots_epochs','root_artifacts','root_edges','root_wake_packets']) for (const action of ['update','delete']) {
+    for (const table of ['roots_epochs','root_artifacts','root_edges','root_wake_packets','root_reasoning_artifacts']) for (const action of ['update','delete']) {
       const trigger = `${table}_append_only_${action}`;
       if (!this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger)) add({ code: 'roots_trigger_missing', trigger });
     }
@@ -89,7 +96,24 @@ export class RootsLedger {
         if (!edge || !cast || edge.targetHash !== cast.receiptHash) add({ code: 'root_wake_packet_glass_edge_missing', wakeId: hearth.wakeId });
       }
     }
-    return { verified: mismatches.length === 0, epoch: { id: epoch.id, boundaryKind: epoch.boundaryKind, establishedAt: epoch.establishedAt }, rootedWakePacketCount: hearths.length, mismatches };
+    const reasoning = this.sqlite.prepare(`SELECT r.artifact_id AS artifactId,r.reasoning_hash AS reasoningHash,r.byte_length AS byteLength,
+      a.payload_json AS payloadJson,a.content_hash AS contentHash,a.kind FROM root_reasoning_artifacts r JOIN root_artifacts a ON a.id=r.artifact_id`).all();
+    for (const item of reasoning) {
+      let payload = null; try { payload = JSON.parse(item.payloadJson); } catch {}
+      if (item.kind !== 'provider_reasoning' || sha256(item.payloadJson) !== item.contentHash || payload?.reasoningHash !== item.reasoningHash ||
+        sha256(payload?.text || '') !== item.reasoningHash || Buffer.byteLength(payload?.text || '', 'utf8') !== item.byteLength) add({ code: 'root_reasoning_binding_mismatch', artifactId: item.artifactId });
+      const scrollEdges = this.sqlite.prepare(`SELECT target_id AS targetId,target_hash AS targetHash FROM root_edges
+        WHERE from_artifact_id=? AND relation='produced_scroll_row' AND target_authority='session_history'`).all(item.artifactId);
+      if (!scrollEdges.length) add({ code: 'root_reasoning_scroll_edge_missing', artifactId: item.artifactId });
+      for (const edge of scrollEdges) {
+        const history = this.sqlite.prepare('SELECT message_json AS messageJson FROM session_history WHERE id=?').get(edge.targetId);
+        let message = null; try { message = JSON.parse(history?.messageJson); } catch {}
+        const pointerMatches = message?.reasoning_ref?.artifactId === item.artifactId && message.reasoning_ref.sha256 === item.reasoningHash;
+        const inheritedMatches = typeof message?.reasoning_content === 'string' && sha256(message.reasoning_content) === item.reasoningHash;
+        if (!history || edge.targetHash !== sha256(history.messageJson) || (!pointerMatches && !inheritedMatches)) add({ code: 'root_reasoning_scroll_binding_mismatch', artifactId: item.artifactId, historyId: edge.targetId });
+      }
+    }
+    return { verified: mismatches.length === 0, epoch: { id: epoch.id, boundaryKind: epoch.boundaryKind, establishedAt: epoch.establishedAt }, rootedWakePacketCount: hearths.length, rootedReasoningCount: reasoning.length, mismatches };
   }
 
   recordWakePacket({ sessionId, wakeId, hearthReceiptId, packet, markdown, markdownHash }) {
@@ -116,10 +140,46 @@ export class RootsLedger {
     return rooted.artifactId;
   }
 
+  recordReasoning(text) {
+    if (typeof text !== 'string') return null;
+    const epoch = this.epoch();
+    if (!epoch) throw Object.assign(new Error('Roots boundary is not established.'), { code: 'roots_boundary_missing' });
+    const reasoningHash = sha256(text);
+    const existing = this.sqlite.prepare(`SELECT artifact_id AS artifactId,reasoning_hash AS reasoningHash,byte_length AS byteLength
+      FROM root_reasoning_artifacts WHERE reasoning_hash=?`).get(reasoningHash);
+    if (existing) return { ...existing, deduplicated: true };
+    const artifactId = `root_reasoning_${reasoningHash}`;
+    const payload = { schemaVersion: 1, kind: 'provider_reasoning', text, reasoningHash,
+      custody: { respiration: 'pointer_only', forestExhaleEligible: false, residentBrowseEligible: false } };
+    const payloadJson = canonicalize(payload); const createdAt = now(); const byteLength = Buffer.byteLength(text, 'utf8');
+    this.sqlite.prepare(`INSERT INTO root_artifacts(id,epoch_id,kind,payload_version,retention_class,sensitivity_class,payload_json,content_hash,created_at)
+      VALUES(?,?,'provider_reasoning',1,'causal_evidence','restricted',?,?,?)`).run(artifactId, epoch.id, payloadJson, sha256(payloadJson), createdAt);
+    this.sqlite.prepare(`INSERT INTO root_reasoning_artifacts(artifact_id,reasoning_hash,byte_length,created_at) VALUES(?,?,?,?)`).run(artifactId, reasoningHash, byteLength, createdAt);
+    return { artifactId, reasoningHash, byteLength, deduplicated: false };
+  }
+
+  linkReasoning({ artifactId, relation, targetAuthority, targetId, targetHash = null }) {
+    if (!artifactId) return null;
+    const epoch = this.epoch();
+    this.sqlite.prepare(`INSERT OR IGNORE INTO root_edges(id,epoch_id,from_artifact_id,relation,target_authority,target_id,target_hash,created_at)
+      VALUES(?,?,?,?,?,?,?,?)`).run(id('root_edge'), epoch.id, artifactId, relation, targetAuthority, targetId, targetHash, now());
+    return artifactId;
+  }
+
+  reasoningForHistory(historyId) {
+    const item = this.sqlite.prepare(`SELECT a.id AS artifactId,a.payload_json AS payloadJson,r.reasoning_hash AS reasoningHash,r.byte_length AS byteLength
+      FROM root_edges e JOIN root_artifacts a ON a.id=e.from_artifact_id JOIN root_reasoning_artifacts r ON r.artifact_id=a.id
+      WHERE e.relation='produced_scroll_row' AND e.target_authority='session_history' AND e.target_id=? LIMIT 1`).get(historyId);
+    if (!item) return null;
+    const payload = JSON.parse(item.payloadJson);
+    return { artifactId: item.artifactId, reasoningHash: item.reasoningHash, byteLength: item.byteLength, text: payload.text };
+  }
+
   inspectWake(wakeId) {
-    return this.sqlite.prepare(`SELECT a.id AS artifactId,a.kind,a.payload_version AS payloadVersion,a.retention_class AS retentionClass,
+    return this.sqlite.prepare(`SELECT DISTINCT a.id AS artifactId,a.kind,a.payload_version AS payloadVersion,a.retention_class AS retentionClass,
       a.sensitivity_class AS sensitivityClass,a.payload_json AS payloadJson,a.content_hash AS contentHash,a.created_at AS createdAt
-      FROM root_artifacts a JOIN root_wake_packets p ON p.artifact_id=a.id WHERE p.wake_id=?`).all(wakeId).map(item => ({ ...item, payload: JSON.parse(item.payloadJson),
+      FROM root_artifacts a LEFT JOIN root_wake_packets p ON p.artifact_id=a.id LEFT JOIN root_edges e ON e.from_artifact_id=a.id
+      WHERE p.wake_id=? OR (e.target_authority='wake' AND e.target_id=?)`).all(wakeId, wakeId).map(item => ({ ...item, payload: JSON.parse(item.payloadJson),
         edges: this.sqlite.prepare('SELECT relation,target_authority AS targetAuthority,target_id AS targetId,target_hash AS targetHash,created_at AS createdAt FROM root_edges WHERE from_artifact_id=? ORDER BY created_at,id').all(item.artifactId) }));
   }
 }

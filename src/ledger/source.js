@@ -42,6 +42,7 @@ export class HubDatabase {
     this.threadId = this.ensureThread();
     this.session = openSession ? this.openSession() : null;
     if (!existingSource) { this.establishTraceEpoch(); this.establishGlassTraceEpoch(); this.establishRootsEpoch(); }
+    this.backfillReasoningRoots();
   }
 
   getRootsEpoch() { return this.roots.epoch(); }
@@ -66,6 +67,29 @@ export class HubDatabase {
     addColumn('session_history', 'scrub_receipt_id', 'TEXT');
     addColumn('session_history', 'raw_return_record_id', 'TEXT');
     addColumn('session_history', 'source_record_hash', 'TEXT');
+  }
+
+  backfillReasoningRoots() {
+    if (!this.roots.epoch()) return { rooted: 0 };
+    let rooted = 0;
+    const rows = this.sqlite.prepare(`SELECT h.id,h.wake_id AS wakeId,h.message_json AS messageJson,h.raw_return_record_id AS rawReturnRecordId,h.scrub_receipt_id AS scrubReceiptId
+      FROM session_history h WHERE h.role='assistant' AND NOT EXISTS (
+        SELECT 1 FROM root_edges e WHERE e.relation='produced_scroll_row' AND e.target_authority='session_history' AND e.target_id=h.id
+      )`).all();
+    this.transaction(() => {
+      for (const item of rows) {
+        let message; try { message = JSON.parse(item.messageJson); } catch { continue; }
+        if (typeof message?.reasoning_content !== 'string') continue;
+        const artifact = this.roots.recordReasoning(message.reasoning_content);
+        this.roots.linkReasoning({ artifactId: artifact.artifactId, relation: 'produced_scroll_row', targetAuthority: 'session_history', targetId: item.id, targetHash: sha256(item.messageJson) });
+        this.roots.linkReasoning({ artifactId: artifact.artifactId, relation: 'produced_during_wake', targetAuthority: 'wake', targetId: item.wakeId });
+        if (item.rawReturnRecordId) this.roots.linkReasoning({ artifactId: artifact.artifactId, relation: 'selected_from_return', targetAuthority: 'spine_record', targetId: item.rawReturnRecordId });
+        const request = item.scrubReceiptId ? this.sqlite.prepare('SELECT provider_request_id AS providerRequestId FROM return_scrub_receipts WHERE id=?').get(item.scrubReceiptId) : null;
+        if (request) this.roots.linkReasoning({ artifactId: artifact.artifactId, relation: 'produced_by_request', targetAuthority: 'provider_request', targetId: request.providerRequestId });
+        rooted += 1;
+      }
+    });
+    return { rooted };
   }
 
   migrateCirculationColumns() {
@@ -352,14 +376,30 @@ export class HubDatabase {
       FROM session_history WHERE session_id=? ORDER BY ordinal`).all(sessionId);
   }
 
+  projectSessionHistoryMessage(row, { activeWakeId = null, materializeActiveToolReasoning = false, materializeMissingAsEmpty = false } = {}) {
+    const message = JSON.parse(row.messageJson);
+    if (message?.role !== 'assistant') return message;
+    const rooted = this.roots.reasoningForHistory(row.id);
+    delete message.reasoning_content;
+    delete message.reasoning_ref;
+    if (materializeActiveToolReasoning && row.wakeId === activeWakeId && row.messageKind === 'assistant_tool_call') {
+      if (rooted || materializeMissingAsEmpty) message.reasoning_content = rooted?.text || '';
+    }
+    return message;
+  }
+
   appendSessionHistory({ sessionId = this.session.id, wakeId, message, messageKind, sourceEventId = null, traceSourceEventId = sourceEventId, returnScrub = null, hostReturnScrub = null }) {
     const history = this.getSessionHistory(sessionId);
     const ordinal = history.length + 1;
-    const raw = JSON.stringify(message);
-    const content = typeof message.content === 'string' ? message.content : raw;
+    let scrollMessage = structuredClone(message);
     if (['assistant_tool_call', 'resident'].includes(messageKind)) {
       if (!returnScrub) throw new Error('Provider assistant history requires a validated return Scrub result.');
       assertScrubbedProviderReturn(returnScrub);
+      const reasoning = typeof message.reasoning_content === 'string' ? this.roots.recordReasoning(message.reasoning_content) : null;
+      if (reasoning) {
+        delete scrollMessage.reasoning_content;
+        scrollMessage.reasoning_ref = { authority: 'Roots', artifactId: reasoning.artifactId, sha256: reasoning.reasoningHash, byteLength: reasoning.byteLength };
+      }
     }
     if (messageKind === 'tool_result') {
       if (!hostReturnScrub) throw new Error('Host tool history requires a validated host-return Scrub result.');
@@ -367,9 +407,19 @@ export class HubDatabase {
     }
     const scrubReceipt = messageKind === 'tool_result' ? hostReturnScrub : returnScrub;
     const historyId = id('history');
+    const raw = JSON.stringify(scrollMessage);
+    const content = typeof scrollMessage.content === 'string' ? scrollMessage.content : raw;
     this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at, scrub_receipt_id, raw_return_record_id, source_record_hash)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(historyId, sessionId, wakeId, ordinal, raw, message.role, messageKind, sourceEventId, sha256(content), now(), scrubReceipt?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
-    this.appendScrollTraceManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId: traceSourceEventId, scrubReceipt });
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(historyId, sessionId, wakeId, ordinal, raw, scrollMessage.role, messageKind, sourceEventId, sha256(content), now(), scrubReceipt?.receipt?.receiptId || null, returnScrub?.receipt?.source?.spineRecordId || null, returnScrub?.receipt?.source?.recordHash || null);
+    const reasoning = scrollMessage.reasoning_ref;
+    if (reasoning) {
+      this.roots.linkReasoning({ artifactId: reasoning.artifactId, relation: 'produced_scroll_row', targetAuthority: 'session_history', targetId: historyId, targetHash: sha256(raw) });
+      this.roots.linkReasoning({ artifactId: reasoning.artifactId, relation: 'produced_during_wake', targetAuthority: 'wake', targetId: wakeId });
+      this.roots.linkReasoning({ artifactId: reasoning.artifactId, relation: 'selected_from_return', targetAuthority: 'spine_record', targetId: returnScrub.receipt.source.spineRecordId, targetHash: returnScrub.receipt.source.recordHash || null });
+      const request = this.sqlite.prepare('SELECT provider_request_id AS providerRequestId FROM return_scrub_receipts WHERE id=?').get(returnScrub.receipt.receiptId);
+      if (request) this.roots.linkReasoning({ artifactId: reasoning.artifactId, relation: 'produced_by_request', targetAuthority: 'provider_request', targetId: request.providerRequestId });
+    }
+    this.appendScrollTraceManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId: traceSourceEventId, scrubReceipt, reasoningRoot: reasoning || null });
     return ordinal;
   }
 
