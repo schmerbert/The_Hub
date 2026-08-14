@@ -125,6 +125,19 @@ function updateThinkingTimeline(state, text, { replace = false } = {}) {
   return { ...state, timeline, thinkingSegmentId: segmentId };
 }
 
+function updateSpeechTimeline(state, text, { replace = false } = {}) {
+  let segmentId = state.speechSegmentId;
+  let timeline = state.timeline;
+  if (!segmentId) {
+    segmentId = `speech:${state.phaseKey || 'phase'}`;
+    timeline = [...timeline, { kind: 'speech', id: segmentId, text: '' }];
+  }
+  timeline = timeline.map(segment => segment.id === segmentId
+    ? { ...segment, text: replace ? text : `${segment.text || ''}${text}` }
+    : segment);
+  return { ...state, timeline, speechSegmentId: segmentId };
+}
+
 function resetForWake(state, wakeId) {
   return {
     ...state,
@@ -138,6 +151,7 @@ function resetForWake(state, wakeId) {
     timeline: [],
     phaseKey: null,
     thinkingSegmentId: null,
+    speechSegmentId: null,
     terminal: null,
     status: 'assembling',
     optimisticUser: state.optimisticUser ? { ...state.optimisticUser, wakeId } : null,
@@ -159,6 +173,7 @@ export function createLiveState() {
     timeline: [],
     phaseKey: null,
     thinkingSegmentId: null,
+    speechSegmentId: null,
     terminal: null,
     status: 'idle',
     optimisticUser: null,
@@ -196,6 +211,7 @@ export function reduceHubEvent(current, event) {
       phase,
       phaseKey,
       thinkingSegmentId: null,
+      speechSegmentId: null,
       timeline: [...state.timeline, { kind: 'phase', id: `phase:${phaseKey}`, label: phaseTimelineLabel(phase) }],
       status: phase === 'orientation' ? 'orienting' : 'calling provider',
       thinking: '',
@@ -206,7 +222,10 @@ export function reduceHubEvent(current, event) {
     const delta = deltaText(payload);
     return { ...updateThinkingTimeline(state, delta), thinking: state.thinking + delta, status: 'thinking' };
   }
-  if (event.kind === 'provider.content.delta') return { ...state, draft: state.draft + deltaText(payload), status: 'responding' };
+  if (event.kind === 'provider.content.delta') {
+    const delta = deltaText(payload);
+    return { ...updateSpeechTimeline(state, delta), draft: state.draft + delta, status: 'responding' };
+  }
   if (event.kind === 'provider.tool_call.delta') {
     const index = Number.isInteger(payload.index) && payload.index >= 0 ? payload.index : null;
     if (index === null) return { ...state, resyncRequired: true };
@@ -230,10 +249,12 @@ export function reduceHubEvent(current, event) {
   if (event.kind === 'provider.message.ready') {
     const message = payload.message && typeof payload.message === 'object' ? payload.message : null;
     const exactThinking = typeof message?.reasoning_content === 'string' ? message.reasoning_content : null;
+    const exactSpeech = typeof message?.content === 'string' ? message.content : null;
     state = exactThinking !== null ? updateThinkingTimeline(state, exactThinking, { replace: true }) : state;
+    state = exactSpeech !== null && exactSpeech ? updateSpeechTimeline(state, exactSpeech, { replace: true }) : state;
     return {
       ...state,
-      draft: typeof message?.content === 'string' ? message.content : state.draft,
+      draft: exactSpeech ?? state.draft,
       thinking: exactThinking ?? state.thinking,
       status: 'message ready',
     };
@@ -306,6 +327,7 @@ export function clearLiveWake(state, wakeId) {
     timeline: [],
     phaseKey: null,
     thinkingSegmentId: null,
+    speechSegmentId: null,
     terminal: null,
     optimisticUser: null,
   };

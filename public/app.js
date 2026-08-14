@@ -154,6 +154,10 @@ function renderSlips(parent, slips) {
       });
       detail.append(node('summary', null, slip.label), node('p', null, slip.detail));
       parent.append(detail);
+    } else if (slip.kind === 'speech') {
+      const event = node('div', 'event resident intermediate-resident');
+      event.append(node('span', 'event-label', slip.label), node('span', null, slip.detail));
+      parent.append(event);
     } else if (slip.kind === 'pending' && slip.decidable && slip.approvalId) {
       const row = node('div', 'slip pending slip-pending');
       const label = node('span', 'slip-pending-label', slip.label);
@@ -223,6 +227,11 @@ function renderLiveTimeline(projection) {
       detail.append(node('summary', null, 'Thinking'), node('p', null, segment.text));
       elements.push(detail);
     }
+    if (segment.kind === 'speech' && segment.text) {
+      const event = node('div', 'event resident provisional-resident intermediate-resident');
+      event.append(node('span', 'event-label', 'Resident · en route'), node('span', null, segment.text));
+      elements.push(event);
+    }
     if (segment.kind === 'tool') {
       const detail = node('details', 'slip live-tool-call');
       const toolCall = segment.toolCall;
@@ -233,7 +242,7 @@ function renderLiveTimeline(projection) {
     }
     if (segment.kind === 'card') elements.push(renderLiveCard(segment.card));
   }
-  if (projection.draft) {
+  if (projection.draft && !projection.timeline.some(segment => segment.kind === 'speech')) {
     const event = node('div', 'event resident provisional-resident');
     event.append(node('span', 'event-label', 'Resident · provisional'), node('span', null, projection.draft));
     elements.push(event);

@@ -52,8 +52,8 @@ test('slips project thinking and multi-tool actions without polluting utterances
     async complete({ phase }) {
       if (phase === 'orientation') return { message: { role: 'assistant', content: null, reasoning_content: 'checking the hearth before speaking', tool_calls: [{ id: 'hearth', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] }, content: null, resolvedModel: 'test-model', finishReason: 'tool_calls' };
       round += 1;
-      if (round === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'move', type: 'function', function: { name: 'move_through_door', arguments: '{"door_id":"door.workshop"}' } }] }, content: null, resolvedModel: 'test-model', finishReason: 'tool_calls' };
-      if (round === 2) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'engage', type: 'function', function: { name: 'engage_fixture', arguments: '{"fixture_id":"fixture.workshop_shelves"}' } }] }, content: null, resolvedModel: 'test-model', finishReason: 'tool_calls' };
+      if (round === 1) return { message: { role: 'assistant', content: 'I am heading into the Workshop.', tool_calls: [{ id: 'move', type: 'function', function: { name: 'move_through_door', arguments: '{"door_id":"door.workshop"}' } }] }, content: 'I am heading into the Workshop.', resolvedModel: 'test-model', finishReason: 'tool_calls' };
+      if (round === 2) return { message: { role: 'assistant', content: 'The shelves are the right place to begin.', tool_calls: [{ id: 'engage', type: 'function', function: { name: 'engage_fixture', arguments: '{"fixture_id":"fixture.workshop_shelves"}' } }] }, content: 'The shelves are the right place to begin.', resolvedModel: 'test-model', finishReason: 'tool_calls' };
       return { message: { role: 'assistant', content: 'The shelves are engaged.' }, content: 'The shelves are engaged.', resolvedModel: 'test-model', finishReason: 'stop' };
     },
   };
@@ -66,6 +66,10 @@ test('slips project thinking and multi-tool actions without polluting utterances
     assert.ok(slips.slips.some(slip => slip.kind === 'thinking' && slip.detail === 'checking the hearth before speaking' && slip.expandable));
     assert.ok(slips.slips.some(slip => slip.label === 'Steps through to Workshop'));
     assert.ok(slips.slips.some(slip => slip.label === 'Engages the shelves'));
+    assert.deepEqual(slips.slips.filter(slip => slip.kind === 'speech').map(slip => slip.detail), [
+      'I am heading into the Workshop.',
+      'The shelves are the right place to begin.',
+    ]);
     const indexes = Object.fromEntries(slips.slips.map((slip, index) => [slip.id, index]));
     const moveIndex = slips.slips.findIndex(slip => slip.label === 'Steps through to Workshop');
     const engageIndex = slips.slips.findIndex(slip => slip.label === 'Engages the shelves');

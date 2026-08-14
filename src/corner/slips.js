@@ -105,6 +105,11 @@ export function projectWakeSlips({ wake, history = [], world = null, pendingAppr
     slips.push({ id: `phase:${phase.id}`, kind: 'phase', label, createdAt: phase.createdAt });
     const thinking = phase.responseMessage?.reasoning_content;
     if (typeof thinking === 'string' && thinking.trim()) slips.push({ id: `thinking:${phase.id}`, kind: 'thinking', label: 'Thinking', detail: thinking, expandable: true, createdAt: phase.completedAt || phase.createdAt });
+    const intermediateSpeech = phase.responseMessage?.content;
+    const continuesThroughTools = Array.isArray(phase.responseMessage?.tool_calls) && phase.responseMessage.tool_calls.length > 0;
+    if (continuesThroughTools && typeof intermediateSpeech === 'string' && intermediateSpeech.trim()) slips.push({
+      id: `speech:${phase.id}`, kind: 'speech', label: 'Resident · en route', detail: intermediateSpeech, createdAt: phase.completedAt || phase.createdAt,
+    });
     for (const receipt of receiptsByRequest.get(phase.id) || []) appendReceipt(receipt);
   }
   for (const receipt of orphanReceipts) appendReceipt(receipt);
