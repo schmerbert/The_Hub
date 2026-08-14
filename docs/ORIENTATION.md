@@ -1,6 +1,6 @@
 # The Hub — Orientation
 
-> **Start here.** This document explains what the Hub is, why it exists, what is real now, and where the adopted design is going. It is an orientation, not an implementation specification. [`STATUS.md`](STATUS.md) is the authority for current runtime claims; [`specs/HOUSE_GRAMMAR_V1.md`](specs/HOUSE_GRAMMAR_V1.md) owns the constitutional vocabulary.
+> **Start here. This is the repository front door.** It is the authoritative introduction to what the Hub is, why the Marble has this shape, what distinctions govern it, and where every deeper question belongs. [`STATUS.md`](STATUS.md) is the exact current-runtime capability register. [`specs/README.md`](specs/README.md) names the limited set of specifications that still own active feature contracts; unlisted specifications are implementation ancestry, not competing introductions.
 
 ## The proposition
 
@@ -131,7 +131,7 @@ Choose the path that matches your question:
 | How do material and authority circulate? | [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) |
 | Which code owns each runtime responsibility? | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | What vocabulary governs new design? | [`specs/HOUSE_GRAMMAR_V1.md`](specs/HOUSE_GRAMMAR_V1.md) |
-| What exact law owns a feature? | The relevant document under [`specs/`](specs/) |
+| What exact law owns a feature? | [`specs/README.md`](specs/README.md), then its named current owner |
 | How should code and laws evolve safely? | [`engineering/BUILDERS_STANDARD.md`](engineering/BUILDERS_STANDARD.md) and [`engineering/FEATURE_CHANGE_PROTOCOL.md`](engineering/FEATURE_CHANGE_PROTOCOL.md) |
 | What is being tested without installation? | [`../experiments/`](../experiments/) |
 | Where did the project begin? | [`../PREBUILD.md`](../PREBUILD.md) and sealed [`lineage/`](lineage/) ancestry |

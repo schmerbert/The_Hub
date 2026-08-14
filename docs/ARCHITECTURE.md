@@ -45,6 +45,7 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Ceiling / Patch Bay | `src/world/ceiling.js`, `src/world/tools.js` | Complete World authority plus deterministic engaged-fixture schema fitting for provider attention |
 | Workshop path law | `src/workshop/path-law.js` | Shared protected-path, traversal, containment, and symlink law used by Workshop and promotion |
 | Workshop | `src/world/workshop.js`, `src/world/git.js`, `src/world/recipes.js` | Bounded repository operations, local Git, and fake/test host recipes |
+| Workshop room package | `src/places/hub/workshop/` | Reference specialist-room import surface; historical implementation paths remain compatibility seams |
 | World Gateway | `src/world/gateway.js`, `src/world/gateway/` | Compatibility facade over the complete handler registry, approval crossings, Result Rack integration, and async result capture |
 | Sandbox Bay | `src/world/sandbox.js`, `src/world/sandbox-recipes.js` | Disposable Git worktree jobs, Docker recipe execution in live mode, lifecycle/diff control, and no-fallback adapter |
 | Promotion | `src/world/promotion.js` | Clean-base, plan/patch-hash-bound host application with protected-path checks |

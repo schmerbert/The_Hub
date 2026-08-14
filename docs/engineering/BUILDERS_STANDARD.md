@@ -80,6 +80,8 @@ Current broad ownership is:
 
 [`PLACE_MODULE_STANDARD.md`](PLACE_MODULE_STANDARD.md) governs the seam between universal World machinery and code truly owned by a place or room.
 
+`test/architecture-boundaries-v1.test.js` is the executable fitting barrier. It prevents place modules from reaching Marble machinery, prevents domain stores from importing presentation/composition roots, and requires every 500-line source module to carry an explicit cohesion standing. Crossing a threshold is therefore visible without making line count a substitute for architectural judgment.
+
 An owner may be divided internally. Ownership does not require one large file.
 
 Before a meaningful feature, record:

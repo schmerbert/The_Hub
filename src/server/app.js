@@ -12,13 +12,11 @@ import { projectForestHealth } from '../forest/health.js';
 import { SpineStore } from '../spine/store.js';
 import { WorldGraphStore } from '../world/graph.js';
 import { projectWorldBuilderInspection } from '../world/inspection.js';
-import { WorkshopAdapter } from '../world/workshop.js';
+import { WorkshopAdapter, DockerCliSandboxBackend, SandboxBay, SandboxRecipeRunner } from '../places/hub/workshop/index.js';
 import { WorldActionGateway } from '../world/gateway.js';
 import { residentToolProfile } from '../world/tools.js';
 import { projectWakeSlips } from '../corner/slips.js';
 import { ResultRackStore } from '../world/results.js';
-import { DockerCliSandboxBackend, SandboxBay } from '../world/sandbox.js';
-import { SandboxRecipeRunner } from '../world/sandbox-recipes.js';
 import { WakeService } from '../runtime/wake-service.js';
 import { HubEventBus } from '../runtime/hub-event-bus.js';
 
