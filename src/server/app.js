@@ -78,7 +78,9 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
     results = new ResultRackStore(config.resultPath, { projectionMaxBytes: config.resultProjectionMaxBytes, projectionMaxLines: config.resultProjectionMaxLines });
     if (worldVerified) world.ensureLifespan(db.session.id);
   } catch (error) {
-    forest?.close(); spine?.close(); world?.close(); results?.close(); db.close(); throw { code: error?.code === 'wake_ritual_invalid' ? 'wake_ritual_invalid' : 'forest_activation_refused', message: error?.code === 'wake_ritual_invalid' ? error.message : error?.code === 'forest_activation_refused' ? error.message : 'Existing Forest validation failed.' };
+    forest?.close(); spine?.close(); world?.close(); results?.close(); db.close();
+    if (error?.code === 'wake_ritual_invalid' || error?.code === 'forest_activation_refused') throw error;
+    throw { code: 'hub_startup_failed', message: `Hub startup failed: ${error?.message || 'unknown store initialization error'}` };
   }
   let workshop = null; let sandboxBay = null; let recipeRunner = recipeRunnerOverride || null; let gateway = null;
   try {

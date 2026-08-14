@@ -5,7 +5,8 @@ export function establishInstalledRoomReceipts(world) {
   const sqlite = worldStore(world);
   installRoomInstallationLedger(sqlite);
   const witness = workshopInstallationWitness();
-  const topology = sqlite.prepare("SELECT sequence,event_hash,occurred_at FROM world_event_journal WHERE event_kind='topology.installed/v1' ORDER BY sequence LIMIT 1").get();
+  const topology = sqlite.prepare("SELECT sequence,event_hash,occurred_at FROM world_event_journal WHERE event_kind IN ('topology.installed/v1','legacy_snapshot.imported/v1') ORDER BY sequence LIMIT 1").get();
+  if (!topology) throw new Error('Workshop installation ancestry has no exact World root event.');
   return appendRoomInstallationReceipt(sqlite, {
     witness,
     ancestry: 'inherited_pre_boundary',

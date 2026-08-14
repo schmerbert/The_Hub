@@ -62,3 +62,8 @@ test('Hub startup opens the boundary once and exposes inherited Workshop ancestr
   assert.equal(inspection.installationReceipts[0].ancestry, 'inherited_pre_boundary');
   await hub.close();
 });
+
+test('runtime ancestry accepts the exact legacy World root used by inherited installations', async () => {
+  const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/rooms/installation-runtime.js', import.meta.url), 'utf8'));
+  assert.match(source, /legacy_snapshot\.imported\/v1/);
+});
