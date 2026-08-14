@@ -245,9 +245,10 @@ export function reduceHubEvent(current, event) {
     const status = event.kind === 'tool.started' ? 'using tools' : event.kind === 'approval.pending' || (currentCard?.cardKind === 'approval' && currentCard.state === 'pending') ? 'awaiting approval' : event.kind === 'tool.refused' ? 'tool refused' : event.kind === 'tool.completed' ? 'working' : state.status;
     return { ...state, status };
   }
-  if (event.kind === 'message.committed') return { ...state, draft: '', status: 'committed' };
+  // Keep the sealed provider draft visible until canonical thread replacement.
+  if (event.kind === 'message.committed') return { ...state, status: 'committed' };
   if (TERMINAL_KINDS.has(event.kind)) {
-    return { ...state, draft: '', terminal: { kind: event.kind, wakeId, sequence: event.sequence }, status: event.kind === 'wake.failed' ? 'failed' : 'committed' };
+    return { ...state, terminal: { kind: event.kind, wakeId, sequence: event.sequence }, status: event.kind === 'wake.failed' ? 'failed' : 'committed' };
   }
   return state;
 }

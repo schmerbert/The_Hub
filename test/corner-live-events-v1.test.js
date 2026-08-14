@@ -53,7 +53,7 @@ test('live reducer projects a complete streamed wake without making provisional 
 
   state = reduceHubEvent(state, envelope(14, 'message.committed', { content: 'canonical only on thread endpoint' }));
   projected = projectLiveState(state);
-  assert.equal(projected.draft, '');
+  assert.equal(projected.draft, 'draft <unsafe-looking>');
   assert.equal(Object.hasOwn(projected, 'conversation'), false);
   state = reduceHubEvent(state, envelope(15, 'wake.completed'));
   assert.deepEqual(projectLiveState(state).terminal, { kind: 'wake.completed', wakeId: 'wake-live', sequence: 15 });
@@ -118,7 +118,7 @@ test('named EventSource lifecycle events reach the reducer, dedupe, and invoke t
   dispatch(envelope(7, 'wake.completed'));
   const projected = projectLiveState(state);
   assert.equal(projected.thinking, '<reasoning>');
-  assert.equal(projected.draft, '');
+  assert.equal(projected.draft, '<draft>');
   assert.equal(projected.toolCalls[0].name, 'workshop_read');
   assert.equal(projected.cards[0].detail, '<result>');
   assert.equal(projected.cards[0].revision, 1);
@@ -217,6 +217,8 @@ test('Corner opens one same-origin EventSource and renders events through textCo
   assert.match(app, /setInterval\(pollSlips, 400\)/);
   assert.match(app, /liveState\.connection === 'open'/);
   assert.match(app, /retainWakeSlips/);
+  assert.match(app, /terminalReconciliations\.get\(wakeId\)/);
+  assert.match(app, /\/api\/wakes\?projection=compact/);
   assert.match(app, /clearLiveWake/);
   assert.match(app, /renderThread\(thread\)/);
   assert.match(app, /captureConversationScroll\(conversationScroller\)/);

@@ -60,6 +60,7 @@ let slipPoll = null;
 let slipPollBusy = false;
 let liveState = createLiveState();
 let terminalReconcileSequence = 0;
+const terminalReconciliations = new Map();
 let resyncInFlight = false;
 let liveEventSource = null;
 let unregisterLiveEvents = null;
@@ -644,16 +645,27 @@ async function retainWakeSlips(wakeId) {
   wakeSlips.set(wakeId, projected.slips || []);
 }
 
+function reconcileWakeOnce(wakeId, terminalKind = 'wake.completed') {
+  if (!wakeId) return Promise.resolve();
+  const existing = terminalReconciliations.get(wakeId);
+  if (existing) return existing;
+  const reconciliation = (async () => {
+    await retainWakeSlips(wakeId).catch(() => {});
+    await refresh().catch(() => {});
+    liveState = clearLiveWake(liveState, wakeId);
+    renderLive();
+    stopSlipPoll();
+    gap.replaceChildren();
+    setState(terminalKind === 'wake.failed' ? 'failed' : 'committed');
+  })();
+  terminalReconciliations.set(wakeId, reconciliation);
+  return reconciliation;
+}
+
 async function reconcileTerminal(terminal) {
   if (!terminal || terminal.sequence <= terminalReconcileSequence) return;
   terminalReconcileSequence = terminal.sequence;
-  await retainWakeSlips(terminal.wakeId).catch(() => {});
-  await refresh().catch(() => {});
-  liveState = clearLiveWake(liveState, terminal.wakeId);
-  renderLive();
-  stopSlipPoll();
-  gap.replaceChildren();
-  setState(terminal.kind === 'wake.failed' ? 'failed' : 'committed');
+  await reconcileWakeOnce(terminal.wakeId, terminal.kind);
 }
 
 async function resyncLiveEvents() {
@@ -750,7 +762,7 @@ async function submitWake(event) {
   setTimeout(() => { if (busy) setState('orienting'); }, 0);
   startSlipPoll();
   try {
-    const wake = await request('/api/wakes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: submitted }) });
+    const wake = await request('/api/wakes?projection=compact', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: submitted }) });
     input.value = '';
     if (!liveState.optimisticUser?.wakeId) liveState = clearOptimisticUser(liveState);
     if (wake.__failedWake || wake.status === 'failed') {
@@ -763,10 +775,7 @@ async function submitWake(event) {
       return;
     }
     setState('committed');
-    await retainWakeSlips(wake.id);
-    await refresh();
-    liveState = clearLiveWake(liveState, wake.id);
-    renderLive();
+    await reconcileWakeOnce(wake.id);
     setState('committed');
     setTimeout(() => { if (!busy) setState('idle'); }, 1200);
     if (wake.id) currentWake = wake;

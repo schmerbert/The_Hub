@@ -231,11 +231,11 @@ export class WakeService {
     forest.linkPresentations(links);
   }
 
-  async wake(content) {
+  async wake(content, { completionProjection = 'full' } = {}) {
     if (this.closing) throw { code: 'hub_closing', message: 'The Hub is shutting down and is not accepting new wakes.' };
     if (this.wakeInProgress) throw { code: 'wake_in_progress', message: 'Another wake is already in progress.' };
     this.wakeInProgress = true;
-    const operation = this.performWake(content);
+    const operation = this.performWake(content, { completionProjection });
     this.activeWakePromise = operation;
     try { return await operation; }
     finally {
@@ -245,7 +245,7 @@ export class WakeService {
     }
   }
 
-  async performWake(content) {
+  async performWake(content, { completionProjection = 'full' } = {}) {
     const { config, db, provider, forest, spine, world, gateway, attentionMeter } = this;
     const submitted = typeof content === 'string' ? content : '';
     const trimmed = submitted.trim();
@@ -275,7 +275,7 @@ export class WakeService {
           sessionId: created.sessionId, wakeId: created.wakeId,
           payload: failure, source: { failureEventId },
         });
-        return db.getWake(created.wakeId);
+        return completionProjection === 'compact' ? db.getWakeCompletion(created.wakeId) : db.getWake(created.wakeId);
       }
     }
     db.markCalling(created.wakeId);
@@ -619,6 +619,6 @@ export class WakeService {
         });
       }
     }
-    return db.getWake(created.wakeId);
+    return completionProjection === 'compact' ? db.getWakeCompletion(created.wakeId) : db.getWake(created.wakeId);
   }
 }

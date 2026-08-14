@@ -102,7 +102,7 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
   }
   const eventBus = new HubEventBus(db);
   const wakeService = new WakeService({ config, db, provider, forest, spine, world, gateway, eventBus });
-  const wake = content => wakeService.wake(content);
+  const wake = (content, options) => wakeService.wake(content, options);
   let closing = false;
   let closePromise = null;
   const eventStreams = new Set();
@@ -193,15 +193,15 @@ export function createHub({ env = process.env, dbPath, forestPath, spinePath, wo
       }
       if (request.method === 'GET' && /^\/api\/wakes\/[^/]+\/slips$/.test(url.pathname)) {
         const wakeId = url.pathname.split('/')[3];
-        const wakeRecord = db.getWake(wakeId);
+        const wakeRecord = db.getWakeSlipSource(wakeId);
         if (!wakeRecord) return typedError(response, 404, 'wake_not_found', 'Wake not found.');
-        const history = db.getSessionHistory(wakeRecord.sessionId).filter(item => item.wakeId === wakeId);
-        return json(response, 200, projectWakeSlips({ wake: wakeRecord, history, world, pendingApprovals: world.listApprovals(wakeRecord.sessionId, { pendingOnly: true }) }));
+        return json(response, 200, projectWakeSlips({ wake: wakeRecord, world, pendingApprovals: world.listApprovals(wakeRecord.sessionId, { pendingOnly: true }) }));
       }
       if (request.method === 'POST' && url.pathname === '/api/wakes') {
         let incoming; try { incoming = await body(request, config.maxBodyBytes); } catch (error) { return typedError(response, 400, error.code, error.message); }
         if (!Object.hasOwn(incoming, 'content')) return typedError(response, 400, 'invalid_message', 'Message must contain text.');
-        const record = await wake(incoming.content);
+        const completionProjection = url.searchParams.get('projection') === 'compact' ? 'compact' : 'full';
+        const record = await wake(incoming.content, { completionProjection });
         const responseStatus = record.status === 'committed' && !record.custodyFailureCode ? 200 : statusFor(record.failureCode || record.custodyFailureCode || 'provider_error');
         return json(response, responseStatus, { ...record, residentMode: config.mode });
       }

@@ -679,6 +679,25 @@ export class HubDatabase {
     return normalized;
   }
 
+  getWakeSlipSource(wakeId) {
+    const wake = this.sqlite.prepare(`SELECT id,status,session_id AS sessionId,started_at AS startedAt,completed_at AS completedAt
+      FROM wakes WHERE id=?`).get(wakeId);
+    if (!wake) return null;
+    const phases = this.sqlite.prepare(`SELECT id,phase,response_message_json AS responseMessage,created_at AS createdAt,completed_at AS completedAt
+      FROM provider_requests WHERE wake_id=? ORDER BY ordinal`).all(wakeId).map(phase => ({
+        ...phase,
+        responseMessage: phase.responseMessage ? JSON.parse(phase.responseMessage) : null,
+      }));
+    return { ...wake, phases };
+  }
+
+  getWakeCompletion(wakeId) {
+    return rowToObject(this.sqlite.prepare(`SELECT id,status,session_id AS sessionId,turn_ordinal AS turnOrdinal,
+      failure_code AS failureCode,failure_message AS failureMessage,custody_failure_code AS custodyFailureCode,
+      custody_failure_message AS custodyFailureMessage,started_at AS startedAt,completed_at AS completedAt
+      FROM wakes WHERE id=?`).get(wakeId));
+  }
+
   getEvent(eventId) {
     const event = this.sqlite.prepare(`SELECT id, thread_id AS threadId, session_id AS sessionId, wake_id AS wakeId,
       actor_kind AS actorKind, event_kind AS eventKind, content, authority,
