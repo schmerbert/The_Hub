@@ -1,5 +1,9 @@
 // The Ceiling is the complete installed wire catalog. The Patch Bay selects
 // which wires are live in a room; it does not rename or otherwise alter them.
+import { CENTER } from '../places/hub/center.js';
+import { GARDEN } from '../places/garden/index.js';
+import { HOUSE } from '../places/house/index.js';
+import { THRESHOLD } from '../places/threshold/index.js';
 export const approvalAnchor = 'fixture.workshop_workbench';
 export const APPROVAL_ANCHOR = approvalAnchor;
 
@@ -67,11 +71,11 @@ const WIRES_BY_GROUP = new Map(WIRE_GROUPS.map(group => [group.id, CEILING_WIRES
 const WORKSHOP_TOOL_NAMES = Object.freeze(CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture'].includes(name)));
 
 export const ROOM_PROFILES = Object.freeze({
-  'room.center': Object.freeze(['move_through_door', 'move_through_passage', 'inspect_fixture']),
+  [CENTER.id]: CENTER.mountedTools,
   'room.workshop': WORKSHOP_TOOL_NAMES,
-  'place.garden': Object.freeze(['move_through_passage', 'operate_passage', 'inspect_fixture', 'turn_fixture']),
-  'place.house': Object.freeze(['move_through_passage', 'operate_passage', 'inspect_fixture']),
-  'place.threshold': Object.freeze(['move_through_passage']),
+  [GARDEN.id]: GARDEN.mountedTools,
+  [HOUSE.id]: HOUSE.mountedTools,
+  [THRESHOLD.id]: THRESHOLD.mountedTools,
 });
 
 export function mountedToolNames(roomId) {

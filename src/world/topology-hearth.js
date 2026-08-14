@@ -1,4 +1,5 @@
 import { canonicalize, sha256 } from '../core/hash.js';
+import { HEARTH } from '../places/house/index.js';
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -9,11 +10,11 @@ function deepFreeze(value) {
 }
 
 export const HEARTH_WORLD_NODES = deepFreeze([
-  ['fixture.hearth', 'fixture', 'A tended fire stands in the House.', { fixture: 'hearth', engageable: false }, 'standing', 1],
+  ...HEARTH.nodes,
 ]);
 
 export const HEARTH_WORLD_EDGES = deepFreeze([
-  ['edge.contains.house_hearth', 'contains', 'place.house', 'fixture.hearth', null, 'Hearth'],
+  ...HEARTH.edges,
 ]);
 
 export function hearthTopologyManifest() {

@@ -70,12 +70,15 @@ Current broad ownership is:
 | Provider presentation and attention fitting | `src/context/`, `src/scrub/` |
 | Exact provider-bound and admitted return bytes | `src/spine/` |
 | Material topology, state, movement, and World causation | `src/world/` |
+| Place- and room-owned declarations and local behavior | `src/places/` |
 | Continuity admission and terrain | `src/forest/` |
 | Machine result and artifact custody | `src/result-rack/` |
 | Wake protocol orchestration | `src/runtime/` |
 | HTTP translation and process composition | `src/server/` |
 | Human projection and desktop shell | `public/`, `src/corner/` |
 | Unadopted propositions under test | `experiments/` |
+
+[`PLACE_MODULE_STANDARD.md`](PLACE_MODULE_STANDARD.md) governs the seam between universal World machinery and code truly owned by a place or room.
 
 An owner may be divided internally. Ownership does not require one large file.
 

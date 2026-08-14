@@ -16,270 +16,10 @@ import { assertScrubbedProviderReturn } from '../scrub/provider-return.js';
 import { assertScrubbedHostReturn } from '../scrub/host-return.js';
 import { STABLE_GLASS_TEXT } from '../context/glass-cast.js';
 import { WakeStreamJournal } from './wake-stream.js';
-
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS threads (
-  id TEXT PRIMARY KEY,
-  created_at TEXT NOT NULL,
-  label TEXT
-);
-CREATE TABLE IF NOT EXISTS wakes (
-  id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL REFERENCES threads(id),
-  status TEXT NOT NULL CHECK(status IN ('assembling','calling_provider','committed','failed')),
-  provider TEXT NOT NULL,
-  requested_model TEXT NOT NULL,
-  resolved_model TEXT,
-  provider_response_id TEXT,
-  finish_reason TEXT,
-  system_fingerprint TEXT,
-  usage_json TEXT,
-  failure_code TEXT,
-  failure_message TEXT,
-  custody_failure_code TEXT,
-  custody_failure_message TEXT,
-  started_at TEXT NOT NULL,
-  completed_at TEXT
-);
-CREATE TABLE IF NOT EXISTS events (
-  id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL REFERENCES threads(id),
-  wake_id TEXT REFERENCES wakes(id),
-  actor_kind TEXT NOT NULL CHECK(actor_kind IN ('user','resident','host')),
-  event_kind TEXT NOT NULL CHECK(event_kind IN ('utterance','failure','state')),
-  content TEXT NOT NULL,
-  authority TEXT NOT NULL CHECK(authority IN ('ground','model_signed','host_receipt')),
-  provider TEXT,
-  model TEXT,
-  created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS wake_context_items (
-  id TEXT PRIMARY KEY,
-  wake_id TEXT NOT NULL REFERENCES wakes(id),
-  ordinal INTEGER NOT NULL,
-  item_kind TEXT NOT NULL CHECK(item_kind IN ('charter','clinical_anchor','environment_manifest','resident_blessing','utterance','disclosure')),
-  actor_role TEXT NOT NULL,
-  content TEXT NOT NULL,
-  source_event_id TEXT,
-  source_event_hash TEXT,
-  blessing_text TEXT,
-  blessing_hash TEXT,
-  source_description TEXT NOT NULL,
-  authority TEXT NOT NULL,
-  trust TEXT,
-  continuity TEXT,
-  version INTEGER,
-  included INTEGER NOT NULL CHECK(included IN (0,1)),
-  omission_reason TEXT,
-  content_hash TEXT NOT NULL,
-  UNIQUE(wake_id, ordinal)
-);
-CREATE INDEX IF NOT EXISTS events_thread_created ON events(thread_id, created_at);
-CREATE INDEX IF NOT EXISTS context_wake_ordinal ON wake_context_items(wake_id, ordinal);
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL REFERENCES threads(id),
-  kind TEXT NOT NULL CHECK(kind IN ('ancestry','lifespan')),
-  label TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('open','closed')),
-  opened_at TEXT NOT NULL,
-  closed_at TEXT,
-  close_reason TEXT,
-  predecessor_session_id TEXT REFERENCES sessions(id),
-  wake_status TEXT NOT NULL DEFAULT 'pending' CHECK(wake_status IN ('pending','orienting','complete','failed'))
-);
-CREATE INDEX IF NOT EXISTS sessions_thread_opened ON sessions(thread_id, opened_at, id);
-CREATE TABLE IF NOT EXISTS session_history (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  wake_id TEXT NOT NULL REFERENCES wakes(id),
-  ordinal INTEGER NOT NULL,
-  message_json TEXT NOT NULL,
-  role TEXT NOT NULL,
-  message_kind TEXT NOT NULL CHECK(message_kind IN ('user','assistant_tool_call','tool_result','resident')),
-  source_event_id TEXT,
-  content_hash TEXT NOT NULL,
-  scrub_receipt_id TEXT,
-  raw_return_record_id TEXT,
-  source_record_hash TEXT,
-  created_at TEXT NOT NULL,
-  UNIQUE(session_id, ordinal)
-);
-CREATE INDEX IF NOT EXISTS session_history_order ON session_history(session_id, ordinal);
-CREATE TABLE IF NOT EXISTS trace_epochs (
-  id TEXT PRIMARY KEY,
-  schema_version INTEGER NOT NULL CHECK(schema_version=1),
-  boundary_kind TEXT NOT NULL UNIQUE CHECK(boundary_kind='scroll_trace_boundary/v1'),
-  pre_boundary_head_json TEXT NOT NULL,
-  pre_boundary_head_hash TEXT NOT NULL,
-  law_json TEXT NOT NULL,
-  law_hash TEXT NOT NULL,
-  established_at TEXT NOT NULL
-);
-CREATE TRIGGER IF NOT EXISTS trace_epochs_append_only_update BEFORE UPDATE ON trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS trace_epochs_append_only_delete BEFORE DELETE ON trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS scroll_trace_manifests (
-  id TEXT PRIMARY KEY,
-  epoch_id TEXT NOT NULL REFERENCES trace_epochs(id),
-  history_id TEXT NOT NULL UNIQUE REFERENCES session_history(id),
-  schema_version INTEGER NOT NULL CHECK(schema_version=1),
-  manifest_json TEXT NOT NULL,
-  manifest_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS scroll_trace_manifests_epoch ON scroll_trace_manifests(epoch_id, created_at, id);
-CREATE TRIGGER IF NOT EXISTS scroll_trace_manifests_append_only_update BEFORE UPDATE ON scroll_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS scroll_trace_manifests_append_only_delete BEFORE DELETE ON scroll_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS provider_requests (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  wake_id TEXT NOT NULL REFERENCES wakes(id),
-  phase TEXT NOT NULL CHECK(phase IN ('orientation','response','ordinary')),
-  ordinal INTEGER NOT NULL,
-  request_body TEXT NOT NULL,
-  message_sources_json TEXT NOT NULL,
-  attention_json TEXT,
-  spine_record_id TEXT,
-  raw_return_record_id TEXT,
-  raw_return_byte_length INTEGER,
-  raw_return_sha256 TEXT,
-  return_scrub_receipt_id TEXT,
-  return_scrub_receipt_json TEXT,
-  response_message_json TEXT,
-  response_id TEXT,
-  finish_reason TEXT,
-  outcome_json TEXT,
-  created_at TEXT NOT NULL,
-  completed_at TEXT,
-  UNIQUE(wake_id, ordinal)
-);
-CREATE INDEX IF NOT EXISTS provider_requests_wake_order ON provider_requests(wake_id, ordinal);
-CREATE TABLE IF NOT EXISTS glass_cast_receipts (
-  id TEXT PRIMARY KEY,
-  provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id),
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  wake_id TEXT NOT NULL REFERENCES wakes(id),
-  phase TEXT NOT NULL CHECK(phase IN ('orientation','response','ordinary')),
-  schema_version INTEGER NOT NULL CHECK(schema_version=1),
-  receipt_json TEXT NOT NULL,
-  receipt_hash TEXT NOT NULL,
-  cast_hash TEXT NOT NULL,
-  presentation_scrub_hash TEXT NOT NULL,
-  presented_messages_utf8_bytes INTEGER NOT NULL,
-  presented_messages_sha256 TEXT NOT NULL,
-  request_body_utf8_bytes INTEGER NOT NULL,
-  request_body_sha256 TEXT NOT NULL,
-  spine_record_id TEXT NOT NULL,
-  spine_record_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS glass_cast_receipts_wake_order ON glass_cast_receipts(wake_id, created_at, id);
-CREATE TRIGGER IF NOT EXISTS glass_cast_receipts_append_only_update BEFORE UPDATE ON glass_cast_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS glass_cast_receipts_append_only_delete BEFORE DELETE ON glass_cast_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS glass_trace_epochs (
-  id TEXT PRIMARY KEY, schema_version INTEGER NOT NULL CHECK(schema_version=1),
-  boundary_kind TEXT NOT NULL UNIQUE CHECK(boundary_kind='glass_trace_boundary/v1'),
-  pre_boundary_head_json TEXT NOT NULL, pre_boundary_head_hash TEXT NOT NULL,
-  law_json TEXT NOT NULL, law_hash TEXT NOT NULL, established_at TEXT NOT NULL
-);
-CREATE TRIGGER IF NOT EXISTS glass_trace_epochs_append_only_update BEFORE UPDATE ON glass_trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS glass_trace_epochs_append_only_delete BEFORE DELETE ON glass_trace_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS glass_ground_receipts (
-  id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL REFERENCES glass_trace_epochs(id),
-  provider_request_id TEXT NOT NULL REFERENCES provider_requests(id), kind TEXT NOT NULL,
-  schema_version INTEGER NOT NULL CHECK(schema_version=1), receipt_json TEXT NOT NULL,
-  receipt_hash TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider_request_id,kind)
-);
-CREATE TRIGGER IF NOT EXISTS glass_ground_receipts_append_only_update BEFORE UPDATE ON glass_ground_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS glass_ground_receipts_append_only_delete BEFORE DELETE ON glass_ground_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS glass_trace_manifests (
-  id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL REFERENCES glass_trace_epochs(id),
-  glass_cast_receipt_id TEXT NOT NULL UNIQUE REFERENCES glass_cast_receipts(id),
-  provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id),
-  schema_version INTEGER NOT NULL CHECK(schema_version=1), manifest_json TEXT NOT NULL,
-  manifest_hash TEXT NOT NULL, created_at TEXT NOT NULL
-);
-CREATE TRIGGER IF NOT EXISTS glass_trace_manifests_append_only_update BEFORE UPDATE ON glass_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS glass_trace_manifests_append_only_delete BEFORE DELETE ON glass_trace_manifests BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS roots_epochs (
-  id TEXT PRIMARY KEY, schema_version INTEGER NOT NULL CHECK(schema_version=1),
-  boundary_kind TEXT NOT NULL UNIQUE CHECK(boundary_kind='roots_boundary/v1'),
-  pre_boundary_head_json TEXT NOT NULL, pre_boundary_head_hash TEXT NOT NULL,
-  law_json TEXT NOT NULL, law_hash TEXT NOT NULL, established_at TEXT NOT NULL
-);
-CREATE TRIGGER IF NOT EXISTS roots_epochs_append_only_update BEFORE UPDATE ON roots_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS roots_epochs_append_only_delete BEFORE DELETE ON roots_epochs BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS root_artifacts (
-  id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL REFERENCES roots_epochs(id),
-  kind TEXT NOT NULL, payload_version INTEGER NOT NULL,
-  retention_class TEXT NOT NULL, sensitivity_class TEXT NOT NULL,
-  payload_json TEXT NOT NULL, content_hash TEXT NOT NULL, created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS root_artifacts_kind_order ON root_artifacts(kind,created_at,id);
-CREATE TRIGGER IF NOT EXISTS root_artifacts_append_only_update BEFORE UPDATE ON root_artifacts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS root_artifacts_append_only_delete BEFORE DELETE ON root_artifacts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS root_edges (
-  id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL REFERENCES roots_epochs(id),
-  from_artifact_id TEXT NOT NULL REFERENCES root_artifacts(id),
-  relation TEXT NOT NULL, target_authority TEXT NOT NULL, target_id TEXT NOT NULL,
-  target_hash TEXT, created_at TEXT NOT NULL,
-  UNIQUE(from_artifact_id,relation,target_authority,target_id)
-);
-CREATE TRIGGER IF NOT EXISTS root_edges_append_only_update BEFORE UPDATE ON root_edges BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS root_edges_append_only_delete BEFORE DELETE ON root_edges BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS root_wake_packets (
-  artifact_id TEXT PRIMARY KEY REFERENCES root_artifacts(id),
-  session_id TEXT NOT NULL REFERENCES sessions(id), wake_id TEXT NOT NULL UNIQUE REFERENCES wakes(id),
-  hearth_receipt_id TEXT NOT NULL UNIQUE REFERENCES hearth_receipts(id),
-  packet_hash TEXT NOT NULL, markdown_hash TEXT NOT NULL, created_at TEXT NOT NULL
-);
-CREATE TRIGGER IF NOT EXISTS root_wake_packets_append_only_update BEFORE UPDATE ON root_wake_packets BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS root_wake_packets_append_only_delete BEFORE DELETE ON root_wake_packets BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS attention_receipts (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  wake_id TEXT NOT NULL REFERENCES wakes(id),
-  phase TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('ok','warn','refuse')),
-  receipt_json TEXT NOT NULL,
-  receipt_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS attention_receipts_wake_order ON attention_receipts(wake_id, created_at, id);
-CREATE TRIGGER IF NOT EXISTS attention_receipts_append_only_update BEFORE UPDATE ON attention_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS attention_receipts_append_only_delete BEFORE DELETE ON attention_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TABLE IF NOT EXISTS return_scrub_receipts (
-  id TEXT PRIMARY KEY,
-  provider_request_id TEXT NOT NULL UNIQUE REFERENCES provider_requests(id),
-  spine_record_id TEXT NOT NULL,
-  receipt_json TEXT NOT NULL,
-  message_json TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS hearth_receipts (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  wake_id TEXT NOT NULL REFERENCES wakes(id),
-  tool_call_id TEXT NOT NULL,
-  return_json TEXT NOT NULL,
-  return_hash TEXT NOT NULL,
-  scroll_markdown TEXT,
-  scroll_hash TEXT,
-  action_event_id TEXT NOT NULL REFERENCES events(id),
-  return_event_id TEXT NOT NULL REFERENCES events(id),
-  created_at TEXT NOT NULL,
-  UNIQUE(wake_id)
-);
-CREATE TABLE IF NOT EXISTS host_return_scrub_receipts (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  wake_id TEXT NOT NULL REFERENCES wakes(id),
-  tool_name TEXT NOT NULL,
-  receipt_json TEXT NOT NULL,
-  result_json TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-`;
+import { ROOTS_SCHEMA, RootsLedger } from './roots.js';
+import { ScrollTraceLedger } from './scroll-trace.js';
+import { GlassTraceLedger } from './glass-trace.js';
+import { LEDGER_SCHEMA } from './schema.js';
 
 function now() { return new Date().toISOString(); }
 function rowToObject(row) { return row ? { ...row } : null; }
@@ -290,190 +30,30 @@ export class HubDatabase {
     this.sqlite = new DatabaseSync(path);
     const existingSource = Boolean(this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_history'").get());
     this.sqlite.exec('PRAGMA foreign_keys = ON;');
-    this.sqlite.exec(SCHEMA);
+    this.sqlite.exec(`${LEDGER_SCHEMA}\n${ROOTS_SCHEMA}`);
     this.migrateContextItems();
     this.migrateCustodyFailureColumns();
     this.migrateSessionColumns();
     this.migrateCirculationColumns();
     this.wakeStream = new WakeStreamJournal(this.sqlite);
+    this.roots = new RootsLedger(this.sqlite);
+    this.scrollTrace = new ScrollTraceLedger(this.sqlite);
+    this.glassTrace = new GlassTraceLedger(this.sqlite);
     this.threadId = this.ensureThread();
     this.session = openSession ? this.openSession() : null;
     if (!existingSource) { this.establishTraceEpoch(); this.establishGlassTraceEpoch(); this.establishRootsEpoch(); }
   }
 
-  getRootsEpoch() {
-    return rowToObject(this.sqlite.prepare(`SELECT id,schema_version AS schemaVersion,boundary_kind AS boundaryKind,
-      pre_boundary_head_json AS preBoundaryHeadJson,pre_boundary_head_hash AS preBoundaryHeadHash,
-      law_json AS lawJson,law_hash AS lawHash,established_at AS establishedAt FROM roots_epochs LIMIT 1`).get());
-  }
+  getRootsEpoch() { return this.roots.epoch(); }
+  establishRootsEpoch() { return this.roots.establishEpoch(); }
+  verifyRoots(options) { return this.roots.verify(options); }
 
-  establishRootsEpoch() {
-    const existing = this.getRootsEpoch();
-    if (existing) return { status: 'already_established', epoch: existing };
-    const head = this.sqlite.prepare('SELECT rowid AS rowid,id,wake_id AS wakeId,return_hash AS returnHash,created_at AS createdAt FROM hearth_receipts ORDER BY rowid DESC LIMIT 1').get() || null;
-    const boundary = { hearthPacketCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM hearth_receipts').get().count, head };
-    const law = { name: 'Retention Does Not Imply Respiration', version: 1,
-      before: 'Historical retained material remains exact and may lack rooted custody.',
-      after: 'Every new Hearth wake packet is retained as immutable causal evidence and is never an ordinary Forest Exhale source.' };
-    const boundaryJson = canonicalize(boundary); const lawJson = canonicalize(law);
-    this.sqlite.prepare(`INSERT INTO roots_epochs(id,schema_version,boundary_kind,pre_boundary_head_json,pre_boundary_head_hash,law_json,law_hash,established_at)
-      VALUES(?,1,'roots_boundary/v1',?,?,?,?,?)`).run(id('roots_epoch'), boundaryJson, sha256(boundaryJson), lawJson, sha256(lawJson), now());
-    return { status: 'established', epoch: this.getRootsEpoch() };
-  }
-
-  verifyRoots({ mismatchLimit = 50 } = {}) {
-    const epoch = this.getRootsEpoch(); const mismatches = [];
-    const add = item => { if (mismatches.length < mismatchLimit) mismatches.push(item); };
-    if (!epoch) return { verified: true, epoch: null, rootedWakePacketCount: 0, mismatches };
-    if (sha256(epoch.preBoundaryHeadJson) !== epoch.preBoundaryHeadHash) add({ code: 'roots_boundary_hash_mismatch' });
-    if (sha256(epoch.lawJson) !== epoch.lawHash) add({ code: 'roots_law_hash_mismatch' });
-    for (const table of ['roots_epochs','root_artifacts','root_edges','root_wake_packets']) for (const action of ['update','delete']) {
-      const trigger = `${table}_append_only_${action}`;
-      if (!this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger)) add({ code: 'roots_trigger_missing', trigger });
-    }
-    const boundary = JSON.parse(epoch.preBoundaryHeadJson);
-    const hearths = this.sqlite.prepare(`SELECT rowid AS rowid,id,session_id AS sessionId,wake_id AS wakeId,return_json AS returnJson,return_hash AS returnHash,
-      scroll_markdown AS markdown,scroll_hash AS markdownHash FROM hearth_receipts WHERE rowid>? ORDER BY rowid`).all(boundary.head?.rowid || 0);
-    for (const hearth of hearths) {
-      const rooted = this.sqlite.prepare(`SELECT p.artifact_id AS artifactId,p.packet_hash AS packetHash,p.markdown_hash AS markdownHash,
-        a.payload_json AS payloadJson,a.content_hash AS contentHash,a.kind,a.payload_version AS payloadVersion
-        FROM root_wake_packets p JOIN root_artifacts a ON a.id=p.artifact_id WHERE p.hearth_receipt_id=? AND p.wake_id=? AND p.session_id=?`).get(hearth.id, hearth.wakeId, hearth.sessionId);
-      if (!rooted) { add({ code: 'root_wake_packet_missing', wakeId: hearth.wakeId }); continue; }
-      if (rooted.kind !== 'wake_packet' || rooted.payloadVersion !== 1 || sha256(rooted.payloadJson) !== rooted.contentHash || rooted.packetHash !== sha256(hearth.returnJson) || rooted.markdownHash !== hearth.markdownHash || sha256(hearth.markdown || '') !== hearth.markdownHash) add({ code: 'root_wake_packet_binding_mismatch', wakeId: hearth.wakeId });
-      const wake = this.sqlite.prepare('SELECT status FROM wakes WHERE id=?').get(hearth.wakeId);
-      if (wake?.status === 'committed') {
-        const edge = this.sqlite.prepare("SELECT target_id AS targetId,target_hash AS targetHash FROM root_edges WHERE from_artifact_id=? AND relation='presented_in_glass' AND target_authority='glass_cast_receipt'").get(rooted.artifactId);
-        const cast = edge ? this.sqlite.prepare("SELECT id,receipt_hash AS receiptHash FROM glass_cast_receipts WHERE id=? AND phase='response'").get(edge.targetId) : null;
-        if (!edge || !cast || edge.targetHash !== cast.receiptHash) add({ code: 'root_wake_packet_glass_edge_missing', wakeId: hearth.wakeId });
-      }
-    }
-    return { verified: mismatches.length === 0, epoch: { id: epoch.id, boundaryKind: epoch.boundaryKind, establishedAt: epoch.establishedAt }, rootedWakePacketCount: hearths.length, mismatches };
-  }
-
-  getGlassTraceEpoch() {
-    return rowToObject(this.sqlite.prepare(`SELECT id,schema_version AS schemaVersion,boundary_kind AS boundaryKind,
-      pre_boundary_head_json AS preBoundaryHeadJson,pre_boundary_head_hash AS preBoundaryHeadHash,
-      law_json AS lawJson,law_hash AS lawHash,established_at AS establishedAt FROM glass_trace_epochs LIMIT 1`).get());
-  }
-
-  establishGlassTraceEpoch() {
-    const existing = this.getGlassTraceEpoch();
-    if (existing) return { status: 'already_established', epoch: existing };
-    const head = this.sqlite.prepare(`SELECT rowid AS rowid,id,provider_request_id AS providerRequestId,receipt_hash AS receiptHash,created_at AS createdAt
-      FROM glass_cast_receipts ORDER BY rowid DESC LIMIT 1`).get() || null;
-    const boundary = { castCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM glass_cast_receipts').get().count, head };
-    const law = { name: 'Glass Two-Ended Closure', version: 1, before: 'Exact historical casts may have partial ground ancestry.', after: 'Every new Glass source has a resolvable authority witness and explicit presented or omitted disposition.' };
-    const boundaryJson = canonicalize(boundary); const lawJson = canonicalize(law);
-    this.sqlite.prepare(`INSERT INTO glass_trace_epochs(id,schema_version,boundary_kind,pre_boundary_head_json,pre_boundary_head_hash,law_json,law_hash,established_at)
-      VALUES(?,1,'glass_trace_boundary/v1',?,?,?,?,?)`).run(id('glass_trace_epoch'), boundaryJson, sha256(boundaryJson), lawJson, sha256(lawJson), now());
-    return { status: 'established', epoch: this.getGlassTraceEpoch() };
-  }
-
-  verifyGlassTrace({ mismatchLimit = 50 } = {}) {
-    const epoch = this.getGlassTraceEpoch(); const mismatches = [];
-    const add = item => { if (mismatches.length < mismatchLimit) mismatches.push(item); };
-    if (!epoch) return { verified: true, epoch: null, tracedCastCount: 0, mismatches };
-    if (sha256(epoch.preBoundaryHeadJson) !== epoch.preBoundaryHeadHash) add({ code: 'glass_trace_boundary_hash_mismatch' });
-    if (sha256(epoch.lawJson) !== epoch.lawHash) add({ code: 'glass_trace_law_hash_mismatch' });
-    for (const trigger of ['glass_trace_epochs_append_only_update','glass_trace_epochs_append_only_delete','glass_ground_receipts_append_only_update','glass_ground_receipts_append_only_delete','glass_trace_manifests_append_only_update','glass_trace_manifests_append_only_delete']) {
-      if (!this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger)) add({ code: 'glass_trace_trigger_missing', trigger });
-    }
-    const boundary = JSON.parse(epoch.preBoundaryHeadJson);
-    const casts = this.sqlite.prepare('SELECT id,provider_request_id AS providerRequestId,receipt_hash AS receiptHash FROM glass_cast_receipts WHERE rowid>? ORDER BY rowid').all(boundary.head?.rowid || 0);
-    for (const cast of casts) {
-      const row = this.sqlite.prepare('SELECT manifest_json AS manifestJson,manifest_hash AS manifestHash FROM glass_trace_manifests WHERE glass_cast_receipt_id=?').get(cast.id);
-      if (!row) { add({ code: 'glass_trace_manifest_missing', glassCastReceiptId: cast.id }); continue; }
-      if (sha256(row.manifestJson) !== row.manifestHash) { add({ code: 'glass_trace_manifest_hash_mismatch', glassCastReceiptId: cast.id }); continue; }
-      let manifest; try { manifest = JSON.parse(row.manifestJson); } catch { add({ code: 'glass_trace_manifest_invalid_json', glassCastReceiptId: cast.id }); continue; }
-      if (manifest.providerRequestId !== cast.providerRequestId || manifest.glassCastReceiptHash !== cast.receiptHash) add({ code: 'glass_trace_cast_binding_mismatch', glassCastReceiptId: cast.id });
-      let requestMessages; try { requestMessages = JSON.parse(this.sqlite.prepare('SELECT request_body AS requestBody FROM provider_requests WHERE id=?').get(cast.providerRequestId)?.requestBody).messages; } catch {}
-      const presentedItems = (manifest.items || []).filter(item => item.disposition?.kind === 'presented').sort((left, right) => left.disposition.presentedOrdinal - right.disposition.presentedOrdinal);
-      if (!Array.isArray(requestMessages) || requestMessages.length !== presentedItems.length || presentedItems.some((item, index) => item.messageHash !== sha256(JSON.stringify(requestMessages[index])))) add({ code: 'glass_trace_request_projection_mismatch', glassCastReceiptId: cast.id });
-      for (const item of manifest.items || []) {
-        if (item.source?.authority === 'glass_ground_receipt') {
-          const ground = this.sqlite.prepare('SELECT receipt_hash AS receiptHash,receipt_json AS receiptJson FROM glass_ground_receipts WHERE id=? AND provider_request_id=?').get(item.source.receiptId, cast.providerRequestId);
-          if (!ground || ground.receiptHash !== item.source.receiptHash || sha256(ground.receiptJson) !== ground.receiptHash) add({ code: 'glass_trace_ground_unresolved', sourceOrdinal: item.sourceOrdinal });
-          else {
-            const receipt = JSON.parse(ground.receiptJson);
-            if (!Array.isArray(receipt.sourceMessageHashes) || !receipt.sourceMessageHashes.includes(item.messageHash)) add({ code: 'glass_trace_ground_message_mismatch', sourceOrdinal: item.sourceOrdinal });
-          }
-        } else if (item.source?.authority === 'Session Scroll') {
-          const history = this.sqlite.prepare('SELECT session_id AS sessionId,ordinal,message_json AS messageJson FROM session_history WHERE id=?').get(item.source.historyId);
-          if (!history || history.sessionId !== item.source.sessionId || history.ordinal !== item.source.ordinal || sha256(history.messageJson) !== item.source.messageHash) add({ code: 'glass_trace_scroll_unresolved', sourceOrdinal: item.sourceOrdinal });
-        } else if (item.source?.authority === 'Source') {
-          const event = this.sqlite.prepare('SELECT content FROM events WHERE id=?').get(item.source.eventId);
-          if (!event || (item.source.contentHash && sha256(event.content) !== item.source.contentHash)) add({ code: 'glass_trace_source_unresolved', sourceOrdinal: item.sourceOrdinal });
-        }
-        else if (item.source?.authority === 'code_owned_glass' && (item.source.version !== 1 || item.source.contentHash !== sha256(STABLE_GLASS_TEXT))) add({ code: 'glass_trace_stable_glass_mismatch', sourceOrdinal: item.sourceOrdinal });
-        else if (!['code_owned_glass','glass_ground_receipt','Session Scroll','Source'].includes(item.source?.authority)) add({ code: 'glass_trace_authority_unknown', sourceOrdinal: item.sourceOrdinal });
-      }
-    }
-    return { verified: mismatches.length === 0, epoch: { id: epoch.id, boundaryKind: epoch.boundaryKind, establishedAt: epoch.establishedAt }, tracedCastCount: casts.length, mismatches };
-  }
-
-  getTraceEpoch() {
-    const row = this.sqlite.prepare(`SELECT id, schema_version AS schemaVersion, boundary_kind AS boundaryKind,
-      pre_boundary_head_json AS preBoundaryHeadJson, pre_boundary_head_hash AS preBoundaryHeadHash,
-      law_json AS lawJson, law_hash AS lawHash, established_at AS establishedAt FROM trace_epochs LIMIT 1`).get();
-    return rowToObject(row);
-  }
-
-  establishTraceEpoch() {
-    const existing = this.getTraceEpoch();
-    if (existing) return { status: 'already_established', epoch: existing };
-    const head = this.sqlite.prepare(`SELECT id,session_id AS sessionId,ordinal,content_hash AS contentHash,created_at AS createdAt
-      FROM session_history ORDER BY created_at DESC,id DESC LIMIT 1`).get() || null;
-    const preBoundaryHead = {
-      historyCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM session_history').get().count,
-      providerRequestCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM provider_requests').get().count,
-      sourceEventCount: this.sqlite.prepare('SELECT COUNT(*) AS count FROM events').get().count,
-      head,
-    };
-    const law = {
-      name: 'Two-Ended Closure Law',
-      version: 1,
-      before: 'Exact inherited history; trace ancestry may be partial and must not be fabricated.',
-      after: 'Every new Session Scroll row has one atomic manifest naming source, gate, witness, destination, and disposition.',
-    };
-    const preBoundaryHeadJson = canonicalize(preBoundaryHead);
-    const lawJson = canonicalize(law);
-    const epochId = id('trace_epoch');
-    const establishedAt = now();
-    this.sqlite.prepare(`INSERT INTO trace_epochs(id,schema_version,boundary_kind,pre_boundary_head_json,pre_boundary_head_hash,law_json,law_hash,established_at)
-      VALUES(?,1,'scroll_trace_boundary/v1',?,?,?,?,?)`).run(epochId, preBoundaryHeadJson, sha256(preBoundaryHeadJson), lawJson, sha256(lawJson), establishedAt);
-    return { status: 'established', epoch: this.getTraceEpoch() };
-  }
-
-  appendScrollTraceManifest({ historyId, sessionId, wakeId, ordinal, messageKind, sourceEventId, scrubReceipt }) {
-    const epoch = this.getTraceEpoch();
-    if (!epoch) return null;
-    let source;
-    let gate;
-    if (messageKind === 'user') {
-      if (!sourceEventId) throw new Error('Closure-era human Scroll rows require a Source event.');
-      source = { authority: 'Source', eventId: sourceEventId };
-      gate = { kind: 'http_wake_validation+source_append' };
-    } else if (messageKind === 'tool_result') {
-      if (!sourceEventId || !scrubReceipt?.receipt?.receiptId) throw new Error('Closure-era tool results require a host Source event and host-return Scrub receipt.');
-      source = { authority: 'Source', eventId: sourceEventId };
-      gate = { kind: 'host-return_scrub', receiptId: scrubReceipt.receipt.receiptId };
-    } else {
-      if (!scrubReceipt?.receipt?.receiptId || !scrubReceipt?.receipt?.source?.spineRecordId) throw new Error('Closure-era provider Scroll rows require return Scrub and Spine witnesses.');
-      source = { authority: 'Spine', recordId: scrubReceipt.receipt.source.spineRecordId, recordHash: scrubReceipt.receipt.source.recordHash || null };
-      gate = { kind: 'provider-return_scrub', receiptId: scrubReceipt.receipt.receiptId };
-    }
-    const manifest = {
-      epochId: epoch.id, historyId, sessionId, wakeId, ordinal, messageKind,
-      source, gate,
-      witness: { historyId, sourceEventId: sourceEventId || null, scrubReceiptId: scrubReceipt?.receipt?.receiptId || null },
-      destination: { authority: 'Session Scroll', sessionId, ordinal },
-      disposition: 'retained_in_session_scroll',
-    };
-    const manifestJson = canonicalize(manifest);
-    this.sqlite.prepare(`INSERT INTO scroll_trace_manifests(id,epoch_id,history_id,schema_version,manifest_json,manifest_hash,created_at)
-      VALUES(?,?,?,1,?,?,?)`).run(id('scroll_trace'), epoch.id, historyId, manifestJson, sha256(manifestJson), now());
-    return manifest;
-  }
+  getGlassTraceEpoch() { return this.glassTrace.epoch(); }
+  establishGlassTraceEpoch() { return this.glassTrace.establishEpoch(); }
+  verifyGlassTrace(options) { return this.glassTrace.verify(options); }
+  getTraceEpoch() { return this.scrollTrace.epoch(); }
+  establishTraceEpoch() { return this.scrollTrace.establishEpoch(); }
+  appendScrollTraceManifest(input) { return this.scrollTrace.appendManifest(input); }
 
   migrateSessionColumns() {
     const addColumn = (table, column, definition) => {
@@ -897,10 +477,7 @@ export class HubDatabase {
     const manifestJson = canonicalize(manifest); const manifestId = id('glass_trace'); const manifestHash = sha256(manifestJson);
     this.sqlite.prepare(`INSERT INTO glass_trace_manifests(id,epoch_id,glass_cast_receipt_id,provider_request_id,schema_version,manifest_json,manifest_hash,created_at)
       VALUES(?,?,?,?,1,?,?,?)`).run(manifestId, epoch.id, glassCastReceiptId, providerRequestId, manifestJson, manifestHash, now());
-    const rootedPacket = sourceRefs.some(ref => ref.kind === 'hearth_return')
-      ? this.sqlite.prepare('SELECT artifact_id AS artifactId FROM root_wake_packets WHERE wake_id=?').get(request.wakeId) : null;
-    if (rootedPacket) this.sqlite.prepare(`INSERT OR IGNORE INTO root_edges(id,epoch_id,from_artifact_id,relation,target_authority,target_id,target_hash,created_at)
-      VALUES(?,?,?,'presented_in_glass','glass_cast_receipt',?,?,?)`).run(id('root_edge'), this.getRootsEpoch().id, rootedPacket.artifactId, glassCastReceiptId, cast.receiptHash, now());
+    if (sourceRefs.some(ref => ref.kind === 'hearth_return')) this.roots.linkWakePacketToGlass({ wakeId: request.wakeId, glassCastReceiptId, glassCastReceiptHash: cast.receiptHash });
     return { manifestId, manifestHash, manifest };
   }
 
@@ -941,7 +518,7 @@ export class HubDatabase {
     const message = { role: 'tool', tool_call_id: toolCallId, content: scrollMarkdown };
     if (!hostReturnScrub) throw new Error('Hearth return requires a validated host-return Scrub result.');
     if (JSON.stringify(hostReturnScrub.message) !== JSON.stringify(message)) throw new Error('Hearth host-return Scrub does not match the exact resident-facing tool result.');
-    const hearthReceiptId = id('hearth'); const rootArtifactId = id('root');
+    const hearthReceiptId = id('hearth'); let rootArtifactId = null;
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         SELECT ?, thread_id, ?, ?, 'host', 'state', ?, 'host_receipt', provider, requested_model, ? FROM wakes WHERE id=?`).run(eventId, sessionId, wakeId, message.content, now(), wakeId);
@@ -949,16 +526,7 @@ export class HubDatabase {
       this.persistHostReturnScrub({ sessionId, wakeId, toolName: 'tend_hearth', hostReturnScrub });
       this.sqlite.prepare(`INSERT INTO hearth_receipts(id, session_id, wake_id, tool_call_id, return_json, return_hash, scroll_markdown, scroll_hash, action_event_id, return_event_id, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(hearthReceiptId, sessionId, wakeId, toolCallId, JSON.stringify(returnValue), returnHash, scrollMarkdown, scrollHash, actionEventId, eventId, now());
-      const epoch = this.getRootsEpoch();
-      if (!epoch) throw Object.assign(new Error('Roots boundary is not established.'), { code: 'roots_boundary_missing' });
-      const payload = { schemaVersion: 1, kind: 'wake_packet', sessionId, wakeId, hearthReceiptId,
-        packet: structuredClone(returnValue), packetHash: sha256(JSON.stringify(returnValue)), markdown: scrollMarkdown, markdownHash: scrollHash,
-        custody: { respiration: 'prohibited', forestExhaleEligible: false } };
-      const payloadJson = canonicalize(payload); const createdAt = now();
-      this.sqlite.prepare(`INSERT INTO root_artifacts(id,epoch_id,kind,payload_version,retention_class,sensitivity_class,payload_json,content_hash,created_at)
-        VALUES(?,?,'wake_packet',1,'causal_evidence','ordinary',?,?,?)`).run(rootArtifactId, epoch.id, payloadJson, sha256(payloadJson), createdAt);
-      this.sqlite.prepare(`INSERT INTO root_wake_packets(artifact_id,session_id,wake_id,hearth_receipt_id,packet_hash,markdown_hash,created_at)
-        VALUES(?,?,?,?,?,?,?)`).run(rootArtifactId, sessionId, wakeId, hearthReceiptId, payload.packetHash, scrollHash, createdAt);
+      rootArtifactId = this.roots.recordWakePacket({ sessionId, wakeId, hearthReceiptId, packet: returnValue, markdown: scrollMarkdown, markdownHash: scrollHash }).artifactId;
     });
     return { eventId, message, hearthReceiptId, rootArtifactId };
   }
@@ -1099,10 +667,7 @@ export class HubDatabase {
       .map(receipt => ({ ...receipt, receipt: JSON.parse(receipt.receiptJson) }));
     normalized.hearth = this.sqlite.prepare(`SELECT tool_call_id AS toolCallId, return_json AS returnJson, return_hash AS returnHash, scroll_markdown AS scrollMarkdown, scroll_hash AS scrollHash,
       action_event_id AS actionEventId, return_event_id AS returnEventId FROM hearth_receipts WHERE wake_id=?`).get(wakeId) || null;
-    normalized.roots = this.sqlite.prepare(`SELECT a.id AS artifactId,a.kind,a.payload_version AS payloadVersion,a.retention_class AS retentionClass,
-      a.sensitivity_class AS sensitivityClass,a.payload_json AS payloadJson,a.content_hash AS contentHash,a.created_at AS createdAt
-      FROM root_artifacts a JOIN root_wake_packets p ON p.artifact_id=a.id WHERE p.wake_id=?`).all(wakeId).map(row => ({ ...row, payload: JSON.parse(row.payloadJson),
-        edges: this.sqlite.prepare('SELECT relation,target_authority AS targetAuthority,target_id AS targetId,target_hash AS targetHash,created_at AS createdAt FROM root_edges WHERE from_artifact_id=? ORDER BY created_at,id').all(row.artifactId) }));
+    normalized.roots = this.roots.inspectWake(wakeId);
     return normalized;
   }
 

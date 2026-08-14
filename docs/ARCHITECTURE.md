@@ -28,8 +28,10 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 
 | Bay | Entry point | Current responsibility |
 | --- | --- | --- |
-| Ledger | `src/ledger/source.js` | Operational/source events and provider-phase attention records |
-| Roots | `src/ledger/source.js` | Append-only non-respiratory evidence registry, typed wake-packet custody, causal edges, and verification |
+| Ledger facade | `src/ledger/source.js` | Operational/source events, shared transactions, and stable public custody contract |
+| Ledger schema | `src/ledger/schema.js` | Inert operational SQLite schema; no runtime behavior |
+| Scroll / Glass traces | `src/ledger/scroll-trace.js`, `src/ledger/glass-trace.js` | Forward epochs, append-only trace custody, and verification |
+| Roots | `src/ledger/roots.js` | Append-only non-respiratory evidence registry, typed wake-packet custody, causal edges, and verification |
 | Session | `src/session/lifespan.js` | Process-lived session identity, complete active history, and Session Zero ancestry |
 | Hearth | `src/hearth/handshake.js`, `src/hearth/scroll.js` | Native first-call action validation, exact recency extracts, and resident Scroll |
 | Provider Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Subtractive provider projection and exact provider-return selection |
@@ -38,6 +40,7 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Forest | `src/forest/` | Home/Wild admission, custody, backfill, and verification; no exhale selector yet |
 | Forest health projection | `src/forest/health.js` | Domain-owned active/inactive, integrity, catch-up, Wild, and Intake health projection for transport surfaces |
 | World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, and append-only approval completion custody |
+| Place declarations | `src/places/` | Inert place/room-owned topology contributions, fixtures, local state seeds, and Patch Bay profile declarations; universal replay and crossings remain in World |
 | World builder inspection | `src/world/inspection.js` | Bounded verified or drift-safe diagnostic projection; owns direct diagnostic access to World storage |
 | Ceiling / Patch Bay | `src/world/ceiling.js`, `src/world/tools.js` | Complete World authority plus deterministic engaged-fixture schema fitting for provider attention |
 | Workshop path law | `src/workshop/path-law.js` | Shared protected-path, traversal, containment, and symlink law used by Workshop and promotion |
