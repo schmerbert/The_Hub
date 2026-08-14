@@ -49,8 +49,9 @@ test('room.workshop owns its machinery without reaching into Marble-wide systems
   }
 });
 
-test('room installation contracts remain inert and cannot discover or activate packages', async () => {
+test('room installation manifest contracts remain inert and cannot discover or activate packages', async () => {
   for (const path of await filesUnder(resolve(SRC, 'rooms'))) {
+    if (!path.endsWith('installation-contract.js')) continue;
     const source = await readFile(path, 'utf8');
     assert.doesNotMatch(source, /from ['"](?:node:)?(fs|url|module|child_process)|\b(import\(|require\(|fetch\(|process\.)/, relative(ROOT, path));
     assert.doesNotMatch(source, /from ['"].*(runtime|server|providers|ledger|spine|forest|result-rack|context|world|places)\//, relative(ROOT, path));

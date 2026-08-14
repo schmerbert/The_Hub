@@ -1,6 +1,6 @@
 # Room Installation Contract v1
 
-> **Status: Adopted and partially installed.** The manifest contract and Workshop reference manifest are implemented and verified. Generic discovery, signature/provenance verification, installation transactions, dynamic Ceiling/Gateway composition, lifecycle persistence, removal tooling, and any marketplace are not implemented.
+> **Status: Adopted and partially installed.** The manifest contract, Workshop reference manifest, and deterministic host-owned Workshop installation witness are implemented and verified. Generic discovery, signature/provenance verification, installation transactions, dynamic Ceiling/Gateway composition, lifecycle persistence, removal tooling, and any marketplace are not implemented.
 
 ## Purpose
 
@@ -77,6 +77,10 @@ Market-facing security work must define publisher identity, signatures, reproduc
 ## Reference installation
 
 `room.workshop` is the first standing reference manifest. Its declared affordances must equal the installed Workshop names in the Ceiling, `room.workshop` mount profile, and Gateway registry. Every socket and custody route remains host-owned. The current Hub still composes these crossings statically; the manifest detects drift but does not drive runtime installation.
+
+The host produces `room-installation-witness.v1` from the exact manifest bytes and independently inspected installed surfaces. The witness includes topology, parent containment, entrance, fixtures, schema hashes, Ceiling and mounting presence, Gateway handlers, approval classes, socket bindings, and custody bindings. It has a deterministic hash and is verified only when `gaps` is empty. Required missing wires fail verification; declared optional Forest Wild wiring may remain honestly `optional_unwired`.
+
+The bounded Builder World inspection exposes this witness. It is a diagnostic projection, not an installation receipt journal: persistence of admission and installation decisions remains deferred.
 
 The Spotlight capsule remains an experiment. Its `room-capsule.v1` laboratory contract proves inert discovery and activation for observational code; it is not silently promoted to this production contract. Adoption requires an explicit migration once the production host exists.
 

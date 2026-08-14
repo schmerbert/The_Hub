@@ -11,7 +11,7 @@
     { "id": "socket.result_custody", "capability": "custody.result_rack", "suppliedBy": "host" },
     { "id": "socket.forest_admission", "capability": "custody.forest_wild", "suppliedBy": "host", "optional": true },
     { "id": "socket.builder_approval", "capability": "approval.builder", "suppliedBy": "host" },
-    { "id": "socket.sandbox_backend", "capability": "sandbox.execution", "suppliedBy": "host", "optional": true }
+    { "id": "socket.recipe_execution", "capability": "execution.recipe", "suppliedBy": "host" }
   ],
   "affordanceGroups": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "id": "affordance.recipe_kiln", "fixtureId": "fixture.workshop_kiln", "effect": "execute", "approvalPolicy": "host_owned",
-      "requires": ["socket.repository_root", "socket.world_crossing", "socket.result_custody", "socket.sandbox_backend"],
+      "requires": ["socket.repository_root", "socket.world_crossing", "socket.result_custody", "socket.recipe_execution"],
       "tools": ["workshop_recipe_list", "workshop_run_recipe", "workshop_recipe_status", "workshop_recipe_cancel", "workshop_sandbox_diff"]
     },
     {

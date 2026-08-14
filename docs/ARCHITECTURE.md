@@ -42,6 +42,7 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, and append-only approval completion custody |
 | Place and room packages | `src/places/` | Inert topology declarations plus behavior owned entirely by one place or room; universal replay, authority, and crossings remain in World |
 | Room installation contract | `src/rooms/installation-contract.js` | Pure validation of inert `room-installation.v1` requests; grants no discovery, activation, wiring, or authority |
+| Room installation witness | `src/rooms/installation-witness.js`, `src/rooms/workshop-witness.js` | Host-owned deterministic comparison of manifest claims with installed topology, fixtures, tools, schemas, handlers, approvals, sockets, and custody |
 | World builder inspection | `src/world/inspection.js` | Bounded verified or drift-safe diagnostic projection; owns direct diagnostic access to World storage |
 | Ceiling / Patch Bay | `src/world/ceiling.js`, `src/world/tools.js` | Complete World authority plus deterministic engaged-fixture schema fitting for provider attention |
 | Workshop room package | `src/places/hub/workshop/index.js` | Canonical `room.workshop` declaration and machinery: repository adapter, path law, Git, recipes, Sandbox Bay, and promotion |

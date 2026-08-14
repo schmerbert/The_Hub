@@ -1,5 +1,6 @@
 import { ceilingCatalog } from './ceiling.js';
 import { schemasForSession } from './tools.js';
+import { workshopInstallationWitness } from '../rooms/workshop-witness.js';
 
 const COLLECTION_LIMIT = 100;
 const CELL_CHARACTER_LIMIT = 2048;
@@ -107,6 +108,7 @@ export function projectWorldBuilderInspection(world, sessionId) {
     graph: { nodes: nodes.rows, edges: edges.rows, passages: passages.rows, objectStates: objectStates.rows },
     verification,
     ceiling: ceilingCatalog(),
+    installations: [workshopInstallationWitness()],
     approvals,
     collectionBounds: {
       limit: COLLECTION_LIMIT,

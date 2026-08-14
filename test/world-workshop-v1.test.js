@@ -126,7 +126,7 @@ test('room-gated bounded native loop moves, reads, and keeps Home separate', asy
     assert.equal(receipts.length, history.length); assert.equal(new Set(receipts.map(row => row.id)).size, receipts.length);
     for (const row of history) { assert.ok(row.scrubReceiptId); const receipt = receipts.find(candidate => candidate.id === row.scrubReceiptId); assert.ok(receipt); assert.equal(JSON.parse(receipt.receipt_json).receiptId, row.scrubReceiptId); assert.equal(JSON.parse(receipt.receipt_json).outputHash, (await import('../src/core/hash.js')).sha256(JSON.parse(row.messageJson).content)); }
     assert.equal(f.hub.db.sqlite.prepare('SELECT COUNT(*) AS count FROM host_return_scrub_receipts h LEFT JOIN session_history s ON s.scrub_receipt_id=h.id WHERE h.session_id=? AND s.id IS NULL').get(result.body.sessionId).count, 0);
-    const world = await (await fetch(`${f.base}/api/world`)).json(); assert.ok(world.tools.map(tool => tool.function.name).includes('move_through_door')); assert.ok(world.tools.map(tool => tool.function.name).includes('workshop_apply_patch')); assert.ok(world.tools.map(tool => tool.function.name).includes('workshop_tool_catalog'));
+    const world = await (await fetch(`${f.base}/api/world`)).json(); assert.ok(world.tools.map(tool => tool.function.name).includes('move_through_door')); assert.ok(world.tools.map(tool => tool.function.name).includes('workshop_apply_patch')); assert.ok(world.tools.map(tool => tool.function.name).includes('workshop_tool_catalog')); assert.equal(world.installations[0].roomId, 'room.workshop'); assert.equal(world.installations[0].verified, true); assert.deepEqual(world.installations[0].gaps, []);
   } finally { await f.close(); }
 });
 
