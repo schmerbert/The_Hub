@@ -5,6 +5,12 @@ import { readSpineFrames } from '../spine/store.js';
 import { metadataForEvent } from './admission.js';
 import { APPEND_ONLY_TABLES } from './store.js';
 
+export function wildSourceKindForTool(toolName) {
+  if (toolName === 'workshop_read') return 'workshop_read';
+  if (['workshop_search', 'workshop_search_regex'].includes(toolName)) return 'workshop_search';
+  return null;
+}
+
 export function verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection = true, strictWildBijection = true } = {}) {
   if (!forestPath || !existsSync(forestPath)) throw new Error('Forest database is missing.');
   const forest = new DatabaseSync(forestPath, { readOnly: true });
@@ -203,7 +209,8 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       }
       for (const [actionReceiptId, entriesForAction] of wildByAction) {
         const action = world.prepare('SELECT * FROM world_action_receipts WHERE receipt_id=?').get(actionReceiptId);
-        if (!action || action.outcome !== 'committed' || action.tool_name !== entriesForAction[0].source_kind || action.request_record_id !== entriesForAction[0].request_record_id || action.spine_record_id !== entriesForAction[0].spine_record_id || !action.request_record_id || !action.spine_record_id) throw new Error(`Wild workshop action custody mismatch for ${actionReceiptId}.`);
+        const expectedSourceKind = wildSourceKindForTool(action?.tool_name);
+        if (!action || action.outcome !== 'committed' || expectedSourceKind !== entriesForAction[0].source_kind || action.request_record_id !== entriesForAction[0].request_record_id || action.spine_record_id !== entriesForAction[0].spine_record_id || !action.request_record_id || !action.spine_record_id) throw new Error(`Wild workshop action custody mismatch for ${actionReceiptId}.`);
         const providerRequest = op.prepare('SELECT id, session_id AS sessionId, wake_id AS wakeId, spine_record_id AS spineRecordId FROM provider_requests WHERE id=?').get(action.request_record_id);
         if (!providerRequest || providerRequest.sessionId !== action.session_id || providerRequest.wakeId !== action.wake_id || providerRequest.spineRecordId !== action.spine_record_id) throw new Error(`Wild workshop request ancestry mismatch for ${actionReceiptId}.`);
         const requestFrame = preparedById.get(action.spine_record_id);
@@ -225,7 +232,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       }
       if (strictWildBijection && worldPath && existsSync(worldPath)) {
         if (!world) world = new DatabaseSync(worldPath, { readOnly: true });
-        const actions = world.prepare("SELECT * FROM world_action_receipts WHERE outcome='committed' AND tool_name IN ('workshop_read','workshop_search') AND request_record_id IS NOT NULL AND spine_record_id IS NOT NULL ORDER BY created_at,receipt_id").all();
+        const actions = world.prepare("SELECT * FROM world_action_receipts WHERE outcome='committed' AND tool_name IN ('workshop_read','workshop_search','workshop_search_regex') AND request_record_id IS NOT NULL AND spine_record_id IS NOT NULL ORDER BY created_at,receipt_id").all();
         const expectedKeys = new Set();
         for (const action of actions) {
           let result;

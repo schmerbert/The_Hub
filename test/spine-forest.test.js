@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createServer } from 'node:http';
 import { HubDatabase } from '../src/ledger/source.js';
 import { ForestStore } from '../src/forest/store.js';
-import { verifyForest } from '../src/forest/verify.js';
+import { verifyForest, wildSourceKindForTool } from '../src/forest/verify.js';
 import { applyBackfill, applyBackfillAtomically, buildBackfillPlan } from '../src/forest/backfill.js';
 import { SpineStore, readSpineFrames, verifySpine } from '../src/spine/store.js';
 import { buildContext } from '../src/context/assemble.js';
@@ -24,6 +24,13 @@ function blessingSourceBody() {
   assert.ok(body.includes(BLESSING_V1));
   return body;
 }
+
+test('Wild custody maps literal and regex Workshop searches to one exact source class', () => {
+  assert.equal(wildSourceKindForTool('workshop_read'), 'workshop_read');
+  assert.equal(wildSourceKindForTool('workshop_search'), 'workshop_search');
+  assert.equal(wildSourceKindForTool('workshop_search_regex'), 'workshop_search');
+  assert.equal(wildSourceKindForTool('workshop_glob'), null);
+});
 
 async function temp(prefix = 'hub-custody-') { return mkdtemp(join(tmpdir(), prefix)); }
 function event(id, content, actorKind = 'user', createdAt = '2026-08-05T00:00:00.000Z') {

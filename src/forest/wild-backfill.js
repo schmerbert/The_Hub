@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, sha256 } from '../core/hash.js';
 import { readSpineFrames } from '../spine/store.js';
 import { ForestStore } from './store.js';
-import { verifyForest } from './verify.js';
+import { verifyForest, wildSourceKindForTool } from './verify.js';
 
 function exactSources(action) {
   let result;
@@ -24,13 +24,13 @@ export function eligibleWildActions({ operationalPath, worldPath, spinePath } = 
     const prepared = new Map(frames.filter(frame => frame.frame_type === 'request_prepared').map(frame => [frame.record_id, frame]));
     const dispatched = new Set(frames.filter(frame => frame.frame_type === 'dispatch_attempted').map(frame => frame.request_record_id));
     const successful = new Set(frames.filter(frame => frame.frame_type === 'provider_outcome' && frame.outcome?.kind === 'success').map(frame => frame.request_record_id));
-    const actions = world.prepare("SELECT * FROM world_action_receipts WHERE outcome='committed' AND tool_name IN ('workshop_read','workshop_search') ORDER BY created_at,receipt_id").all();
+    const actions = world.prepare("SELECT * FROM world_action_receipts WHERE outcome='committed' AND tool_name IN ('workshop_read','workshop_search','workshop_search_regex') ORDER BY created_at,receipt_id").all();
     return actions.map(action => {
       if (!action.request_record_id || !action.spine_record_id) throw new Error(`Wild workshop action lacks request ancestry for ${action.receipt_id}.`);
       const request = op.prepare('SELECT session_id,wake_id,spine_record_id FROM provider_requests WHERE id=?').get(action.request_record_id);
       const frame = prepared.get(action.spine_record_id);
       if (!request || request.session_id !== action.session_id || request.wake_id !== action.wake_id || request.spine_record_id !== action.spine_record_id || frame?.wake_id !== action.wake_id || !dispatched.has(action.spine_record_id) || !successful.has(action.spine_record_id)) throw new Error(`Wild workshop ancestry is invalid for ${action.receipt_id}.`);
-      return { actionReceiptId: action.receipt_id, sourceKind: action.tool_name, requestRecordId: action.request_record_id, spineRecordId: action.spine_record_id, rows: exactSources(action) };
+      return { actionReceiptId: action.receipt_id, sourceKind: wildSourceKindForTool(action.tool_name), requestRecordId: action.request_record_id, spineRecordId: action.spine_record_id, rows: exactSources(action) };
     });
   } finally { world.close(); op.close(); }
 }
