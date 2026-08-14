@@ -23,6 +23,8 @@ Open <http://localhost:3000>. The fake adapter does not claim to be DeepSeek or 
 npm run desktop
 ```
 
+On Windows, double-click `start.bat` from the repository root. It delegates to the pinned `start-hub.bat` launcher; launching it again expands the existing single instance. Use `stop-hub.bat` for a graceful stop.
+
 Electron 43.2.0 starts the same Hub on loopback, then loads it into a secure frameless Corner window. The desktop surface is 96x96 when compact and 980x680 when expanded, stays 24 pixels inside the active display, and offers tray controls to expand, collapse, or quit. Ordinary window close collapses and hides it; explicit quit awaits Hub custody shutdown. Set `HUB_CORNER_ALWAYS_ON_TOP=false` to disable its normal-level always-on-top behavior. The browser and desktop use the same renderer and API; a 96-pixel desktop window remains compact while a narrow browser opens expanded.
 
 The shell is single-instance, opaque, and loopback-only. Its preload exposes only compact/expanded mode operations with sender validation; renderer Node integration, permissions, new windows, and external navigation are denied. There is not yet an installer or packaging pipeline, and a native GUI/tray smoke pass remains pending even though the desktop lifecycle, geometry, and security seams have automated coverage.

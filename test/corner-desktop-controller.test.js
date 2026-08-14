@@ -167,11 +167,14 @@ test('desktop command-line routing preserves expansion and privately requests gr
   assert.throws(() => routeDesktopSecondInstance([], {}), /quit and expand handlers/);
 });
 
-test('double-click scripts use the pinned Electron binary and graceful single-instance stop path', async () => {
-  const [startScript, stopScript] = await Promise.all([
+test('double-click scripts expose start.bat, use the pinned Electron binary, and keep a graceful single-instance stop path', async () => {
+  const [frontDoor, startScript, stopScript] = await Promise.all([
+    readFile(new URL('../start.bat', import.meta.url), 'utf8'),
     readFile(new URL('../start-hub.bat', import.meta.url), 'utf8'),
     readFile(new URL('../stop-hub.bat', import.meta.url), 'utf8'),
   ]);
+  assert.match(frontDoor, /call "%~dp0start-hub\.bat"/i);
+  assert.doesNotMatch(frontDoor, /electron|taskkill/i);
   for (const script of [startScript, stopScript]) {
     assert.match(script, /cd \/d "%~dp0"/i);
     assert.match(script, /node_modules\\electron\\dist\\electron\.exe/i);
