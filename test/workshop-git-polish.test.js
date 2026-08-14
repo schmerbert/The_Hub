@@ -4,8 +4,8 @@ import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sanitizeGitStderr, WorkshopGit } from '../src/world/git.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { sanitizeGitStderr, WorkshopGit } from '../src/places/hub/workshop/index.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 
 function git(root, args) {
   const result = spawnSync('git', ['-c', `safe.directory=${root.replaceAll('\\', '/')}`, ...args], {

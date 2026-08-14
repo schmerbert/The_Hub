@@ -1,11 +1,11 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { TOOL_NAMES } from '../src/world/tools.js';
 import { WorldGraphStore } from '../src/world/graph.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { WorldActionGateway, parseWorldToolIntent as facadeParseWorldToolIntent } from '../src/world/gateway.js';
 import { WORLD_TOOL_HANDLER_NAMES, dispatchWorldTool, parseWorldToolIntent } from '../src/world/gateway/dispatch.js';
 

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": "room-installation.v1",
+  "identity": { "id": "room.workshop", "kind": "room", "version": "1.0.0" },
+  "status": { "classification": "standing", "autoInstall": false },
+  "package": { "entrypoint": "index.js", "declarationExport": "WORKSHOP" },
+  "placement": { "requestedParent": "place.hub", "hostOwnsDoor": true },
+  "sockets": [
+    { "id": "socket.repository_root", "capability": "repository.local", "suppliedBy": "host" },
+    { "id": "socket.world_crossing", "capability": "world.event_crossing", "suppliedBy": "host" },
+    { "id": "socket.result_custody", "capability": "custody.result_rack", "suppliedBy": "host" },
+    { "id": "socket.forest_admission", "capability": "custody.forest_wild", "suppliedBy": "host", "optional": true },
+    { "id": "socket.builder_approval", "capability": "approval.builder", "suppliedBy": "host" },
+    { "id": "socket.sandbox_backend", "capability": "sandbox.execution", "suppliedBy": "host", "optional": true }
+  ],
+  "affordanceGroups": [
+    {
+      "id": "affordance.repository_explore", "fixtureId": "fixture.workshop_shelves", "effect": "observe", "approvalPolicy": "host_owned",
+      "requires": ["socket.repository_root", "socket.result_custody"],
+      "tools": ["workshop_list", "workshop_read", "workshop_search", "workshop_search_regex", "workshop_glob", "workshop_tree", "workshop_stat", "workshop_file_hash"]
+    },
+    {
+      "id": "affordance.repository_workbench", "fixtureId": "fixture.workshop_workbench", "effect": "mutate", "approvalPolicy": "host_owned",
+      "requires": ["socket.repository_root", "socket.world_crossing", "socket.result_custody", "socket.builder_approval"],
+      "tools": ["workshop_apply_patch", "workshop_apply_unified_diff", "workshop_write_file", "workshop_create_path", "workshop_delete_path", "workshop_rename_path", "workshop_git_add", "workshop_git_commit", "workshop_git_checkout", "workshop_pending_diff", "workshop_approval_status", "workshop_approval_list", "workshop_sandbox_promote"]
+    },
+    {
+      "id": "affordance.recipe_kiln", "fixtureId": "fixture.workshop_kiln", "effect": "execute", "approvalPolicy": "host_owned",
+      "requires": ["socket.repository_root", "socket.world_crossing", "socket.result_custody", "socket.sandbox_backend"],
+      "tools": ["workshop_recipe_list", "workshop_run_recipe", "workshop_recipe_status", "workshop_recipe_cancel", "workshop_sandbox_diff"]
+    },
+    {
+      "id": "affordance.repository_ledger", "fixtureId": "fixture.workshop_ledger", "effect": "observe", "approvalPolicy": "host_owned",
+      "requires": ["socket.repository_root", "socket.result_custody"],
+      "tools": ["workshop_git_status", "workshop_git_diff", "workshop_git_log", "workshop_git_show", "workshop_git_branch_list"]
+    },
+    {
+      "id": "affordance.work_clipboard", "fixtureId": "fixture.workshop_clipboard", "effect": "govern", "approvalPolicy": "host_owned",
+      "requires": ["socket.world_crossing"], "tools": ["workshop_brief_upsert", "workshop_brief_get"]
+    },
+    {
+      "id": "affordance.room_heartbeat", "fixtureId": "fixture.workshop_kiln", "effect": "govern", "approvalPolicy": "host_owned",
+      "requires": ["socket.world_crossing"], "tools": ["workshop_timer_set", "workshop_timer_status", "workshop_timer_cancel"]
+    },
+    {
+      "id": "affordance.room_catalog", "fixtureId": "fixture.workshop_shelves", "effect": "observe", "approvalPolicy": "host_owned",
+      "requires": ["socket.world_crossing"], "tools": ["workshop_tool_catalog"]
+    }
+  ],
+  "custody": [
+    { "id": "custody.world_receipts", "installedBy": "host", "appliesTo": ["mutate", "execute", "govern"] },
+    { "id": "custody.result_rack", "installedBy": "host", "appliesTo": ["observe", "mutate", "execute"] },
+    { "id": "custody.forest_wild", "installedBy": "host", "appliesTo": ["attributable_repository_reads"], "optional": true }
+  ],
+  "authority": { "selfInstall": false, "selfAuthorize": false, "ambientAuthority": false },
+  "removal": { "hostDecision": true, "preserveCustody": true }
+}

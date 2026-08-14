@@ -58,7 +58,7 @@ This diagram mixes implemented and proposed relations only to show the intended 
 - Forest and Road boundaries are visible from the Garden but not traversable.
 - The House is currently one sparse, undivided occupiable interior. Naming future domestic possibilities does not install them.
 
-`place.hub` is the container for the Center and specialist working rooms. The Center is the current starting room and junction. The Workshop is the installed repository-work domain. Spotlight is the first experimental specialist-room capsule: an observational market workspace being used to prove that a room can declare sockets, receive only explicitly host-supplied wires, and remain truthful when a capability is absent.
+`place.hub` is the container for the Center and specialist working rooms. The Center is the current starting room and junction. The Workshop is the installed repository-work domain and the first source-coherent room package: its declaration and removable machinery live together, while Marble-wide authority and custody remain explicit host crossings. This is the foundation for rooms that another Marble could carry as a unit; automatic discovery and installation are not implemented. Spotlight is the first experimental specialist-room capsule: an observational market workspace being used to prove that a room can declare sockets, receive only explicitly host-supplied wires, and remain truthful when a capability is absent.
 
 ## How one wake moves
 
@@ -112,7 +112,7 @@ This is a summary, not a status promise. Read [`STATUS.md`](STATUS.md) before re
 The adopted direction has several connected fronts:
 
 1. **Walkable continuity.** Older exact conversation will waterfall out of immediate Glass into a bounded rolling fold while remaining reachable as exact Forest terrain. Chronology supplies structural trails; semantic systems offer possible directions; the Resident's witnessed choices make paths.
-2. **Specialist working rooms.** Rooms such as Spotlight can be discovered inertly, installed deliberately, and wired through declared sockets without acquiring ambient authority. Spotlight's next intended stage is bounded market observation and replay, not brokerage execution.
+2. **Specialist working rooms.** Rooms can travel as inert source packages with declared identity, placement request, sockets, affordances, effects, custody, and removal law. The receiving Marble alone owns admission, its doors, supplied wires, installed authority, and standing. Workshop is the first statically installed reference manifest; generic installation remains future machinery. Spotlight's next intended stage is bounded market observation and replay, not brokerage execution.
 3. **An intentional House.** The House will develop through explicit decisions about threshold, privacy, domestic objects, writing, hospitality, and return. It should not accumulate every useful subsystem.
 4. **Safe outside crossings.** Road, Garden, gates, channels, quarantine, and foreign Forests provide a grammar for encountering outside material without allowing it to name its own authority or destination.
 5. **Sealed sensitive custody.** The adopted security direction requires direct Vault intake, class-aware sealed pointers, bounded sensitive-attention leases, explicit provider disclosure, key lifecycle, and honest destruction before the Hub can claim suitability for sensitive material.
@@ -131,6 +131,7 @@ Choose the path that matches your question:
 | How do material and authority circulate? | [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) |
 | Which code owns each runtime responsibility? | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | What vocabulary governs new design? | [`specs/HOUSE_GRAMMAR_V1.md`](specs/HOUSE_GRAMMAR_V1.md) |
+| How can a room travel without installing itself? | [`specs/ROOM_INSTALLATION_CONTRACT_V1.md`](specs/ROOM_INSTALLATION_CONTRACT_V1.md) |
 | What exact law owns a feature? | [`specs/README.md`](specs/README.md), then its named current owner |
 | How should code and laws evolve safely? | [`engineering/BUILDERS_STANDARD.md`](engineering/BUILDERS_STANDARD.md) and [`engineering/FEATURE_CHANGE_PROTOCOL.md`](engineering/FEATURE_CHANGE_PROTOCOL.md) |
 | What is being tested without installation? | [`../experiments/`](../experiments/) |

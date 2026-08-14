@@ -1,11 +1,11 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHub } from '../src/server/app.js';
 import { WorldGraphStore } from '../src/world/graph.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { projectWakeSlips } from '../src/corner/slips.js';
 import { placeInCenterFromHouse } from './support/house-navigation.js';

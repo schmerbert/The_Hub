@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { createHub } from '../src/server/app.js';
 import { ResultRackStore } from '../src/world/results.js';
 import { WorldGraphStore } from '../src/world/graph.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { placeInWorkshopFromHouse } from './support/house-navigation.js';
 

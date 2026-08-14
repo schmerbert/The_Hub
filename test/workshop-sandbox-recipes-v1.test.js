@@ -5,9 +5,9 @@ import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildRecipeInvocation, RecipeRunner } from '../src/world/recipes.js';
-import { SandboxRecipeRunner } from '../src/world/sandbox-recipes.js';
-import { HostTestSandboxBackend, SandboxBay } from '../src/world/sandbox.js';
+import { buildRecipeInvocation, RecipeRunner } from '../src/places/hub/workshop/index.js';
+import { SandboxRecipeRunner } from '../src/places/hub/workshop/index.js';
+import { HostTestSandboxBackend, SandboxBay } from '../src/places/hub/workshop/index.js';
 
 function git(root, args) {
   const result = spawnSync('git', ['-c', `safe.directory=${root.replaceAll('\\', '/')}`, ...args], { cwd: root, encoding: 'utf8', windowsHide: true });

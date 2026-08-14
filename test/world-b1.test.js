@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { canonicalize } from '../src/core/hash.js';
 import { WorldGraphStore } from '../src/world/graph.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { createHub } from '../src/server/app.js';
 import {
   OBJECT_STATE_COLUMNS, PASSAGE_COLUMNS, WORLD_A2_PROJECTION_TABLE_SQL, WORLD_INTEGRITY_TRIGGER_SQL,

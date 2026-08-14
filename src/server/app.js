@@ -16,7 +16,7 @@ import { WorkshopAdapter, DockerCliSandboxBackend, SandboxBay, SandboxRecipeRunn
 import { WorldActionGateway } from '../world/gateway.js';
 import { residentToolProfile } from '../world/tools.js';
 import { projectWakeSlips } from '../corner/slips.js';
-import { ResultRackStore } from '../world/results.js';
+import { ResultRackStore } from '../result-rack/store.js';
 import { WakeService } from '../runtime/wake-service.js';
 import { HubEventBus } from '../runtime/hub-event-bus.js';
 

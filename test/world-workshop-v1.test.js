@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,7 +9,7 @@ import { ForestStore } from '../src/forest/store.js';
 import { verifyForest } from '../src/forest/verify.js';
 import { sha256 } from '../src/core/hash.js';
 import { SpineStore, verifySpine } from '../src/spine/store.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { WorldGraphStore } from '../src/world/graph.js';
 import { scrubHostReturn, assertScrubbedHostReturn } from '../src/scrub/host-return.js';

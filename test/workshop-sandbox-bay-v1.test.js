@@ -11,7 +11,7 @@ import {
   DockerCliSandboxBackend,
   HostTestSandboxBackend,
   SandboxBay,
-} from '../src/world/sandbox.js';
+} from '../src/places/hub/workshop/index.js';
 
 function git(root, args) {
   const result = spawnSync('git', ['-c', `safe.directory=${root.replaceAll('\\', '/')}`, ...args], { cwd: root, encoding: 'utf8', windowsHide: true });

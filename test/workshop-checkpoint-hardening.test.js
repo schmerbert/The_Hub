@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { readConfig } from '../src/core/config.js';
 import { createHub } from '../src/server/app.js';
 import { KILN_FIXTURE_ID, WorldGraphStore } from '../src/world/graph.js';
-import { buildRecipeEnvironment, buildRecipeInvocation, RecipeRunner } from '../src/world/recipes.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { buildRecipeEnvironment, buildRecipeInvocation, RecipeRunner } from '../src/places/hub/workshop/index.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 import { placeInWorkshopFromHouse } from './support/house-navigation.js';
 

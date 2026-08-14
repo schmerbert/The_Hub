@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,7 +8,7 @@ import { WorldGraphStore, KILN_FIXTURE_ID } from '../src/world/graph.js';
 import { canonicalize, sha256 } from '../src/core/hash.js';
 import { computeWorldEventHash, verifyWorldA2Sqlite, WORLD_A2_PROJECTION_TABLE_SQL, WORLD_INTEGRITY_TRIGGER_SQL } from '../src/world/events.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 
 async function fixture(options) {
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-a2-'));

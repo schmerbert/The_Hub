@@ -1,10 +1,10 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { KILN_FIXTURE_ID, WorldGraphStore } from '../src/world/graph.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 
 async function waitIdle(gateway, ms = 30000) {

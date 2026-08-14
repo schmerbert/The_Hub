@@ -12,7 +12,7 @@ The first question is not “which room mentions this?” It is “which authori
 Cross-room physics and custody -> context, scrub, ledger, spine, forest, runtime
 Universal spatial causation    -> world
 One place's declarations       -> places/<place>/
-One room's fixtures/behavior   -> places/<place>/<room>/
+One room's package            -> places/<place>/<room>/
 Human projection               -> corner / public
 External adapter               -> providers
 ```
@@ -54,7 +54,11 @@ src/places/
 └── threshold/
 ```
 
-A larger room may replace its single module with a directory containing `index.js`, `fixtures/`, `capabilities.js`, and local handlers. Do this when real behavior exists; do not pre-create empty scaffolding.
+A larger room may replace its single module with a directory. Its `index.js` is the canonical public surface and its declaration remains inert even when executable affordances live beside it. Behavior removable with the room belongs inside the package; universal authority and custody do not. Do this when real behavior exists; do not pre-create empty scaffolding.
+
+A room package should be copyable as one source unit. That does not make it self-installing. A portable room must declare the host contracts it requires, while the receiving Marble explicitly installs topology, Ceiling, Gateway, Scrub, and durable custody wiring. Filesystem presence never grants authority. Historical import paths may remain only as registered thin facades and must not become a second implementation home.
+
+Standing portable rooms use [`ROOM_INSTALLATION_CONTRACT_V1.md`](../specs/ROOM_INSTALLATION_CONTRACT_V1.md). Their `room.json` is an inert request whose offered affordances must remain equal to the host's installed Ceiling, mount, and Gateway surfaces. A mismatch is a loose wire and must fail verification.
 
 ## Change checklist
 

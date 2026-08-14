@@ -15,6 +15,13 @@ import {
   assertWorkshopRepositoryPath,
   resolveRepositoryPath,
 } from '../src/workshop/path-law.js';
+import * as workshopRoom from '../src/places/hub/workshop/index.js';
+import { WorkshopAdapter as compatibilityAdapter } from '../src/world/workshop.js';
+import { WorkshopGit as compatibilityGit } from '../src/world/git.js';
+import { RecipeRunner as compatibilityRecipes } from '../src/world/recipes.js';
+import { SandboxBay as compatibilitySandbox } from '../src/world/sandbox.js';
+import { SandboxRecipeRunner as compatibilitySandboxRecipes } from '../src/world/sandbox-recipes.js';
+import { applySandboxPromotion as compatibilityPromotion } from '../src/world/promotion.js';
 
 test('cleanup facades preserve every public Result Rack and path-law export', () => {
   assert.deepEqual(Object.keys(resultFacade).sort(), [
@@ -33,6 +40,18 @@ test('cleanup facades preserve every public Result Rack and path-law export', ()
   assert.strictEqual(resultFacade.projectionPolicyFor, projectionPolicyFor);
   assert.strictEqual(graphAssertPath, assertWorkshopRepositoryPath);
   assert.strictEqual(graphResolvePath, resolveRepositoryPath);
+});
+
+test('historical Workshop doors resolve to the canonical room package', () => {
+  assert.equal(workshopRoom.WORKSHOP_PACKAGE_VERSION, 2);
+  assert.strictEqual(compatibilityAdapter, workshopRoom.WorkshopAdapter);
+  assert.strictEqual(compatibilityGit, workshopRoom.WorkshopGit);
+  assert.strictEqual(compatibilityRecipes, workshopRoom.RecipeRunner);
+  assert.strictEqual(compatibilitySandbox, workshopRoom.SandboxBay);
+  assert.strictEqual(compatibilitySandboxRecipes, workshopRoom.SandboxRecipeRunner);
+  assert.strictEqual(compatibilityPromotion, workshopRoom.applySandboxPromotion);
+  assert.strictEqual(assertWorkshopRepositoryPath, workshopRoom.assertWorkshopRepositoryPath);
+  assert.strictEqual(resolveRepositoryPath, workshopRoom.resolveRepositoryPath);
 });
 
 test('path-law compatibility exports retain exact normalization and refusal contracts', () => {

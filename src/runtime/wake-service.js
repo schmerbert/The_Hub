@@ -9,7 +9,7 @@ import { scrubHostReturn } from '../scrub/host-return.js';
 import { HEARTH_TOOL, HEARTH_TOOL_CHOICE, hearthReturnHash, validateOrientationResult } from '../hearth/handshake.js';
 import { renderHearthPacket } from '../hearth/packet.js';
 import { residentToolProfile, schemasForResidentSession } from '../world/tools.js';
-import { AttentionMeter } from '../world/results.js';
+import { AttentionMeter } from '../context/attention-meter.js';
 import { ProvisionalCollector } from './provisional-collector.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;

@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorldGraphStore } from '../src/world/graph.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 
 async function fixture(prefix = 'hub-approval-custody-') {
   const dir = await mkdtemp(join(tmpdir(), prefix));

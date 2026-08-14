@@ -40,15 +40,13 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Forest | `src/forest/` | Home/Wild admission, custody, backfill, and verification; no exhale selector yet |
 | Forest health projection | `src/forest/health.js` | Domain-owned active/inactive, integrity, catch-up, Wild, and Intake health projection for transport surfaces |
 | World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, and append-only approval completion custody |
-| Place declarations | `src/places/` | Inert place/room-owned topology contributions, fixtures, local state seeds, and Patch Bay profile declarations; universal replay and crossings remain in World |
+| Place and room packages | `src/places/` | Inert topology declarations plus behavior owned entirely by one place or room; universal replay, authority, and crossings remain in World |
+| Room installation contract | `src/rooms/installation-contract.js` | Pure validation of inert `room-installation.v1` requests; grants no discovery, activation, wiring, or authority |
 | World builder inspection | `src/world/inspection.js` | Bounded verified or drift-safe diagnostic projection; owns direct diagnostic access to World storage |
 | Ceiling / Patch Bay | `src/world/ceiling.js`, `src/world/tools.js` | Complete World authority plus deterministic engaged-fixture schema fitting for provider attention |
-| Workshop path law | `src/workshop/path-law.js` | Shared protected-path, traversal, containment, and symlink law used by Workshop and promotion |
-| Workshop | `src/world/workshop.js`, `src/world/git.js`, `src/world/recipes.js` | Bounded repository operations, local Git, and fake/test host recipes |
-| Workshop room package | `src/places/hub/workshop/` | Reference specialist-room import surface; historical implementation paths remain compatibility seams |
+| Workshop room package | `src/places/hub/workshop/index.js` | Canonical `room.workshop` declaration and machinery: repository adapter, path law, Git, recipes, Sandbox Bay, and promotion |
 | World Gateway | `src/world/gateway.js`, `src/world/gateway/` | Compatibility facade over the complete handler registry, approval crossings, Result Rack integration, and async result capture |
-| Sandbox Bay | `src/world/sandbox.js`, `src/world/sandbox-recipes.js` | Disposable Git worktree jobs, Docker recipe execution in live mode, lifecycle/diff control, and no-fallback adapter |
-| Promotion | `src/world/promotion.js` | Clean-base, plan/patch-hash-bound host application with protected-path checks |
+| Workshop compatibility doors | `src/world/{workshop,git,recipes,sandbox,sandbox-recipes,promotion}.js`, `src/workshop/path-law.js` | Thin registered re-exports for historical callers; no new behavior belongs here |
 | Result Rack | `src/result-rack/schema.js`, `src/result-rack/store.js`, `src/result-rack/projection.js` | Append-only exact result/output/artifact/projection custody, deterministic fitting, and exact pointers |
 | Result/attention compatibility | `src/world/results.js`, `src/context/attention-meter.js` | Stable re-export facade plus provider-presentation byte attention measurement |
 | Host-return Scrub | `src/scrub/host-return.js` | Validated identity or named `result_rack_projection_v1` host result projection |
@@ -59,7 +57,7 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Corner desktop | `src/corner/electron-main.js`, `src/corner/desktop-host.js`, `src/corner/desktop-controller.js`, `src/corner/preload.cjs`, `src/corner/window-geometry.js` | Single-instance Electron lifecycle, loopback host ownership, secure narrow bridge, tray/window behavior, and display geometry |
 | Context compatibility | `src/context/assemble.js` | Compatibility assembly for pre-session callers |
 
-The older `src/core/*` paths are compatibility re-exports except `src/core/config.js`, which owns active configuration. `src/providers/dispatch.js` validates a presentation before deriving the legacy `messages` argument used by injected test providers.
+`src/core/config.js` and `src/core/hash.js` are active shared owners. The obsolete Core re-export hallways were removed after all repository callers moved to the dedicated Ledger, Forest, Spine, and Context owners. `src/providers/dispatch.js` validates a presentation before deriving the legacy `messages` argument used by injected test providers.
 
 `src/world/results.js` remains the Result Rack compatibility facade: consumers import the split store/projection surface and attention meter through it while the implementation lives in `src/result-rack/` and `src/context/attention-meter.js`. Likewise, `src/world/gateway.js` owns crossing state but delegates tool execution through a registry that is checked against the installed Ceiling names at module load.
 

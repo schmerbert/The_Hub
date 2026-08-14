@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,7 +9,7 @@ import { createHub } from '../src/server/app.js';
 import { WorldGraphStore } from '../src/world/graph.js';
 import { computeWorldEventHash, reduceWorldEvent, verifyWorldDatabase, WORLD_A2_PROJECTION_TABLE_SQL, WORLD_EVENT_KINDS, WORLD_INTEGRITY_TRIGGER_SQL } from '../src/world/events.js';
 import { INSTALLED_WORLD_EDGES, installedTopologyHash } from '../src/world/topology.js';
-import { WorkshopAdapter } from '../src/world/workshop.js';
+import { WorkshopAdapter } from '../src/places/hub/workshop/index.js';
 import { WorldActionGateway } from '../src/world/gateway.js';
 
 async function fixture(options) {

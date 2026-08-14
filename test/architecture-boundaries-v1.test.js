@@ -16,11 +16,44 @@ async function filesUnder(directory) {
   return files;
 }
 
-test('place modules remain inert and cannot reach Marble machinery', async () => {
+test('place declarations remain inert and cannot reach Marble machinery', async () => {
   for (const path of await filesUnder(resolve(SRC, 'places'))) {
     const source = await readFile(path, 'utf8');
+    if (!/\bplaceModule\b/.test(source)) continue;
     assert.doesNotMatch(source, /from ['"].*(runtime|server|providers|ledger|spine|forest|result-rack)\//, relative(ROOT, path));
     assert.doesNotMatch(source, /\b(DatabaseSync|sqlite|fetch|process\.env|child_process)\b/, relative(ROOT, path));
+  }
+});
+
+test('room.workshop owns its machinery without reaching into Marble-wide systems', async () => {
+  const room = resolve(SRC, 'places', 'hub', 'workshop');
+  for (const path of await filesUnder(room)) {
+    const source = await readFile(path, 'utf8');
+    assert.doesNotMatch(
+      source,
+      /from ['"].*(runtime|server|providers|ledger|spine|forest|result-rack|context|world)\//,
+      relative(ROOT, path),
+    );
+    for (const [, specifier] of source.matchAll(/^\s*import[^\n]*from ['"]([^'"]+)['"]/gm)) {
+      assert.equal(
+        specifier.startsWith('node:') || specifier.startsWith('./') || (path.endsWith('declaration.js') && specifier === '../../declaration.js'),
+        true,
+        `${relative(ROOT, path)} reaches outside the carryable room package through ${specifier}`,
+      );
+    }
+  }
+  for (const obsolete of ['workshop.js','git.js','recipes.js','sandbox.js','sandbox-recipes.js','promotion.js']) {
+    const source = await readFile(resolve(SRC, 'world', obsolete), 'utf8');
+    assert.match(source, /Compatibility import/);
+    assert.ok(source.split(/\r?\n/).length <= 4, `${obsolete} must remain a thin compatibility door`);
+  }
+});
+
+test('room installation contracts remain inert and cannot discover or activate packages', async () => {
+  for (const path of await filesUnder(resolve(SRC, 'rooms'))) {
+    const source = await readFile(path, 'utf8');
+    assert.doesNotMatch(source, /from ['"](?:node:)?(fs|url|module|child_process)|\b(import\(|require\(|fetch\(|process\.)/, relative(ROOT, path));
+    assert.doesNotMatch(source, /from ['"].*(runtime|server|providers|ledger|spine|forest|result-rack|context|world|places)\//, relative(ROOT, path));
   }
 });
 

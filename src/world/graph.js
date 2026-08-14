@@ -1106,4 +1106,4 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
 
 export function seedWorldGraph(path) { const store = new WorldGraphStore(path); const result = { nodes: store.sqlite.prepare('SELECT COUNT(*) AS count FROM world_nodes').get().count, edges: store.sqlite.prepare('SELECT COUNT(*) AS count FROM world_edges').get().count }; store.close(); return result; }
 
-export { assertWorkshopRepositoryPath, resolveRepositoryPath } from '../workshop/path-law.js';
+export { assertWorkshopRepositoryPath, resolveRepositoryPath } from '../places/hub/workshop/path-law.js';
