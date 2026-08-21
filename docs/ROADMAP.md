@@ -135,7 +135,7 @@ Every slice must preserve:
 
 ## Deliberately unordered fronts
 
-Specialist room packaging, the intentional House beyond the Hearth, safe Road/outside crossings, Spotlight, and sealed Vault custody remain adopted or experimental fronts described by Orientation and Status. They are not inserted into this continuity dependency chain until a concrete pressure case establishes their relative order.
+Specialist room packaging, the intentional House beyond the Hearth, and sealed Vault custody remain adopted or experimental fronts described by Orientation and Status. The outside pressure case now adopts The Binder as the intended passive portfolio Window, The Box as the observation supplier/public watering hole, and The Pipes as named deliberate Road fittings. Their first favored slice is a passive Binder-owned projection; active Box inspection and live Pipes knocks remain later action crossings. This direction is not inserted into the continuity dependency chain and installs no runtime capability.
 
 ## Updating this roadmap
 

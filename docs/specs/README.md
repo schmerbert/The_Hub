@@ -26,11 +26,13 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Provider streaming | [`WAKE_STREAM_V1.md`](WAKE_STREAM_V1.md) |
 | Forest/Spine intake | [`SPINE_FOREST_INGESTION.md`](SPINE_FOREST_INGESTION.md) |
 | Security direction | [`SECURITY_PRIVACY_CUSTODY_V1.md`](SECURITY_PRIVACY_CUSTODY_V1.md) |
+| Outside data, portfolio Window, and web passage direction | [`OUTSIDE_ORGANS_DIRECTION_V1.md`](OUTSIDE_ORGANS_DIRECTION_V1.md) |
 
 ## Adopted but not installed
 
 - [`FOREST_PATHS_ROLLING_FOLD_V1.md`](FOREST_PATHS_ROLLING_FOLD_V1.md)
 - [`FOREST_EXHALE_V2.md`](FOREST_EXHALE_V2.md) — recoverable Result slice installed; semantic selection shadow-only and uninstalled
+- [`OUTSIDE_ORGANS_DIRECTION_V1.md`](OUTSIDE_ORGANS_DIRECTION_V1.md)
 - [`VAULT_V1.md`](VAULT_V1.md)
 
 These constrain future design only to the extent stated in [`../STATUS.md`](../STATUS.md). They must never be described as current runtime capability.
