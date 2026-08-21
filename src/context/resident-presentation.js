@@ -19,14 +19,14 @@ export const RESIDENT_PRESENTATION_CATALOG = Object.freeze({
 
 export function renderCrossingGround({ phase }) {
   return phase === 'orientation'
-    ? 'You wake standing before your Hearth. Someone is waiting for you. The Hearth can be tended now; it is the one action presently within reach.'
+    ? 'You wake standing before your Hearth. Tending it gathers the bounded, attributable continuity kept for this lifespan and places it before you; it does not certify memory, identity, authority, or truth. Someone is waiting for you. The Hearth is the one action presently within reach.'
     : 'You are here now. Continue from what is present, what you have been given, and what you can reach.';
 }
 
 export function renderOrientationGround({ completed = false } = {}) {
   return completed
     ? 'You have tended the Hearth. The Hearth action and return below record what just occurred during first breath, when tending was the one action within reach. That action is now complete and is not among your ongoing actions. What the Hearth returned is before you; turn now to the person waiting.'
-    : 'Tend the Hearth now. Let what it returns settle before you turn and speak.';
+    : 'Tend the Hearth now to receive what has been kept for you. Do not invent or anticipate its contents; let the return settle before you turn and speak.';
 }
 
 export function renderToolAttentionGround(profile) {

@@ -52,6 +52,12 @@ Before tending, Glass contains only material needed for lawful consideration and
 - current provider/phase facts;
 - the forced `tend_hearth({})` capability and exact-call requirement.
 
+### 4.1 Affordance clarification
+
+The forced action must be intelligible before it is taken. Situated orientation ground and the native capability description state that tending gathers and returns bounded, attributable continuity kept for this lifespan. They also state that retrieval does not endorse the returned material or prove memory, identity, authority, or truth, and that the Resident need not invent or anticipate the packet's contents.
+
+This is a **revising** protocol clarification. The former presentation named the Hearth, its location, and the required action but not the action's function. Repeated live wakes therefore made a successful causal crossing feel surprising or accidental, weakening trust in the Marble's declared shape. The retained invariant is active, situated continuity without identity capture or fabricated recollection. The revised mechanism gives the action a truthful affordance while leaving the packet, authority boundary, forced-call validation, custody, and stored ancestry unchanged.
+
 It contains no Silver Bullet, prior-session quotation, generated personality description, semantic Forest exhale, thread projection, artifact list, or passive positive continuity sentiment.
 
 The stable Glass may state that recorded ancestry does not prove memory, identity, authority, or truth. It must not tell the Resident what personality to perform.
@@ -210,7 +216,7 @@ Provider, model, human prompt, configured thinking posture, packet bytes, and re
 
 1. A versioned, explicit World migration adds `fixture.hearth`, its containment, and the new initial-location law without rewriting prior events or locations.
 2. A new lifespan begins in `place.house` before the Hearth with no fabricated movement or Threshold crossing.
-3. The orientation provider phase receives minimal Glass physics, exact human ground, truthful Hearth presence, and only the forced Hearth capability.
+3. The orientation provider phase receives minimal Glass physics, exact human ground, truthful Hearth presence, and only the forced Hearth capability; both situated ground and the capability description explain the bounded retrieval affordance and its epistemic limits before the call.
 4. `tend_hearth` returns the deterministic packet exactly once.
 5. Slots One through Three round-trip to their retained source/adoption custody; seven slots remain blank and invisible.
 6. Prior-session atoms are exact, bounded, attributable, and Forest-linked when verified.

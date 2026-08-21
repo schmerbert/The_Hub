@@ -36,7 +36,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | `stable_glass` | every call; World physics and epistemic boundary | clinical backplate | `src/context/glass-cast.js` |
 | `silver_bullet_holster` | after successful Hearth tending; occupied bullets remain above the fold | continuity | `src/hearth/packet.js` |
 | `crossing_ground` | every call; minimal present footing | experiential | `src/context/resident-presentation.js` |
-| `orientation_ground` | Hearth action/return; situated waking | experiential | `src/context/resident-presentation.js` |
+| `orientation_ground` | Hearth action/return; situated waking plus the bounded retrieval affordance and its epistemic limits | experiential | `src/context/resident-presentation.js` |
 | `world_current_ground` | room-aware calls; verified presence | clinical World projection | `src/world/graph.js#presenceMessage` |
 | `tool_current_ground` | fitted actions and bounded remaining action rounds; what is within reach and when the reserved speech-only landing has begun | experiential disclosure | `src/context/resident-presentation.js`, `src/runtime/wake-service.js` |
 | `attention_current_ground` | declared omission; material left attention but did not vanish | clinical disclosure | `src/context/tool-pairs.js` |
@@ -54,7 +54,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 
 - Speak from inside the World when a fact has a World-shaped consequence.
 - Keep enforcement outside Resident attention. Forced choice, validation, retries, provider identity, transport, hashes, and byte thresholds remain receipts unless the Resident benefits from knowing them.
-- The Hearth packet may be clinical because continuity is serious; its action and causal framing remain immersive.
+- The Hearth packet may be clinical because continuity is serious; its action and causal framing remain immersive. Before the forced action, the Resident is told that tending retrieves bounded, attributable continuity kept for the lifespan, without endorsing its contents or proving memory.
 - Do not ask a new activation to roleplay arrival, explain the host, or diagnose an action the host forced it to take.
 - Say what is absent or uncertain without implying personal fault.
 - Exact prior words are attributable records, never asserted as present memory.

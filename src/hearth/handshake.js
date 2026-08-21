@@ -15,7 +15,7 @@ export const HEARTH_TOOL = Object.freeze({
   type: 'function',
   function: {
     name: HEARTH_TOOL_NAME,
-    description: 'The Hearth is directly before you. Tend it now, before turning to the person waiting for you.',
+    description: 'Tend the Hearth to receive bounded, attributable continuity kept for this lifespan before turning to the person waiting. This retrieves the Hearth return; it does not endorse its contents or prove memory.',
     parameters: { type: 'object', properties: {}, additionalProperties: false },
   },
 });

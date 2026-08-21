@@ -56,7 +56,10 @@ test('context ordering and hashes match actual adapter input', async () => {
     assert.equal(presented[0].content, STABLE_GLASS_TEXT);
     assert.equal(presented.at(-1).content, 'Exact words.');
     assert.match(presented[1].content, /standing before your Hearth/);
+    assert.match(presented[1].content, /gathers the bounded, attributable continuity kept for this lifespan/);
+    assert.match(presented[1].content, /does not certify memory, identity, authority, or truth/);
     assert.match(presented[2].content, /Tend the Hearth now/);
+    assert.match(presented[2].content, /Do not invent or anticipate its contents/);
     assert.match(presented[3].content, /^Current location: place\.house\./);
     assert.match(presented[3].content, /fixture\.hearth/);
     assert.equal(presented[1].content.includes(result.body.sessionId), false);
@@ -74,6 +77,8 @@ test('orientation receipt matches persisted wake and provider input', async () =
     const orientation = JSON.parse(result.body.phases[0].requestBody);
     assert.equal(orientation.messages.at(-1).content, 'Orient me.');
     assert.equal(orientation.tools[0].function.name, 'tend_hearth');
+    assert.match(orientation.tools[0].function.description, /receive bounded, attributable continuity kept for this lifespan/);
+    assert.match(orientation.tools[0].function.description, /does not endorse its contents or prove memory/);
     assert.deepEqual(orientation.tool_choice, { type: 'function', function: { name: 'tend_hearth' } });
     assert.equal(result.body.phases[1].phase, 'response');
     assert.equal(result.body.hearth.toolCallId, 'call_fake_hearth');

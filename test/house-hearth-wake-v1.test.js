@@ -66,6 +66,8 @@ test('first wake receives the full Hearth causally and later wakes carry only th
     assert.equal(first.status, 'committed');
     const orientation = JSON.parse(first.phases[0].requestBody).messages;
     assert.equal(orientation.some(message => /Current location: place\.house\./.test(message.content || '') && /fixture\.hearth/.test(message.content)), true);
+    assert.equal(orientation.some(message => /bounded, attributable continuity kept for this lifespan/.test(message.content || '')), true);
+    assert.equal(orientation.some(message => /Do not invent or anticipate its contents/.test(message.content || '')), true);
     assert.equal(orientation.some(message => /Silver Bullets|Past Session/.test(message.content || '')), false);
     const response = JSON.parse(first.phases[1].requestBody).messages;
     assert.equal(response.filter(message => message.role === 'tool' && message.content.startsWith('# Hearth')).length, 1);
