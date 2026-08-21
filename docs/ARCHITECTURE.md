@@ -47,6 +47,7 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | World builder inspection | `src/world/inspection.js` | Bounded verified or drift-safe diagnostic projection; owns direct diagnostic access to World storage |
 | Ceiling / Patch Bay | `src/world/ceiling.js`, `src/world/tools.js` | Complete World authority plus deterministic engaged-fixture schema fitting for provider attention |
 | Workshop room package | `src/places/hub/workshop/index.js` | Canonical `room.workshop` declaration and machinery: repository adapter, path law, Git, recipes, Sandbox Bay, and promotion |
+| Workshop discovery traversal | `src/places/hub/workshop/discovery-traversal.js` | Streaming eligible-file walk, declared practical exclusions, examined/skipped counts, and honest truncation boundaries |
 | World Gateway | `src/world/gateway.js`, `src/world/gateway/` | Compatibility facade over the complete handler registry, approval crossings, Result Rack integration, and async result capture |
 | Workshop compatibility doors | `src/world/{workshop,git,recipes,sandbox,sandbox-recipes,promotion}.js`, `src/workshop/path-law.js` | Thin registered re-exports for historical callers; no new behavior belongs here |
 | Result Rack | `src/result-rack/schema.js`, `src/result-rack/store.js`, `src/result-rack/projection.js` | Append-only exact result/output/artifact/projection custody, deterministic fitting, and exact pointers |

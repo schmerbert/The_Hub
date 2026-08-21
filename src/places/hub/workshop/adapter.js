@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, relative } from 'node:path';
+import { dirname, extname, relative } from 'node:path';
 import { sha256, sha256Bytes } from './canonical.js';
+import { DEFAULT_EXCLUDED_DIRECTORIES, walkWorkshopFiles } from './discovery-traversal.js';
 import { resolveRepositoryPath } from './path-law.js';
 
 const DEFAULTS = Object.freeze({
@@ -11,6 +12,18 @@ const DEFAULTS = Object.freeze({
   maxTreeDepth: 6,
   maxTreeEntries: 400,
   defaultTreeEntries: 120,
+});
+const ORIENTATION_PATHS = Object.freeze(['AGENTS.md', 'README.md', 'docs/ORIENTATION.md', 'docs/STATUS.md', 'docs/ROADMAP.md']);
+const MANIFEST_PATHS = Object.freeze([
+  'package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'Cargo.toml', 'pyproject.toml',
+  'requirements.txt', 'go.mod', 'Gemfile', 'composer.json', 'mix.exs', 'pubspec.yaml',
+]);
+const LANGUAGE_BY_EXTENSION = Object.freeze({
+  '.c': 'C', '.cc': 'C++', '.cpp': 'C++', '.cs': 'C#', '.css': 'CSS', '.go': 'Go', '.h': 'C/C++',
+  '.html': 'HTML', '.java': 'Java', '.js': 'JavaScript', '.jsx': 'JavaScript', '.json': 'JSON',
+  '.mjs': 'JavaScript', '.php': 'PHP', '.py': 'Python', '.rb': 'Ruby', '.rs': 'Rust', '.scss': 'SCSS',
+  '.sh': 'Shell', '.sql': 'SQL', '.swift': 'Swift', '.toml': 'TOML', '.ts': 'TypeScript', '.tsx': 'TypeScript',
+  '.vue': 'Vue', '.xml': 'XML', '.yaml': 'YAML', '.yml': 'YAML',
 });
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 function rel(root, path) { return relative(root, path).replaceAll('\\', '/'); }
@@ -56,28 +69,6 @@ function globToRegExp(pattern) {
     else regex += character;
   }
   return new RegExp(`${regex}$`);
-}
-
-function walkFiles(root, startPath, limits, { includeDirs = false } = {}) {
-  const files = [];
-  const walk = directory => {
-    for (const item of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (files.length >= limits.maxFiles) fail('workshop_limit', 'Workshop file walk exceeded the file-count limit.');
-      let child;
-      try { child = resolveRepositoryPath(root, `${rel(root, directory) === '' ? '' : `${rel(root, directory)}/`}${item.name}`); }
-      catch (error) { if (['workshop_path_forbidden', 'workshop_path_invalid'].includes(error.code)) continue; throw error; }
-      if (item.isDirectory()) {
-        if (includeDirs) files.push(child);
-        walk(child);
-      } else if (item.isFile()) files.push(child);
-    }
-  };
-  const absolute = startPath === '.' ? root : resolveRepositoryPath(root, startPath);
-  const stat = lstatSync(absolute);
-  if (stat.isDirectory()) walk(absolute);
-  else if (stat.isFile()) files.push(absolute);
-  else fail('workshop_not_file', 'Workshop walk target is not searchable.');
-  return { absolute, files };
 }
 
 function parseUnifiedDiff(diffText) {
@@ -183,7 +174,14 @@ function missingParentDirectories(root, absolute) {
 }
 
 export class WorkshopAdapter {
-  constructor(root, limits = {}) { this.root = root; this.limits = { ...DEFAULTS, ...limits }; }
+  constructor(root, limits = {}) {
+    this.root = root;
+    this.limits = {
+      ...DEFAULTS,
+      ...limits,
+      excludedDirectories: Object.freeze([...new Set([...(limits.excludedDirectories || []), ...DEFAULT_EXCLUDED_DIRECTORIES])]),
+    };
+  }
   list(path = '.') {
     const absolute = path === '.' ? this.root : resolveRepositoryPath(this.root, path);
     const stat = lstatSync(absolute); if (!stat.isDirectory()) fail('workshop_not_directory', 'Workshop list target is not a directory.');
@@ -198,61 +196,107 @@ export class WorkshopAdapter {
     return { kind: 'workshop_list', path: path === '.' ? '.' : rel(this.root, absolute), entries, exact: true };
   }
   read(path, startLine = 1, lineCount = this.limits.maxLines) {
-    if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(lineCount) || lineCount < 1 || lineCount > this.limits.maxLines) fail('workshop_limit', 'Workshop line range is outside the bounded limit.');
+    if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(lineCount) || lineCount < 1) fail('workshop_limit', `Workshop line range is invalid; start_line must be at least 1 and line_count must be a positive integer. Maximum line_count is ${this.limits.maxLines}. No file content was evaluated.`);
+    if (lineCount > this.limits.maxLines) fail('workshop_limit', `Workshop line_count exceeds the configured maximum of ${this.limits.maxLines}; no file content was evaluated. Request line_count <= ${this.limits.maxLines}.`);
     const absolute = resolveRepositoryPath(this.root, path); const { text } = safeText(this.root, absolute, this.limits); const lines = splitSourceLines(text); const start = startLine - 1; const selected = lines.slice(start, start + lineCount); if (!selected.length || start >= lines.length) fail('workshop_range', 'Workshop line range is unavailable.');
-    const body = selected.map(line => line.raw).join(''); return { kind: 'workshop_read', source: source(absolute, this.root, startLine, startLine + selected.length - 1, body), lineCount: selected.length, exact: true, lineTerminators: 'preserved' };
+    const body = selected.map(line => line.raw).join(''); const totalLines = lines.length; const nextStartLine = start + selected.length < totalLines ? startLine + selected.length : null;
+    return { kind: 'workshop_read', source: source(absolute, this.root, startLine, startLine + selected.length - 1, body), lineCount: selected.length, totalLines, nextStartLine, hasMore: nextStartLine !== null, exact: true, lineTerminators: 'preserved' };
+  }
+  overview() {
+    const topLevel = [];
+    const topLevelNames = readdirSync(this.root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    let topLevelTruncated = false;
+    for (const item of topLevelNames) {
+      if (topLevel.length >= this.limits.maxTreeEntries) { topLevelTruncated = true; break; }
+      let child;
+      try { child = resolveRepositoryPath(this.root, item.name); }
+      catch (error) { if (['workshop_path_forbidden', 'workshop_path_invalid'].includes(error.code)) continue; throw error; }
+      const childStat = lstatSync(child);
+      topLevel.push({ path: rel(this.root, child), type: childStat.isDirectory() ? 'directory' : childStat.isFile() ? 'file' : 'other' });
+    }
+    const present = paths => paths.filter(path => {
+      try { return lstatSync(resolveRepositoryPath(this.root, path)).isFile(); }
+      catch (error) { if (['workshop_not_found', 'workshop_path_forbidden', 'workshop_path_invalid'].includes(error.code)) return false; throw error; }
+    });
+    const orientation = present(ORIENTATION_PATHS);
+    const manifests = present(MANIFEST_PATHS);
+    const languages = new Set();
+    const languageScan = walkWorkshopFiles(this.root, '.', this.limits, { onFile: file => {
+      const language = LANGUAGE_BY_EXTENSION[extname(file).toLowerCase()];
+      if (language) languages.add(language);
+      return null;
+    } });
+    if (manifests.some(path => path === 'package.json' || path.endsWith('package-lock.json') || path === 'pnpm-lock.yaml' || path === 'yarn.lock')) languages.add('JavaScript');
+    if (manifests.includes('Cargo.toml')) languages.add('Rust');
+    if (manifests.includes('pyproject.toml') || manifests.includes('requirements.txt')) languages.add('Python');
+    if (manifests.includes('go.mod')) languages.add('Go');
+    return {
+      kind: 'workshop_overview',
+      root: '.',
+      topLevel,
+      topLevelTruncated,
+      orientation,
+      manifests,
+      languages: [...languages].sort(),
+      limits: { ...this.limits },
+      exclusions: [...this.limits.excludedDirectories],
+      worktree: { rootRelative: '.', gitStatus: 'not_read', statusVia: 'workshop_git_status' },
+      languageScan: { filesExamined: languageScan.filesExamined, filesSkipped: languageScan.filesSkipped, truncated: languageScan.truncated },
+      exact: true,
+    };
   }
   search(query, path = '.', maxResults = this.limits.maxResults) {
     if (typeof query !== 'string' || !query || query.length > 200) fail('workshop_invalid_argument', 'Workshop search query is invalid.');
-    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > this.limits.maxResults) fail('workshop_limit', 'Workshop search result limit is outside the bounded limit.');
-    const { absolute, files } = walkFiles(this.root, path, this.limits);
-    const matches = []; let omitted = false;
-    for (const file of files) {
-      let text; try { text = safeText(this.root, file, this.limits).text; } catch (error) { if (['workshop_binary', 'workshop_oversized'].includes(error.code)) continue; throw error; }
+    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > this.limits.maxResults) fail('workshop_limit', `Workshop max_results must be an integer from 1 to ${this.limits.maxResults}; no repository content was evaluated.`);
+    const matches = [];
+    const traversal = walkWorkshopFiles(this.root, path, this.limits, { onFile: (file, state) => {
+      let text; try { text = safeText(this.root, file, this.limits).text; } catch (error) { if (['workshop_binary', 'workshop_oversized'].includes(error.code)) { state.skip(error.code); return; } throw error; }
       const lines = splitSourceLines(text);
       for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index];
         if (!line.content.includes(query)) continue;
-        if (matches.length < maxResults) matches.push({ path: rel(this.root, file), line: index + 1, text: line.raw, hash: sha256(line.raw), byteLength: Buffer.byteLength(line.raw, 'utf8') });
-        else { omitted = true; break; }
+        if (matches.length >= maxResults) return { stop: { kind: 'max_results', limit: maxResults, nextPath: rel(this.root, file) } };
+        matches.push({ path: rel(this.root, file), line: index + 1, text: line.raw, hash: sha256(line.raw), byteLength: Buffer.byteLength(line.raw, 'utf8') });
       }
-      if (omitted) break;
-    }
-    return { kind: 'workshop_search', query, path: path === '.' ? '.' : rel(this.root, absolute), matches, exact: true, truncated: omitted, lineTerminators: 'preserved' };
+      return null;
+    } });
+    const { absolute, ...report } = traversal;
+    return { kind: 'workshop_search', query, path: path === '.' ? '.' : rel(this.root, absolute), matches, exact: true, lineTerminators: 'preserved', ...report };
   }
   searchRegex(pattern, path = '.', maxResults = this.limits.maxResults, flags = '') {
     if (typeof pattern !== 'string' || !pattern || pattern.length > 200) fail('workshop_invalid_argument', 'Workshop regex pattern is invalid.');
     if (typeof flags !== 'string' || flags.length > 5 || /[^gimsuy]/.test(flags)) fail('workshop_invalid_argument', 'Workshop regex flags are invalid.');
-    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > this.limits.maxResults) fail('workshop_limit', 'Workshop search result limit is outside the bounded limit.');
+    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > this.limits.maxResults) fail('workshop_limit', `Workshop max_results must be an integer from 1 to ${this.limits.maxResults}; no repository content was evaluated.`);
     let regex; try { regex = new RegExp(pattern, flags.includes('g') ? flags : `${flags}g`); } catch { fail('workshop_invalid_argument', 'Workshop regex pattern could not be compiled.'); }
-    const { absolute, files } = walkFiles(this.root, path, this.limits);
-    const matches = []; let omitted = false;
-    for (const file of files) {
-      let text; try { text = safeText(this.root, file, this.limits).text; } catch (error) { if (['workshop_binary', 'workshop_oversized'].includes(error.code)) continue; throw error; }
+    const matches = [];
+    const traversal = walkWorkshopFiles(this.root, path, this.limits, { onFile: (file, state) => {
+      let text; try { text = safeText(this.root, file, this.limits).text; } catch (error) { if (['workshop_binary', 'workshop_oversized'].includes(error.code)) { state.skip(error.code); return; } throw error; }
       const lines = splitSourceLines(text);
       for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index];
         regex.lastIndex = 0;
         if (!regex.test(line.content)) continue;
-        if (matches.length < maxResults) matches.push({ path: rel(this.root, file), line: index + 1, text: line.raw, hash: sha256(line.raw), byteLength: Buffer.byteLength(line.raw, 'utf8') });
-        else { omitted = true; break; }
+        if (matches.length >= maxResults) return { stop: { kind: 'max_results', limit: maxResults, nextPath: rel(this.root, file) } };
+        matches.push({ path: rel(this.root, file), line: index + 1, text: line.raw, hash: sha256(line.raw), byteLength: Buffer.byteLength(line.raw, 'utf8') });
       }
-      if (omitted) break;
-    }
-    return { kind: 'workshop_search_regex', pattern, flags, path: path === '.' ? '.' : rel(this.root, absolute), matches, exact: true, truncated: omitted, lineTerminators: 'preserved' };
+      return null;
+    } });
+    const { absolute, ...report } = traversal;
+    return { kind: 'workshop_search_regex', pattern, flags, path: path === '.' ? '.' : rel(this.root, absolute), matches, exact: true, lineTerminators: 'preserved', ...report };
   }
   glob(pattern, path = '.', maxResults = this.limits.maxResults) {
-    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > this.limits.maxResults) fail('workshop_limit', 'Workshop glob result limit is outside the bounded limit.');
+    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > this.limits.maxResults) fail('workshop_limit', `Workshop max_results must be an integer from 1 to ${this.limits.maxResults}; no repository content was evaluated.`);
     const matcher = globToRegExp(pattern.replaceAll('\\', '/'));
-    const { absolute, files } = walkFiles(this.root, path, this.limits);
-    const matches = []; let truncated = false;
-    for (const file of files) {
+    const matches = [];
+    const traversal = walkWorkshopFiles(this.root, path, this.limits, { onFile: file => {
       const relativePath = rel(this.root, file);
-      if (!matcher.test(relativePath)) continue;
-      if (matches.length < maxResults) matches.push(relativePath);
-      else { truncated = true; break; }
-    }
-    return { kind: 'workshop_glob', pattern, path: path === '.' ? '.' : rel(this.root, absolute), matches, exact: true, truncated };
+      if (!matcher.test(relativePath)) return null;
+      if (matches.length >= maxResults) return { stop: { kind: 'max_results', limit: maxResults, nextPath: relativePath } };
+      matches.push(relativePath);
+      return null;
+    } });
+    const { absolute, ...report } = traversal;
+    return { kind: 'workshop_glob', pattern, path: path === '.' ? '.' : rel(this.root, absolute), matches, exact: true, ...report };
   }
   tree(path = '.', depth = 3, maxEntries = undefined) {
     if (!Number.isInteger(depth) || depth < 1 || depth > this.limits.maxTreeDepth) fail('workshop_limit', 'Workshop tree depth is outside the bounded limit.');

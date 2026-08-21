@@ -14,10 +14,10 @@ export const FIXTURE_TOOLS = [
 
 export const WORKSHOP_TOOLS = [
   { type: 'function', function: { name: 'workshop_list', description: 'List exact names and types in a repository directory.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: [], additionalProperties: false } } },
-  { type: 'function', function: { name: 'workshop_read', description: 'Read an exact bounded contiguous source line range.', parameters: { type: 'object', properties: { path: { type: 'string' }, start_line: { type: 'integer', minimum: 1 }, line_count: { type: 'integer', minimum: 1 } }, required: ['path'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'workshop_search', description: 'Search exact source lines with bounded results.', parameters: { type: 'object', properties: { query: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 } }, required: ['query'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'workshop_search_regex', description: 'Search source lines with a bounded regular expression; returns exact matching line spans.', parameters: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 }, flags: { type: 'string' } }, required: ['pattern'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'workshop_glob', description: 'Match repository-relative paths with a glob pattern.', parameters: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 } }, required: ['pattern'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_read', description: 'Read an exact bounded contiguous source line range. line_count maximum is 160 by default (configured by HUB_WORKSHOP_MAX_LINES); the result reports total_lines and next_start_line when more remains.', parameters: { type: 'object', properties: { path: { type: 'string' }, start_line: { type: 'integer', minimum: 1 }, line_count: { type: 'integer', minimum: 1, maximum: 160 } }, required: ['path'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_search', description: 'Search exact source lines with bounded results. Traversal streams through the repository, skips common dependency/build/cache directories, and reports partial bounds honestly.', parameters: { type: 'object', properties: { query: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 } }, required: ['query'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_search_regex', description: 'Search source lines with a bounded regular expression; returns exact matching line spans and partial traversal metadata when a bound is reached.', parameters: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 }, flags: { type: 'string' } }, required: ['pattern'], additionalProperties: false } } },
+  { type: 'function', function: { name: 'workshop_glob', description: 'Match repository-relative paths with a glob pattern using bounded streaming traversal; reports skipped directories and actionable truncation metadata.', parameters: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, max_results: { type: 'integer', minimum: 1 } }, required: ['pattern'], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_tree', description: 'Bounded-depth directory tree under a path (default max_entries 120, ceiling 400).', parameters: { type: 'object', properties: { path: { type: 'string' }, depth: { type: 'integer', minimum: 1 }, max_entries: { type: 'integer', minimum: 1 } }, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_stat', description: 'Return type, size, and mtime for one path.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
   { type: 'function', function: { name: 'workshop_file_hash', description: 'Return SHA-256 of one text file under Workshop limits.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
@@ -67,8 +67,23 @@ const BY_NAME = new Map([MOVE_TOOL, ...B1_TOOLS, ...FIXTURE_TOOLS, ...WORKSHOP_T
 export const TOOL_NAMES = new Set(BY_NAME.keys());
 export const WORKSHOP_TOOL_NAMES = WORKSHOP_TOOLS.map(tool => tool.function.name);
 
-export function schemasForTools(toolNames) {
-  return toolNames.map(name => BY_NAME.get(name)).filter(Boolean);
+export function schemasForTools(toolNames, { workshopMaxLines = null, workshopMaxResults = null } = {}) {
+  return toolNames.map(name => {
+    const schema = BY_NAME.get(name);
+    if (!schema) return null;
+    if (name === 'workshop_read' && Number.isInteger(workshopMaxLines)) {
+      const copy = structuredClone(schema);
+      copy.function.parameters.properties.line_count.maximum = workshopMaxLines;
+      copy.function.description = `Read an exact bounded contiguous source line range. line_count maximum is ${workshopMaxLines}; the result reports total_lines and next_start_line when more remains.`;
+      return copy;
+    }
+    if (['workshop_search', 'workshop_search_regex', 'workshop_glob'].includes(name) && Number.isInteger(workshopMaxResults)) {
+      const copy = structuredClone(schema);
+      copy.function.parameters.properties.max_results.maximum = workshopMaxResults;
+      return copy;
+    }
+    return schema;
+  }).filter(Boolean);
 }
 
 /** @deprecated Prefer schemasForSession */
@@ -119,13 +134,21 @@ export function residentToolProfile(world, sessionId) {
   return { names, activeGroup, completeCount: available.length, omittedCount: available.length - names.length };
 }
 
-export function schemasForResidentSession(world, sessionId) {
-  return schemasForTools(residentToolProfile(world, sessionId).names);
+export function schemasForResidentSession(world, sessionId, limits = {}) {
+  return schemasForTools(residentToolProfile(world, sessionId).names, limits);
 }
 
-export function toolCatalogEntries(toolNames) {
+export function toolCatalogEntries(toolNames, { immediatelyCallable = toolNames } = {}) {
+  const callable = new Set(immediatelyCallable);
   return toolNames.filter(name => name.startsWith('workshop_')).map(name => {
     const schema = BY_NAME.get(name);
-    return { name, description: schema?.function?.description || '', approvalClass: TOOL_APPROVAL_CLASS[name] || 'auto' };
+    return {
+      name,
+      description: schema?.function?.description || '',
+      approvalClass: TOOL_APPROVAL_CLASS[name] || 'auto',
+      installed: true,
+      immediatelyCallable: callable.has(name),
+      ...(callable.has(name) ? {} : { unavailableReason: 'Engage the fixture that owns this capability to fit it on the next provider phase.' }),
+    };
   });
 }

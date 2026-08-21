@@ -132,7 +132,7 @@ Exhale material occupies a named bounded Glass item below stable ground and cont
 
 The Result trail sign uses restrained clinical language. A semantic Forest packet, when later enabled, uses the quiet heading `A breath from the Forest`, event-time attribution, and exact quoted atoms. Resident-visible text contains no retrieval score, hidden query, receipt JSON, or assertion that an atom is true.
 
-An Exhale is selected at most once for the causal response to one human turn. Tool-loop continuations carry the same exact already-exposed packet only when required for causal continuity; they do not run the selector again. A later independent response begins with no inherited Exhale unless a new crossing lawfully selects one.
+An Exhale is selected at most once for the causal response to one human turn. Recoverable Result Exhale presents the full trail-sign set once; later tool-loop continuations carry one deterministic exact-pointer continuation marker rather than replaying every full sign. Semantic tool-loop continuations may carry the same exact already-exposed packet only when required for causal continuity; they do not run the selector again. A later independent response begins with no inherited Exhale unless a new crossing lawfully selects one.
 
 ## 6. Shadow stage
 

@@ -136,7 +136,7 @@ V1 exposes:
 
 Tool availability is derived from current World state. A Workshop tool requested from the Center is rejected even if the model remembers its schema from earlier context. A non-existent or non-adjacent door is rejected. Rejections are bounded, attributable, and cause no state change.
 
-The host supports bounded tool rounds within one human wake. `HUB_MAX_TOOL_ROUNDS=N` permits up to N committed tool-action rounds followed by one final provider turn for a resident response. A tool call on that final opportunity is refused and the wake fails honestly; no completion is fabricated. Each model tool-call message, host result, changed room projection, and final resident utterance enters history in exact order.
+The host supports bounded tool rounds within one human wake. Under the later [`WORKSHOP_USABILITY_V2.md`](WORKSHOP_USABILITY_V2.md) revision, `HUB_MAX_TOOL_ROUNDS=N` permits up to N committed tool-action rounds with a visible remaining-action budget, followed by one schema-free provider turn reserved for a Resident response. A tool call emitted despite that absent mount is refused and the wake fails honestly; no completion is fabricated. Each model tool-call message, host result, changed room projection, and final Resident utterance enters history in exact order.
 
 ## Read-only Workshop boundary
 

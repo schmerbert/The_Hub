@@ -22,6 +22,18 @@ function providerCancellation() {
   return { code: 'provider_cancelled', message: 'Hub shutdown cancelled the active provider request.' };
 }
 
+function renderToolRoundBudget({ used, remaining, limit, finalOpportunity = false }) {
+  const actionState = finalOpportunity
+    ? 'This is the reserved final response opportunity. No action schemas are available; provide the final response now.'
+    : 'The resident may request bounded actions in this continuation.';
+  return [
+    'Workshop action budget (host receipt):',
+    `action rounds used: ${used}; action rounds remaining: ${remaining}; configured action-round limit: ${limit}.`,
+    actionState,
+    'This budget is a host boundary, not a resident instruction or an action authority.',
+  ].join(' ');
+}
+
 function awaitProviderWithAbort(operation, signal) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -288,8 +300,9 @@ export class WakeService {
     const callPhase = async (phase, historyRows, options = {}) => {
       if (this.closing) throw providerCancellation();
       const thinking = options.orientation ? 'disabled' : config.thinking;
-      const tools = options.orientation ? [HEARTH_TOOL] : [...(options.tools || [])];
-      if (!options.orientation && !tools.some(tool => tool?.function?.name === RESULT_REOPEN_TOOL_NAME)) tools.push(REOPEN_RESULT_TOOL);
+      const toolsDisabled = options.toolsDisabled === true;
+      const tools = options.orientation ? [HEARTH_TOOL] : toolsDisabled ? [] : [...(options.tools || [])];
+      if (!options.orientation && !toolsDisabled && !tools.some(tool => tool?.function?.name === RESULT_REOPEN_TOOL_NAME)) tools.push(REOPEN_RESULT_TOOL);
       const continuityMode = options.orientation ? 'pending' : options.causalHearth ? 'causal_hearth' : 'none';
       let omissionPlan = options.orientation
         ? { omissions: [], manifest: [], omittedExchangeCount: 0, omittedMessageCount: 0, disclosure: null }
@@ -329,9 +342,13 @@ export class WakeService {
         message: { role: 'system', content: renderOrientationGround({ completed: true }) },
       });
       if (options.roomPresence !== false) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: world.presenceMessage(created.sessionId) } });
-      if (options.toolProfile?.omittedCount) {
+      if (options.toolProfile?.omittedCount && !toolsDisabled) {
         currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: renderToolAttentionGround(options.toolProfile) } });
       }
+      if (options.toolRoundBudget) currentGround.push({
+        kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null,
+        message: { role: 'system', content: renderToolRoundBudget(options.toolRoundBudget) },
+      });
       if (omissionPlan.disclosure) currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: omissionPlan.disclosure } });
       for (const sign of omissionPlan.trailSigns || []) currentGround.push({
         ...sign,
@@ -418,7 +435,7 @@ export class WakeService {
       const groundWitnesses = {
         crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
         world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
-        tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
+        tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
         attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground']) },
         continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
       };
@@ -434,7 +451,13 @@ export class WakeService {
           const isReopen = ref.kind === 'tool_result' && ref.historyId && db.getHostReturnScrubReceipt(ref.scrubReceiptId)?.receipt?.toolName === RESULT_REOPEN_TOOL_NAME;
           if (!isTrail && !isReopen) return [];
           const pointer = isTrail ? ref.receipt.pointer : recoverablePointerFromHostReceipt(db.getHostReturnScrubReceipt(ref.scrubReceiptId), { sessionId: created.sessionId });
-          const packet = { kind: ref.kind, messageHash: sha256(JSON.stringify(ref.message)), ...(pointer ? { pointer } : {}) };
+          const packet = {
+            kind: ref.kind,
+            messageHash: sha256(JSON.stringify(ref.message)),
+            ...(pointer ? { pointer } : {}),
+            ...(ref.markerKind ? { markerKind: ref.markerKind } : {}),
+            ...(Array.isArray(ref.pointers) ? { pointers: ref.pointers } : {}),
+          };
           return [db.roots.recordAttentionExposure({
             sessionId: created.sessionId, wakeId: created.wakeId, phase, exposureKind: isTrail ? 'result_trail_sign' : 'result_reopen', pointer,
             packet, glassBand: glassItem?.band || 'living_edge', glassOrdinal: glassItem?.ordinal || ordinal,
@@ -575,13 +598,23 @@ export class WakeService {
     };
     const runResidentRounds = async (phase = 'response', options = {}) => {
       for (let round = 0; round <= config.maxToolRounds; round += 1) {
+        const finalOpportunity = round === config.maxToolRounds;
         const fittedProfile = residentToolProfile(world, created.sessionId);
         const toolProfile = {
           ...fittedProfile,
           names: [...fittedProfile.names, RESULT_REOPEN_TOOL_NAME],
           completeCount: fittedProfile.completeCount + 1,
         };
-        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), { tools: [...schemasForResidentSession(world, created.sessionId), REOPEN_RESULT_TOOL], toolProfile, ...options });
+        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), {
+          ...options,
+          tools: finalOpportunity ? [] : [...schemasForResidentSession(world, created.sessionId, {
+            workshopMaxLines: config.workshopMaxLines,
+            workshopMaxResults: config.workshopMaxResults,
+          }), REOPEN_RESULT_TOOL],
+          toolsDisabled: finalOpportunity,
+          toolProfile,
+          toolRoundBudget: { used: round, remaining: Math.max(config.maxToolRounds - round, 0), limit: config.maxToolRounds, finalOpportunity },
+        });
         const calls = Array.isArray(response.result?.message?.tool_calls) ? response.result.message.tool_calls : [];
         if (!calls.length) {
           if (!response.result || typeof response.result.content !== 'string' || !response.result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };

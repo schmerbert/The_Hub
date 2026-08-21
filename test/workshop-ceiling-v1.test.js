@@ -146,6 +146,10 @@ test('recipes list/run/cancel and catalog/approval_list', async () => {
     assert.equal(cancel.result.cancelled, false);
     const catalog = await gateway.execute({ sessionId: 'life', wakeId: 'w4', intent: { id: '4', type: 'function', function: { name: 'workshop_tool_catalog', arguments: '{}' } } });
     assert.ok(catalog.result.tools.length >= WORKSHOP_TOOL_NAMES.length);
+    assert.equal(catalog.result.repository.kind, 'workshop_overview');
+    assert.equal(catalog.result.location, 'room.workshop');
+    assert.ok(catalog.result.tools.some(tool => tool.name === 'workshop_tool_catalog' && tool.installed && tool.immediatelyCallable));
+    assert.ok(catalog.result.tools.some(tool => tool.name === 'workshop_read' && tool.installed && !tool.immediatelyCallable));
     const approvals = await gateway.execute({ sessionId: 'life', wakeId: 'w5', intent: { id: '5', type: 'function', function: { name: 'workshop_approval_list', arguments: '{}' } } });
     assert.equal(approvals.result.kind, 'workshop_approval_list');
   } finally { world.close(); await rm(dir, { recursive: true, force: true }); }

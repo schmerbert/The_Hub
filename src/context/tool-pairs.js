@@ -1,19 +1,28 @@
 import { sha256 } from '../core/hash.js';
-import { buildResultTrailSign, RESULT_REOPEN_TOOL_NAME, RESULT_TRAIL_SIGN_LIMIT } from './result-exhale.js';
+import { buildResultTrailContinuationMarker, buildResultTrailSign, RESULT_REOPEN_TOOL_NAME, RESULT_TRAIL_SIGN_LIMIT } from './result-exhale.js';
 
 function parseMessage(row) {
   try { return JSON.parse(row.messageJson); } catch { return null; }
+}
+
+function hasNonHearthToolContinuation(historyRows, currentWakeId) {
+  return historyRows.some(row => {
+    if (row?.wakeId !== currentWakeId || row?.messageKind !== 'assistant_tool_call') return false;
+    const message = parseMessage(row);
+    return (message?.tool_calls || []).some(call => call?.function?.name && call.function.name !== 'tend_hearth');
+  });
 }
 
 /**
  * Selects only completed tool exchanges from older wakes. The source history is
  * never changed; callers pass the returned whole-message omissions through Scrub.
  */
-export function planOldToolExchangeOmissions(historyRows, { currentWakeId, retainExchanges = 2, sourceOffset = 1, pointerResolver = null, maxTrailSigns = RESULT_TRAIL_SIGN_LIMIT } = {}) {
+export function planOldToolExchangeOmissions(historyRows, { currentWakeId, retainExchanges = 2, sourceOffset = 1, pointerResolver = null, maxTrailSigns = RESULT_TRAIL_SIGN_LIMIT, trailSignContinuation = null } = {}) {
   if (!Array.isArray(historyRows)) throw new Error('Tool exchange history must be an array.');
   if (!Number.isInteger(retainExchanges) || retainExchanges < 0) throw new Error('Retained tool exchanges must be a non-negative integer.');
   if (pointerResolver !== null && typeof pointerResolver !== 'function') throw new Error('Result pointer resolver must be a function.');
   if (!Number.isInteger(maxTrailSigns) || maxTrailSigns < 0) throw new Error('Trail-sign ceiling must be a non-negative integer.');
+  if (trailSignContinuation !== null && typeof trailSignContinuation !== 'boolean') throw new Error('Trail-sign continuation must be a boolean when provided.');
   const completed = [];
   for (let index = 0; index < historyRows.length; index += 1) {
     const assistantRow = historyRows[index];
@@ -52,13 +61,27 @@ export function planOldToolExchangeOmissions(historyRows, { currentWakeId, retai
     messageHashes: [group.assistantIndex, ...group.resultIndexes].map(index => sha256(historyRows[index].messageJson)),
     ...(pointerResolver ? { pointers: group.pointers } : {}),
   }));
-  const trailSigns = omitted.flatMap(group => group.pointers || []).slice(0, maxTrailSigns).map((pointer, index) => buildResultTrailSign(pointer, { ordinal: index + 1 }));
+  const trailPointers = omitted.flatMap(group => group.pointers || []).slice(0, maxTrailSigns);
+  // Wake orchestration may provide explicit phase state. Until it does, the
+  // current-wake history is enough to identify a later non-Hearth tool phase:
+  // the first response has no resident tool call yet, while every continuation
+  // has one. This keeps the planner deterministic and fail-closed.
+  const continuation = trailSignContinuation === null
+    ? hasNonHearthToolContinuation(historyRows, currentWakeId)
+    : trailSignContinuation;
+  const trailSigns = continuation
+    ? (trailPointers.length ? [buildResultTrailContinuationMarker(trailPointers, { ordinal: 1 })] : [])
+    : trailPointers.map((pointer, index) => buildResultTrailSign(pointer, { ordinal: index + 1 }));
   return {
     omissions,
     manifest,
     omittedExchangeCount: omitted.length,
     omittedMessageCount: sourceIndexes.length,
     trailSigns,
+    trailSignPresentation: {
+      mode: continuation ? 'continuation_marker' : 'initial_full_signs',
+      pointerCount: trailPointers.length,
+    },
     recoverable: pointerResolver ? omitted.every(group => group.pointers.length === group.resultIndexes.length) : null,
     disclosure: omitted.length
       ? `Attention disclosure: ${omitted.length} older completed tool exchange${omitted.length === 1 ? '' : 's'} omitted through declared Scrub whole-message omissions; exact session history remains in host custody.`

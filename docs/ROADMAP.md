@@ -49,7 +49,7 @@ Run the source-exact Forest selector over eligible real turns without placing it
 Owner: Forest candidate contract, Context Exhale projector, Roots exposure custody
 Gate: explicit reviewed transition from shadow to live; custody tests alone are insufficient
 
-### 4. Workshop continuation boundary
+### 4. Workshop continuation boundary — implemented
 
 Make bounded tool rounds legible from inside:
 
@@ -62,6 +62,7 @@ Make bounded tool rounds legible from inside:
 The limit remains protective. The revision makes the boundary inhabitable rather than surprising.
 
 Owners: wake orchestration, Workshop action loop, Resident presentation
+Owning revision: [`WORKSHOP_USABILITY_V2.md`](specs/WORKSHOP_USABILITY_V2.md)
 
 ### 5. Truthful Hearth inspection
 

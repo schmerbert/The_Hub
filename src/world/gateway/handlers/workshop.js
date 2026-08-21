@@ -1,4 +1,4 @@
-import { toolCatalogEntries } from '../../tools.js';
+import { residentToolProfile, toolCatalogEntries } from '../../tools.js';
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 function outcome(result, source = null) { return { result, source, changedRoom: false }; }
@@ -39,7 +39,20 @@ export const WORKSHOP_HANDLERS = Object.freeze({
     return outcome({ kind: 'workshop_approval_status', approvals: world.listApprovals(sessionId) });
   },
   workshop_approval_list: ({ world, sessionId, args }) => outcome({ kind: 'workshop_approval_list', approvals: world.listApprovals(sessionId, { pendingOnly: Boolean(args.pending_only) }) }),
-  workshop_tool_catalog: ({ world, sessionId }) => outcome({ kind: 'workshop_tool_catalog', tools: toolCatalogEntries(world.availableTools(sessionId)) }),
+  workshop_tool_catalog: ({ world, workshop, sessionId }) => {
+    const profile = residentToolProfile(world, sessionId);
+    const projection = world.projection(sessionId);
+    return outcome({
+      kind: 'workshop_tool_catalog',
+      location: projection.roomId,
+      engagedFixtureId: projection.engagedFixtureId || null,
+      activeGroup: profile.activeGroup,
+      installedCount: profile.completeCount,
+      immediatelyCallableCount: profile.names.filter(name => name.startsWith('workshop_')).length,
+      tools: toolCatalogEntries(world.availableTools(sessionId), { immediatelyCallable: profile.names }),
+      repository: workshop.overview(),
+    });
+  },
   workshop_apply_patch: ({ workshop, sessionId, wakeId, args, pendingConfirm }) => {
     const preview = workshop.previewPatch(args.path, args.old_text, args.new_text);
     return approvalOutcome(pendingConfirm(sessionId, wakeId, 'patch', { path: args.path, oldText: args.old_text, newText: args.new_text }, preview, 'workshop_apply_patch'));
