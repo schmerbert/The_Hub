@@ -48,7 +48,7 @@ export function readConfig(env = process.env) {
     forestActive: env.HUB_FOREST_ACTIVE === 'true',
     port: integer(env, 'HUB_PORT', 3000, { min: 0, max: 65535 }),
     messageCeiling: integer(env, 'HUB_MESSAGE_CEILING', 20, { min: 1 }),
-    hearthScrollBudget: integer(env, 'HUB_HEARTH_SCROLL_BUDGET', 3000, { min: 1 }),
+    hearthScrollBudget: integer(env, 'HUB_HEARTH_SCROLL_BUDGET', 12000, { min: 1 }),
     hearthExcerptLimit: integer(env, 'HUB_HEARTH_EXCERPT_LIMIT', 600, { min: 1 }),
     maxMessageLength: integer(env, 'HUB_MAX_MESSAGE_LENGTH', 4000, { min: 1 }),
     maxBodyBytes: integer(env, 'HUB_MAX_BODY_BYTES', 10000, { min: 1 }),

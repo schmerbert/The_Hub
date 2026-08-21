@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createHub } from '../src/server/app.js';
 import { WorldGraphStore } from '../src/world/graph.js';
 import { hearthTopologyEventPayload } from '../src/world/topology-hearth.js';
-import { renderHearthPacket, SILVER_BULLET_ONE } from '../src/hearth/packet.js';
+import { renderHearthPacket, SILVER_BULLET_ONE, SILVER_BULLET_TWO, SILVER_BULLET_THREE } from '../src/hearth/packet.js';
 
 test('Hearth extension preserves B1 ancestry and starts new lifespans in the House', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-house-hearth-world-'));
@@ -44,19 +44,21 @@ test('Hearth migration is backup-gated, append-only, and does not relocate an ex
   } finally { current.close(); await rm(dir, { recursive: true, force: true }); }
 });
 
-test('Hearth packet shows one occupied bullet and no blank placeholders', () => {
+test('Hearth packet shows three occupied bullets and no blank placeholders', () => {
   const packet = renderHearthPacket({ atoms: [], priorHorizon: { omittedEarlierCount: 0 }, budgetBytes: 3000 });
   assert.match(packet.markdown, /^# Hearth/);
   assert.match(packet.markdown, /## Ember/);
   assert.match(packet.markdown, /## Silver Bullets/);
   assert.match(packet.markdown, new RegExp(SILVER_BULLET_ONE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(packet.markdown, new RegExp(SILVER_BULLET_TWO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(packet.markdown, new RegExp(SILVER_BULLET_THREE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(packet.markdown, /Slot Two|blank|Threads|Longshore Current/);
   assert.equal(packet.receipt.silverBulletSlots.count, 10);
-  assert.equal(packet.receipt.silverBulletSlots.occupied.length, 1);
-  assert.equal(packet.receipt.silverBulletSlots.blank, 9);
+  assert.equal(packet.receipt.silverBulletSlots.occupied.length, 3);
+  assert.equal(packet.receipt.silverBulletSlots.blank, 7);
 });
 
-test('first wake stands before the Hearth, receives it causally once, and later wakes do not reinject it', async () => {
+test('first wake receives the full Hearth causally and later wakes carry only the Silver Bullet holster under Glass', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hub-house-hearth-wake-'));
   const hub = createHub({ env: { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: join(dir, 'hub.sqlite'), HUB_SPINE_PATH: join(dir, 'spine.jsonl'), HUB_WORLD_PATH: join(dir, 'world.sqlite'), HUB_FOREST_PATH: join(dir, 'forest.sqlite'), HUB_RESULT_PATH: join(dir, 'results.sqlite') } });
   try {
@@ -71,7 +73,12 @@ test('first wake stands before the Hearth, receives it causally once, and later 
     const later = await hub.wake('Continue from here.');
     assert.equal(later.status, 'committed');
     const ordinary = JSON.parse(later.phases[0].requestBody).messages;
-    assert.equal(ordinary.filter(message => message.role === 'system' && (message.content || '').includes(SILVER_BULLET_ONE)).length, 0);
+    assert.match(ordinary[1].content, /^# Holster/);
+    assert.match(ordinary[1].content, new RegExp(SILVER_BULLET_ONE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(ordinary[1].content, new RegExp(SILVER_BULLET_TWO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(ordinary[1].content, new RegExp(SILVER_BULLET_THREE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(ordinary[1].content, /## Ember|Past Session/);
     assert.equal(later.phases[0].glassCast.receipt.cast.bands[1].mode, 'none');
+    assert.equal(later.phases[0].glassCast.receipt.cast.bands[1].itemCount, 1);
   } finally { await hub.close(); await rm(dir, { recursive: true, force: true }); }
 });

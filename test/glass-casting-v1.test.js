@@ -163,8 +163,10 @@ test('runtime persists exact casts, promotes Hearth inheritance once, and keeps 
     assert.equal(later.status, 'committed');
     const ordinary = later.phases[0];
     const direct = ordinary.glassCast.receipt;
-    assert.equal(direct.cast.bands[1].state, 'empty');
+    assert.equal(direct.cast.bands[1].state, 'present');
     assert.equal(direct.cast.bands[1].mode, 'none');
+    assert.equal(direct.cast.bands[1].itemCount, 1);
+    assert.equal(direct.cast.bands[1].items[0].kind, 'silver_bullet_holster');
     const ordinaryMessages = JSON.parse(ordinary.requestBody).messages;
     assert.equal(ordinaryMessages.some(message => message.role === 'tool' && message.content.startsWith('# Wake inheritance')), false);
     assert.equal(ordinaryMessages.some(message => message.tool_calls?.some(call => call.function?.name === 'tend_hearth')), false);

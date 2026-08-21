@@ -522,7 +522,7 @@ export class HubDatabase {
       else if (ref.historyId) source = { authority: 'Session Scroll', historyId: ref.historyId, sessionId: ref.historySessionId, ordinal: ref.historyOrdinal, sourceEventId: ref.sourceEventId || null, messageHash: ref.historyMessageHash };
       else if (ref.sourceEventId || ref.glassSourceEventId) source = { authority: 'Source', eventId: ref.sourceEventId || ref.glassSourceEventId, contentHash: ref.sourceContentHash || null };
       else {
-        const receipt = groundReceipts[groundKind(ref.kind) || (['clinical_wake_anchor', 'prior_horizon'].includes(ref.kind) ? 'continuity_ground' : 'attention')];
+        const receipt = groundReceipts[groundKind(ref.kind) || (['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster'].includes(ref.kind) ? 'continuity_ground' : 'attention')];
         if (!receipt) throw Object.assign(new Error(`Glass source ${sourceIndex} has no resolvable witness.`), { code: 'glass_trace_invalid' });
         source = { authority: 'glass_ground_receipt', kind: receipt.receipt.kind, receiptId: receipt.receiptId, receiptHash: receipt.receiptHash };
       }
@@ -552,6 +552,16 @@ export class HubDatabase {
     try { receipt = JSON.parse(row.returnJson); } catch { return null; }
     if (receipt?.kind !== 'glass_wake_inheritance' || receipt?.schemaVersion !== 1 || receipt?.wakeAnchor?.text === undefined || !Array.isArray(receipt.atoms) || !receipt.priorHorizon) return null;
     return { wakeAnchor: receipt.wakeAnchor, atoms: receipt.atoms, priorHorizon: receipt.priorHorizon };
+  }
+
+  getSessionSilverBulletHolster(sessionId = this.session.id) {
+    const row = this.sqlite.prepare(`SELECT return_json AS returnJson FROM hearth_receipts WHERE session_id=? ORDER BY created_at,id LIMIT 1`).get(sessionId);
+    if (!row) return null;
+    let receipt;
+    try { receipt = JSON.parse(row.returnJson); } catch { return null; }
+    const slots = receipt?.silverBulletSlots;
+    if (receipt?.kind !== 'house_hearth_packet' || receipt?.schemaVersion !== 1 || slots?.count !== 10 || !Array.isArray(slots.occupied)) return null;
+    return structuredClone(slots);
   }
 
   completeProviderRequest(requestId, result, outcome = null, returnScrub = null) {

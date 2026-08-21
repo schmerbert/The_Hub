@@ -1,6 +1,7 @@
 /** Host-authored words which may enter Resident attention. */
 export const RESIDENT_PRESENTATION_CATALOG = Object.freeze({
   stable_glass: { owner: 'src/context/glass-cast.js', when: 'every provider call', why: 'stable World ground and epistemic boundaries', register: 'clinical_backplate' },
+  silver_bullet_holster: { owner: 'src/hearth/packet.js', when: 'after the Hearth has been tended', why: 'carry only the Resident-forged ten-slot holster above the rolling fold', register: 'continuity' },
   crossing_ground: { owner: 'src/context/resident-presentation.js', when: 'every provider call', why: 'locate the present activation without exposing transport machinery', register: 'experiential_ground' },
   orientation_ground: { owner: 'src/context/resident-presentation.js', when: 'first call and causal return', why: 'make tending the Hearth the first situated action', register: 'experiential_ground' },
   world_current_ground: { owner: 'src/world/graph.js#presenceMessage', when: 'when room presence is requested', why: 'project verified current World state', register: 'clinical_world_projection' },

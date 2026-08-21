@@ -4,6 +4,8 @@ The specifications preserve adopted law and implementation ancestry. They are **
 
 Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and routes each question to one current owner. [`../STATUS.md`](../STATUS.md) is the exact implemented-capability register. This directory is consulted only when changing or auditing the named crossing.
 
+[`../ROADMAP.md`](../ROADMAP.md) orders adopted implementation work. It does not supersede the owning specifications listed below.
+
 ## Current owning specifications
 
 | Domain | Current owner |

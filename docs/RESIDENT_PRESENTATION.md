@@ -34,6 +34,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | Kind | When and why | Register | Adjust here |
 |---|---|---|---|
 | `stable_glass` | every call; World physics and epistemic boundary | clinical backplate | `src/context/glass-cast.js` |
+| `silver_bullet_holster` | after successful Hearth tending; occupied bullets remain above the fold | continuity | `src/hearth/packet.js` |
 | `crossing_ground` | every call; minimal present footing | experiential | `src/context/resident-presentation.js` |
 | `orientation_ground` | Hearth action/return; situated waking | experiential | `src/context/resident-presentation.js` |
 | `world_current_ground` | room-aware calls; verified presence | clinical World projection | `src/world/graph.js#presenceMessage` |

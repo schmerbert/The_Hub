@@ -279,6 +279,7 @@ export class WakeService {
     }
     db.markCalling(created.wakeId);
     let wakeInheritance = null;
+    let silverBulletHolster = firstTurn ? null : db.getSessionSilverBulletHolster(created.sessionId);
     const callPhase = async (phase, historyRows, options = {}) => {
       if (this.closing) throw providerCancellation();
       const thinking = options.orientation ? 'disabled' : config.thinking;
@@ -345,6 +346,7 @@ export class WakeService {
           inheritance: options.inheritance || wakeInheritance,
           continuityMode,
           priorHorizon: (options.inheritance || wakeInheritance)?.priorHorizon || null,
+          silverBulletHolster,
         });
         const refs = composed.refs;
         const sourceMessages = refs.map(ref => ref.message);
@@ -393,7 +395,7 @@ export class WakeService {
         world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
         tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
         attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground']) },
-        continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'prior_horizon']) },
+        continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
       };
       const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });
       const { persistedGlass, glassTrace } = db.transaction(() => {
@@ -566,6 +568,7 @@ export class WakeService {
         const inheritance = buildGlassWakeInheritance({ prior, forest, budgetBytes: config.hearthScrollBudget, excerptLimitUtf16: config.hearthExcerptLimit, sourceAncestry: { orientationSpineRecordId: orientation.requestFrame?.record_id || null, orientationReturnScrub: orientation.returnScrub.receipt } });
         wakeInheritance = { wakeAnchor: inheritance.receipt.wakeAnchor, atoms: inheritance.atoms, priorHorizon: inheritance.priorHorizon };
         const packet = renderHearthPacket({ atoms: inheritance.atoms, priorHorizon: inheritance.priorHorizon, selection: inheritance.receipt.selection, budgetBytes: config.hearthScrollBudget });
+        silverBulletHolster = packet.receipt.silverBulletSlots;
         const hearthScrub = scrubHostReturn({ toolName: 'tend_hearth', toolCallId: action.toolCallId, arguments: {}, result: { markdown: packet.markdown, hearthPacket: packet.receipt }, content: packet.markdown, renderPolicy: 'house_hearth_packet_markdown_v1' });
         const hearthReturnRecord = db.recordHearthReturn({ wakeId: created.wakeId, sessionId: created.sessionId, toolCallId: action.toolCallId, returnValue: packet.receipt, scrollMarkdown: packet.markdown, scrollHash: packet.markdownHash, actionEventId, returnHash: hearthReturnHash(packet.receipt), hostReturnScrub: hearthScrub });
         this.publish('tool.completed', {

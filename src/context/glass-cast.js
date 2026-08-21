@@ -203,23 +203,38 @@ function priorHorizonBand(priorHorizon = null) {
   });
 }
 
-export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = [], inheritance = null, continuityMode = 'direct', priorHorizon = null } = {}) {
+function holsterRef(holster) {
+  if (!holster) return null;
+  if (holster.count !== 10 || !Array.isArray(holster.occupied) || holster.occupied.length > holster.count || holster.blank !== holster.count - holster.occupied.length) throw glassError('Silver Bullet holster is invalid.');
+  const bullets = [...holster.occupied].sort((left, right) => left.slot - right.slot);
+  if (new Set(bullets.map(bullet => bullet.slot)).size !== bullets.length) throw glassError('Silver Bullet holster has duplicate slots.');
+  for (const bullet of bullets) if (!Number.isInteger(bullet.slot) || bullet.slot < 1 || bullet.slot > holster.count || typeof bullet.text !== 'string' || !bullet.text || sha256(bullet.text) !== bullet.textHash || typeof bullet.sourceEventId !== 'string' || !bullet.sourceEventId || typeof bullet.adoptionEventId !== 'string' || !bullet.adoptionEventId) throw glassError('Silver Bullet holster custody is invalid.');
+  return {
+    kind: 'silver_bullet_holster', authority: 'model_signed',
+    presentationTransform: 'hearth_holster_projection_v1',
+    message: { role: 'system', content: ['# Holster', ...bullets.flatMap(bullet => ['', `> ${bullet.text}`])].join('\n') },
+  };
+}
+
+export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = [], inheritance = null, continuityMode = 'direct', priorHorizon = null, silverBulletHolster = null } = {}) {
   if (!['orientation', 'response', 'ordinary'].includes(phase)) throw glassError('Glass cast phase is invalid.');
   if (!Array.isArray(livingEdgeRefs) || !Array.isArray(livingEdgeOmissions)) throw glassError('Glass living edge and omissions must be arrays.');
   if (!['pending', 'causal_hearth', 'direct', 'none'].includes(continuityMode)) throw glassError('Glass continuity mode is invalid.');
 
   const glassRef = { kind: 'stable_glass', authority: 'host_ground', message: { role: 'system', content: STABLE_GLASS_TEXT } };
+  const carriedHolsterRef = continuityMode === 'none' ? holsterRef(silverBulletHolster) : null;
   const directContinuityRefs = continuityMode === 'direct' ? continuityRefs(inheritance) : [];
   const providerContinuityRefs = directContinuityRefs.map(ref => ({ ...ref, glassSourceEventId: ref.sourceEventId || null, sourceEventId: null }));
   const priorRef = priorHorizonBand(priorHorizon).items[0];
-  const prefixRefs = [glassRef, ...providerContinuityRefs, ...(continuityMode === 'direct' ? [{ ...priorRef, message: priorRef.message }] : [])];
+  const prefixRefs = [glassRef, ...(carriedHolsterRef ? [carriedHolsterRef] : []), ...providerContinuityRefs, ...(continuityMode === 'direct' ? [{ ...priorRef, message: priorRef.message }] : [])];
   const shiftedOmissions = livingEdgeOmissions.map(omission => {
     if (!omission || !Number.isInteger(omission.sourceIndex) || omission.sourceIndex < 0) throw glassError('Glass living-edge omission index is invalid.');
     return { ...omission, sourceIndex: omission.sourceIndex + prefixRefs.length };
   });
   const refs = [...prefixRefs, ...livingEdgeRefs].map(ref => ({ ...ref, message: structuredClone(ref.message) }));
 
-  const continuityItems = continuityMode === 'direct' ? continuityRefs(inheritance).map((ref, index) => messageItem(ref, { sourceMessageOrdinal: index + 2 })) : [];
+  const continuityRefsForBand = [...(carriedHolsterRef ? [carriedHolsterRef] : []), ...(continuityMode === 'direct' ? continuityRefs(inheritance) : [])];
+  const continuityItems = continuityRefsForBand.map((ref, index) => messageItem(ref, { sourceMessageOrdinal: index + 2 }));
   const causalHearthIndex = continuityMode === 'causal_hearth' ? livingEdgeRefs.findIndex(ref => ref.kind === 'hearth_return') : -1;
   if (continuityMode === 'causal_hearth' && causalHearthIndex < 0) throw glassError('Causal Hearth continuity requires its exact tool result in the living edge.');
   const causalHearthMessage = causalHearthIndex >= 0 ? messageItem(livingEdgeRefs[causalHearthIndex]) : null;
@@ -229,7 +244,7 @@ export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = 
   } : null;
   const bands = [
     band('glass', 'present', [messageItem(glassRef, { sourceMessageOrdinal: 1 })]),
-    band('continuity_anchors', continuityMode === 'direct' ? 'present' : 'empty', continuityItems, {
+    band('continuity_anchors', continuityItems.length ? 'present' : 'empty', continuityItems, {
       mode: continuityMode,
       representedIn: continuityMode === 'causal_hearth' ? 'living_edge_causal_hearth' : continuityMode === 'direct' ? 'continuity_anchors' : null,
       ...(causalHearthMessage ? { livingEdgeMessageIndex: causalHearthIndex, providerMessageOrdinal: prefixRefs.length + causalHearthIndex + 1, livingEdgeMessageSha256: causalHearthMessage.messageSha256 } : {}),
