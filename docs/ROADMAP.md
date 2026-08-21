@@ -23,15 +23,17 @@ After the Hearth is tended, the wake function pins only the occupied ten-slot Si
 Owners: `src/hearth/`, `src/context/`, `src/runtime/`
 Law: [`HOUSE_HEARTH_WAKE_V1.md`](specs/HOUSE_HEARTH_WAKE_V1.md), [`GLASS_CASTING_V1.md`](specs/GLASS_CASTING_V1.md)
 
-### 2. Recoverable Exhale pointers — next
+### 2. Recoverable Exhale pointers — implemented
 
 When a completed tool exchange leaves immediate attention, retain a compact trail sign: action identity, relevant object or path, settlement status, bounded size/description, and stable Result Rack address. A pointer is not the result and grants no action authority.
 
 Add one bounded retrieval crossing through which the Resident deliberately reopens a selected result. Retrieval must preserve exact custody, declare its attention cost, and refuse missing, altered, oversized, or cross-session-ineligible targets.
 
-Owners: Result Rack custody, Session Scroll/Glass presentation, wake orchestration
+Every presented reopening and every later semantic Exhale is retained as a non-respirable Roots exposure artifact. Forest selection has no path into Roots; an exposure receipt or rendered Exhale can never become a Forest candidate merely because it was retained or shown.
+
+Owners: Result Rack custody, Session Scroll/Glass presentation, Roots exposure custody, wake orchestration
 Pressure: the Resident can retain a conclusion while losing access to the evidence that produced it
-Required revision: reconcile [`HEARTH_NOTES_FOREST_EXHALE_V1.md`](specs/HEARTH_NOTES_FOREST_EXHALE_V1.md) with current Glass and Result Rack law before implementation
+Owning revision: [`FOREST_EXHALE_V2.md`](specs/FOREST_EXHALE_V2.md)
 
 ### 3. Natural Hearth-packet fitting
 
@@ -39,6 +41,13 @@ After first breath, keep the causal Hearth action and return in the ordinary rec
 
 Owners: Glass fitting and Session Scroll presentation
 Invariant: no duplicate first-response presentation and no fabricated continuity after omission
+
+### 3a. Semantic Exhale shadow stage
+
+Run the source-exact Forest selector over eligible real turns without placing its packet in Glass or provider attention. Root every candidate set, exclusion, selection, and would-be packet as `shadowed`; review silence, stale standing, vividness bias, missing counterweights, echo, and monoculture before any live semantic breath.
+
+Owner: Forest candidate contract, Context Exhale projector, Roots exposure custody
+Gate: explicit reviewed transition from shadow to live; custody tests alone are insufficient
 
 ### 4. Workshop continuation boundary
 

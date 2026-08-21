@@ -110,6 +110,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | Request-time ground enters Glass | Glass ground receipt + trace manifest | Crossing, World-head/projection, attention, continuity, and Patch Bay/schema receipts | Exact Glass source ordinal |
 | Hearth wake packet leaves immediate use | Roots boundary + atomic Hearth custody | Root artifact, typed wake-packet coordinate, and optional response-Glass edge | Roots only; never ordinary Forest Exhale |
 | Capabilities enter a provider request | Ceiling catalog + room Patch Bay + attention fitting | Exact request body in Spine; mount/profile inspection | Provider-visible tool schemas |
+| A retained-result pointer is deliberately reopened | Universal host continuity schema + Result Rack eligibility/projection gate | Exact pointer/session/limit receipt, non-respirable Roots exposure, host-return Scrub, and Spine continuation | Bounded provider attention; no World action or room authority |
 | Provider bytes return | Capture ceiling + Spine admitted-body append | Spine raw-return frame and outcome | Provider-return Scrub |
 | Raw provisional fragments seek display | Bounded memory-only collector + provisional cross-fragment Scrub | Coalesced safe wake-journal event, or explicit suppressed-channel event | Corner only |
 | Provider return becomes tool intent or resident speech | Provider-return Scrub | Return Scrub receipt | Gateway or canonical history |
@@ -117,6 +118,8 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | World reality changes | Versioned World event reducer | Hash-linked World event and derived projection pointer | Verified materialized World |
 | World becomes resident-visible ground | Drift verifier + actor-local perception + provider-presentation Scrub | World verification result, Glass source manifest, Scrub receipt, Spine | Glass living edge |
 | Machine result continues the session | Result Rack when fitted + host-return Scrub | Exact result/artifact custody and host-return receipt | Tool-role history |
+| Omitted machine evidence leaves a trail sign | Attention fitting + Result Rack pointer validation + Roots exposure gate | Omission manifest, immutable pointer/hash, and non-respirable exposure artifact bound to Glass/Scrub/Spine | Bounded provider-visible pointer, never the result itself |
+| Selected or reopened evidence enters attention | Exhale projector + Roots exposure gate + Glass/Scrub | Non-respirable exposure artifact joined to exact source, Glass receipt, Scrub receipt, and Spine request | Provider attention only; never automatic Forest intake or action authority |
 | Utterance seeks continuity | Forest Intake Ledger + admission Scrub | Body-free offer, decision history, Scrub receipt, Source link | Home entry or held crossing |
 | Outside source seeks continuity | Forest Intake Ledger + typed Wild admission | Body-free offer, decision history, action/source ancestry | Wild entry or held crossing |
 | Live activity reaches the interface | Append-before-broadcast wake journal | Hash-linked wake event | Corner display |
@@ -174,7 +177,7 @@ These are tracked architecture gaps, not implied capabilities:
 6. Recursive Forest frames, scale-relative Home/Wild relationships, Mycelium, cross-Forest portals, and projection into an experiential `place.forest` do not yet exist. The installed Forest remains one configured custody substrate with its current exact Home and Wild intake laws.
 7. Current Source, Spine, Forest, World, Result Rack, and wake stores do not have application-level encryption at rest. Authentication, sealed-pointer custody, key lifecycle, direct Vault intake, cryptographic erasure, remote-device admission, and independent security review are not installed.
 8. The adopted [`FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md) waterfall and traversal crossings are not installed. Current attention fitting can omit declared older tool exchanges but cannot generate a rolling fold, lay Resident-chosen paths, preserve latent branch offers, enter Forest attention, or walk exact prior conversation terrain through a warm return tether.
-9. Forest Exhale is absent. The provisional collector is installed and safe batches have hash-linked wake-journal custody, but they do not yet carry trace-epoch manifests joining their collector/Scrub disposition to the broader closure calendar.
+9. Recoverable and semantic Exhale are absent. [`FOREST_EXHALE_V2.md`](specs/FOREST_EXHALE_V2.md) now owns the staged pointer, deliberate reopening, Roots exposure, shadow-selector, and anti-recursion law, but no pointer, reopen crossing, exposure artifact, selector, or live packet is installed. The provisional collector is installed and safe batches have hash-linked wake-journal custody, but they do not yet carry trace-epoch manifests joining their collector/Scrub disposition to the broader closure calendar.
 
 Loose wires remain visible until a tested crossing removes them. Documentation must not smooth over them.
 

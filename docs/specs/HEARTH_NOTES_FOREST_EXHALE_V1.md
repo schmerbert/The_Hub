@@ -1,6 +1,6 @@
 # Hearth Notes and Forest Exhale v1
 
-> **Status: Adopted ancestry; Hearth presentation superseded by an unimplemented revision.** [`HOUSE_HEARTH_WAKE_V1.md`](HOUSE_HEARTH_WAKE_V1.md) now owns the adopted literal-Hearth placement, Ember header, Silver Bullet presentation, deterministic prior-session packet, and active relationship to Glass. This document continues to own the deferred semantic Forest Exhale direction where the newer specification does not supersede it. No Hearth-note storage/rendering, selector, exhale presentation, or tests are installed. See [`GLASS_CASTING_V1.md`](GLASS_CASTING_V1.md) and [`../STATUS.md`](../STATUS.md).
+> **Status: Superseded implementation ancestry.** [`HOUSE_HEARTH_WAKE_V1.md`](HOUSE_HEARTH_WAKE_V1.md) owns current Hearth presentation, and [`FOREST_EXHALE_V2.md`](FOREST_EXHALE_V2.md) revises the deferred Exhale direction around current Glass, Result Rack, Session Scroll trace, and Roots law. The source-exact payload, selection/payload separation, and lawful-silence principles remain ancestry; this document is not an implementation authority. See [`../STATUS.md`](../STATUS.md).
 
 This slice adds two small resident-facing crossings without turning memory into narration:
 

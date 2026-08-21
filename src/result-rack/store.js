@@ -270,7 +270,7 @@ export class ResultRackStore {
       const artifact = this.getArtifact(manifest.artifactId);
       assertArtifactIntegrity(artifact, { ...manifest, jobId: row.job_id });
       if (artifact.bodyHash !== row.source_sha256) fail('result_custody_mismatch', 'Pointed Result Rack artifact no longer matches its custody hash.');
-      return { exactPointer, jobId: row.job_id, sourceKind: 'artifact', sourceId: artifact.artifactId, body: artifact.body, bodyHash: artifact.bodyHash };
+      return { exactPointer, jobId: row.job_id, sourceKind: 'artifact', sourceId: artifact.artifactId, body: artifact.body, bodyHash: artifact.bodyHash, sourceHash: artifact.bodyHash };
     }
     const chunks = manifest.chunks.map(expected => {
       const chunk = this.getOutputChunk(expected.chunkId);
@@ -333,6 +333,79 @@ export class ResultRackStore {
       createdAt: row.created_at,
     };
   }
+
+  /**
+   * Resolve a stored projection pointer without exposing the retained raw body.
+   * Result Rack is the sole owner of this crossing: callers receive the exact
+   * already-fitted projection after terminal and source-integrity verification.
+   */
+  reopenProjection(exactPointer, { sessionId, maxBytes = this.projectionMaxBytes, maxLines = this.projectionMaxLines } = {}) {
+    if (typeof exactPointer !== 'string' || !exactPointer.startsWith('result-rack://')) fail('result_pointer_invalid', 'Result reopening requires an exact Result Rack pointer.');
+    if (typeof sessionId !== 'string' || !sessionId) fail('result_session_ineligible', 'Result reopening requires the current session identity.');
+    if (!Number.isInteger(maxBytes) || maxBytes < MIN_PROJECTION_BYTES || maxBytes > this.projectionMaxBytes ||
+      !Number.isInteger(maxLines) || maxLines < 1 || maxLines > this.projectionMaxLines) {
+      fail('result_projection_limit', 'Result reopening ceilings are invalid.');
+    }
+    const row = this.sqlite.prepare(`SELECT projection_id AS projectionId, job_id AS jobId
+      FROM result_projections WHERE exact_pointer=? ORDER BY created_at, projection_id LIMIT 1`).get(exactPointer);
+    if (!row) fail('result_pointer_not_found', 'Result Rack pointer was not found.');
+    const job = this.getJob(row.jobId);
+    if (!job) fail('result_custody_mismatch', 'Result Rack pointer has no job custody.');
+    if (job.sessionId !== sessionId) fail('result_session_ineligible', 'Result Rack pointer belongs to another session.');
+    const projection = this.getProjection(row.projectionId);
+    // getProjection verifies the terminal receipt and projection identity. The
+    // exact read additionally verifies every retained chunk/artifact hash.
+    const exact = this.readExact(exactPointer);
+    if (exact.sourceHash !== projection.sourceHash) fail('result_custody_mismatch', 'Result Rack projection source hash no longer matches its pointer.');
+    if (projection.byteLength > maxBytes || projection.lineCount > maxLines) fail('result_projection_limit', 'Stored Result Rack projection exceeds the reopening ceiling.');
+    return Object.freeze({
+      projectionId: projection.projectionId,
+      jobId: projection.jobId,
+      exactPointer: projection.exactPointer,
+      content: projection.content,
+      contentHash: projection.contentHash,
+      sourceHash: projection.sourceHash,
+      sourceKind: projection.sourceKind,
+      sourceId: projection.sourceId,
+      byteLength: projection.byteLength,
+      lineCount: projection.lineCount,
+      maxBytes: projection.maxBytes,
+      maxLines: projection.maxLines,
+      truncated: projection.truncated,
+      omittedBytes: projection.omittedBytes,
+      omittedLines: projection.omittedLines,
+      sourceManifest: projection.sourceManifest,
+      terminal: projection.sourceManifest.terminal,
+      custody: { exact: true, rawBody: false, generatedSummary: false },
+    });
+  }
+
+  validateProjectionPointer(exactPointer, { sessionId } = {}) {
+    try {
+      const projection = this.reopenProjection(exactPointer, { sessionId });
+      const { content: _content, ...custody } = projection;
+      return custody;
+    } catch (error) {
+      if (error?.code) return null;
+      throw error;
+    }
+  }
+
+  validateProjectionReceipt({ exactPointer, projectionId, projectionHash, sourceHash }, { sessionId } = {}) {
+    if (typeof projectionId !== 'string' || !projectionId || typeof projectionHash !== 'string' || !projectionHash || typeof sourceHash !== 'string' || !sourceHash) return null;
+    try {
+      const projection = this.getProjection(projectionId);
+      if (!projection || projection.exactPointer !== exactPointer || projection.contentHash !== projectionHash || projection.sourceHash !== sourceHash) return null;
+      const job = this.getJob(projection.jobId);
+      if (!job || job.sessionId !== sessionId) return null;
+      const exact = this.readExact(exactPointer);
+      if (exact.sourceHash !== projection.sourceHash) return null;
+      const { content: _content, ...custody } = projection;
+      return custody;
+    } catch (error) {
+      if (error?.code) return null;
+      throw error;
+    }
+  }
   close() { this.sqlite.close(); }
 }
-

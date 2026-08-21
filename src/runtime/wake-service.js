@@ -11,6 +11,10 @@ import { residentToolProfile, schemasForResidentSession } from '../world/tools.j
 import { AttentionMeter } from '../context/attention-meter.js';
 import { renderCrossingGround, renderOrientationGround, renderToolAttentionGround } from '../context/resident-presentation.js';
 import { ProvisionalCollector } from './provisional-collector.js';
+import {
+  REOPEN_RESULT_TOOL, RESULT_REOPEN_TOOL_NAME, parseReopenResultArguments,
+  recoverablePointerFromHostReceipt,
+} from '../context/result-exhale.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -50,6 +54,7 @@ export class WakeService {
     this.spine = spine;
     this.world = world;
     this.gateway = gateway;
+    this.resultRack = gateway?.resultRack || null;
     this.eventBus = eventBus;
     this.attentionMeter = new AttentionMeter({ warnBytes: config.attentionWarnBytes, refuseBytes: config.attentionRefuseBytes });
     this.wakeInProgress = false;
@@ -283,11 +288,23 @@ export class WakeService {
     const callPhase = async (phase, historyRows, options = {}) => {
       if (this.closing) throw providerCancellation();
       const thinking = options.orientation ? 'disabled' : config.thinking;
-      const tools = options.orientation ? [HEARTH_TOOL] : options.tools;
+      const tools = options.orientation ? [HEARTH_TOOL] : [...(options.tools || [])];
+      if (!options.orientation && !tools.some(tool => tool?.function?.name === RESULT_REOPEN_TOOL_NAME)) tools.push(REOPEN_RESULT_TOOL);
       const continuityMode = options.orientation ? 'pending' : options.causalHearth ? 'causal_hearth' : 'none';
       let omissionPlan = options.orientation
         ? { omissions: [], manifest: [], omittedExchangeCount: 0, omittedMessageCount: 0, disclosure: null }
-        : planOldToolExchangeOmissions(historyRows, { currentWakeId: created.wakeId, retainExchanges: config.retainedToolPairs, sourceOffset: 0 });
+        : planOldToolExchangeOmissions(historyRows, {
+          currentWakeId: created.wakeId,
+          retainExchanges: config.retainedToolPairs,
+          sourceOffset: 0,
+          pointerResolver: row => {
+            const persisted = db.getHostReturnScrubReceipt(row?.scrubReceiptId);
+            const pointer = recoverablePointerFromHostReceipt(persisted, { sessionId: created.sessionId });
+            if (!pointer || !this.resultRack) return null;
+            const verified = this.resultRack.validateProjectionReceipt(pointer, { sessionId: created.sessionId });
+            return verified ? { ...pointer, ...verified } : null;
+          },
+        });
       if (continuityMode === 'direct' || continuityMode === 'none') {
         const promotion = planPromotedHearthOmissions(historyRows);
         const byIndex = new Map([...omissionPlan.omissions, ...promotion.omissions].map(item => [item.sourceIndex, item]));
@@ -316,6 +333,13 @@ export class WakeService {
         currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: renderToolAttentionGround(options.toolProfile) } });
       }
       if (omissionPlan.disclosure) currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: omissionPlan.disclosure } });
+      for (const sign of omissionPlan.trailSigns || []) currentGround.push({
+        ...sign,
+        kind: 'result_trail_sign',
+        authority: 'host_receipt',
+        sourceEventId: null,
+        message: structuredClone(sign.message),
+      });
       const assemble = () => {
         const historyRefs = historyRows.map(row => {
           const message = db.projectSessionHistoryMessage(row, {
@@ -334,6 +358,7 @@ export class WakeService {
             historySessionId: row.sessionId,
             historyOrdinal: row.ordinal,
             historyMessageHash: sha256(row.messageJson),
+            scrubReceiptId: row.scrubReceiptId || null,
             message,
           };
         });
@@ -398,11 +423,26 @@ export class WakeService {
         continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
       };
       const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });
-      const { persistedGlass, glassTrace } = db.transaction(() => {
+      const { persistedGlass, glassTrace, exposureArtifacts } = db.transaction(() => {
         const groundReceipts = db.recordGlassGroundReceipts({ providerRequestId: requestId, witnesses: groundWitnesses });
         const persistedGlass = db.recordGlassCastReceipt({ sessionId: created.sessionId, wakeId: created.wakeId, providerRequestId: requestId, receipt: glassReceipt });
         const glassTrace = db.recordGlassTraceManifest({ providerRequestId: requestId, glassCastReceiptId: persistedGlass.receiptId, sourceRefs: refs, presentationReceipt: presentation.receipt, groundReceipts });
-        return { persistedGlass, glassTrace };
+        const glassItems = assembled.glassCast.bands.flatMap(band => band.items.map((item, index) => ({ band: band.name, ordinal: item.sourceMessageOrdinal || index + 1, item })));
+        const exposureRefs = refs.map((ref, index) => ({ ref, ordinal: index + 1, glassItem: glassItems.find(candidate => candidate.item.kind === ref.kind && candidate.item.messageSha256 === sha256(JSON.stringify(ref.message))) }));
+        const exposureArtifacts = exposureRefs.flatMap(({ ref, ordinal, glassItem }) => {
+          const isTrail = ref.kind === 'result_trail_sign' && ref.receipt?.pointer;
+          const isReopen = ref.kind === 'tool_result' && ref.historyId && db.getHostReturnScrubReceipt(ref.scrubReceiptId)?.receipt?.toolName === RESULT_REOPEN_TOOL_NAME;
+          if (!isTrail && !isReopen) return [];
+          const pointer = isTrail ? ref.receipt.pointer : recoverablePointerFromHostReceipt(db.getHostReturnScrubReceipt(ref.scrubReceiptId), { sessionId: created.sessionId });
+          const packet = { kind: ref.kind, messageHash: sha256(JSON.stringify(ref.message)), ...(pointer ? { pointer } : {}) };
+          return [db.roots.recordAttentionExposure({
+            sessionId: created.sessionId, wakeId: created.wakeId, phase, exposureKind: isTrail ? 'result_trail_sign' : 'result_reopen', pointer,
+            packet, glassBand: glassItem?.band || 'living_edge', glassOrdinal: glassItem?.ordinal || ordinal,
+            glassCastReceiptId: persistedGlass.receiptId, glassCastReceiptHash: persistedGlass.receiptHash,
+            scrubReceiptHash: glassReceipt.presentationScrubSha256, spineRecordId: requestFrame.record_id, spineRecordHash: requestFrame.record_hash,
+          })];
+        });
+        return { persistedGlass, glassTrace, exposureArtifacts };
       });
       this.publish('phase.started', {
         sessionId: created.sessionId, wakeId: created.wakeId, phase,
@@ -417,8 +457,10 @@ export class WakeService {
       const onBeforeDispatch = requestFrame ? () => providerCallbacksOpen ? this.registerPresentationBoundary(created.wakeId, requestFrame, requestBodyString, presentation, sourceMessages, presentedRefs) : undefined : undefined;
       const onDispatch = requestFrame ? () => {
         if (!providerCallbacksOpen) return undefined;
+        const attempted = spine.dispatchAttempted(requestFrame.record_id);
+        for (const exposure of exposureArtifacts) db.roots.recordAttentionExposureDisposition({ artifactId: exposure.artifactId, disposition: 'presented', dispatchHash: requestFrame.record_hash });
         dispatchObserved = true;
-        return spine.dispatchAttempted(requestFrame.record_id);
+        return attempted;
       } : undefined;
       const onRawReturn = requestFrame ? detail => {
         if (!providerCallbacksOpen) return rawReturnFrame;
@@ -443,7 +485,11 @@ export class WakeService {
           providerCallbacksOpen = false;
           if (this.activeProviderAbortController === providerAbortController) this.activeProviderAbortController = null;
         }
-        if (requestFrame && !dispatchObserved) { dispatchObserved = true; spine.dispatchAttempted(requestFrame.record_id); }
+        if (requestFrame && !dispatchObserved) {
+          spine.dispatchAttempted(requestFrame.record_id);
+          for (const exposure of exposureArtifacts) db.roots.recordAttentionExposureDisposition({ artifactId: exposure.artifactId, disposition: 'presented', dispatchHash: requestFrame.record_hash });
+          dispatchObserved = true;
+        }
         if (requestFrame && !rawReturnFrame && result) {
           const fallbackMessage = result.message || { role: 'assistant', content: typeof result.content === 'string' ? result.content : null };
           rawReturnFrame = spine.providerRawReturn(requestFrame.record_id, { body: Buffer.from(JSON.stringify({ id: result.responseId || null, model: result.resolvedModel || config.model, choices: [{ message: fallbackMessage, finish_reason: result.finishReason || null }] }), 'utf8'), httpStatus: 200, contentType: 'application/json', phase });
@@ -478,6 +524,9 @@ export class WakeService {
         this.clearSuppressedRequest(requestId);
         return { result, returnScrub, requestFrame, requestId, refs, glassReceipt: { ...persistedGlass, receipt: glassReceipt } };
       } catch (error) {
+        if (!dispatchObserved) for (const exposure of exposureArtifacts) {
+          try { db.roots.recordAttentionExposureDisposition({ artifactId: exposure.artifactId, disposition: 'never_dispatched' }); } catch {}
+        }
         provisionalCollector.discard();
         this.clearSuppressedRequest(requestId);
         const terminalError = providerAbortController.signal.aborted ? providerCancellation() : error;
@@ -487,10 +536,52 @@ export class WakeService {
         throw terminalError;
       }
     };
+    const reopenResult = (call, { requestRecordId = null, spineRecordId = null } = {}) => {
+      let args;
+      try { args = parseReopenResultArguments(call?.function?.arguments || ''); }
+      catch (error) {
+        const result = { ok: false, kind: 'result_reopen', status: 'refused', error: error?.code || 'result_reopen_invalid_arguments', message: error?.message || 'Result reopening arguments were refused.' };
+        const scrub = scrubHostReturn({ toolName: RESULT_REOPEN_TOOL_NAME, toolCallId: call?.id || null, arguments: {}, result, roomId: world.current(created.sessionId).room_node_id, requestRecordId, spineRecordId });
+        return { name: RESULT_REOPEN_TOOL_NAME, result, scrub, resultRack: null, actionReceipt: null, wild: [] };
+      }
+      if (!this.resultRack) {
+        const result = { ok: false, kind: 'result_reopen', status: 'refused', error: 'result_reopen_unavailable', message: 'Result reopening is unavailable because Result Rack custody is not installed.' };
+        const scrub = scrubHostReturn({ toolName: RESULT_REOPEN_TOOL_NAME, toolCallId: call?.id || null, arguments: args, result, roomId: world.current(created.sessionId).room_node_id, requestRecordId, spineRecordId });
+        return { name: RESULT_REOPEN_TOOL_NAME, result, scrub, resultRack: null, actionReceipt: null, wild: [] };
+      }
+      try {
+        const projection = this.resultRack.reopenProjection(args.exactPointer, { sessionId: created.sessionId });
+        const result = {
+          ok: true, kind: 'result_reopen', status: 'reopened', exactPointer: projection.exactPointer,
+          projection: {
+            projectionId: projection.projectionId, content: projection.content, contentHash: projection.contentHash,
+            sourceHash: projection.sourceHash, byteLength: projection.byteLength, lineCount: projection.lineCount,
+            truncated: projection.truncated, omittedBytes: projection.omittedBytes, omittedLines: projection.omittedLines,
+            sourceManifest: projection.sourceManifest,
+          },
+          custody: { exact: true, rawBody: false, generatedSummary: false, actionAuthority: false, forestExhaleEligible: false },
+        };
+        const scrub = scrubHostReturn({ toolName: RESULT_REOPEN_TOOL_NAME, toolCallId: call?.id || null, arguments: args, result,
+          content: projection.content, renderPolicy: 'result_rack_projection_v1', projection: {
+            projectionId: projection.projectionId, content: projection.content, contentHash: projection.contentHash,
+            sourceHash: projection.sourceHash, exactPointer: projection.exactPointer,
+          }, roomId: world.current(created.sessionId).room_node_id, requestRecordId, spineRecordId });
+        return { name: RESULT_REOPEN_TOOL_NAME, result, scrub, resultRack: null, actionReceipt: null, wild: [] };
+      } catch (error) {
+        const result = { ok: false, kind: 'result_reopen', status: 'refused', exactPointer: args.exactPointer, error: error?.code || 'result_reopen_refused', message: error?.message || 'Result reopening was refused.' };
+        const scrub = scrubHostReturn({ toolName: RESULT_REOPEN_TOOL_NAME, toolCallId: call?.id || null, arguments: args, result, roomId: world.current(created.sessionId).room_node_id, requestRecordId, spineRecordId });
+        return { name: RESULT_REOPEN_TOOL_NAME, result, scrub, resultRack: null, actionReceipt: null, wild: [] };
+      }
+    };
     const runResidentRounds = async (phase = 'response', options = {}) => {
       for (let round = 0; round <= config.maxToolRounds; round += 1) {
-        const toolProfile = residentToolProfile(world, created.sessionId);
-        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), { tools: schemasForResidentSession(world, created.sessionId), toolProfile, ...options });
+        const fittedProfile = residentToolProfile(world, created.sessionId);
+        const toolProfile = {
+          ...fittedProfile,
+          names: [...fittedProfile.names, RESULT_REOPEN_TOOL_NAME],
+          completeCount: fittedProfile.completeCount + 1,
+        };
+        const response = await callPhase(phase, db.getSessionHistory(created.sessionId), { tools: [...schemasForResidentSession(world, created.sessionId), REOPEN_RESULT_TOOL], toolProfile, ...options });
         const calls = Array.isArray(response.result?.message?.tool_calls) ? response.result.message.tool_calls : [];
         if (!calls.length) {
           if (!response.result || typeof response.result.content !== 'string' || !response.result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
@@ -525,7 +616,11 @@ export class WakeService {
             payload: this.toolCardPayload(call.id || null, call.function?.name || 'unknown', 'running', { providerRequestId: response.requestId }),
             source: { toolCallEventId, providerRequestId: response.requestId },
           });
-          try { action = await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call }); }
+          try {
+            action = call.function?.name === RESULT_REOPEN_TOOL_NAME
+              ? reopenResult(call, { requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id })
+              : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
+          }
           catch (error) { action = gateway.refuse({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call, error }); }
           const toolName = action.name || call.function?.name || 'unknown';
           const hostEventId = db.recordToolResult({ wakeId: created.wakeId, sessionId: created.sessionId, toolName, result: action.result, hostReturnScrub: action.scrub });

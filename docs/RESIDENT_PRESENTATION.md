@@ -40,6 +40,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | `world_current_ground` | room-aware calls; verified presence | clinical World projection | `src/world/graph.js#presenceMessage` |
 | `tool_current_ground` | fitted actions; what is within reach | experiential disclosure | `src/context/resident-presentation.js` |
 | `attention_current_ground` | declared omission; material left attention but did not vanish | clinical disclosure | `src/context/tool-pairs.js` |
+| `result_trail_sign` | verified omitted tool evidence remains deliberately reopenable | continuity pointer | `src/context/result-exhale.js`, `src/context/tool-pairs.js` |
 | `clinical_wake_anchor` | inherited continuity; bounds ancestry claims | clinical continuity | `src/context/glass-cast.js` |
 | `source_exact_inheritance` | selected atoms; carries attributable voice | continuity | `src/context/glass-cast.js` |
 | `prior_horizon` | inherited continuity; names unseen boundary | clinical disclosure | `src/context/glass-cast.js` |

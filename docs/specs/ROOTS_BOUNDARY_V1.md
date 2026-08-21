@@ -1,6 +1,6 @@
 # Roots Boundary v1
 
-> **Status: Adopted and implemented for House Hearth wake packets and provider reasoning artifacts.** Inherited Hearth packets remain exact; inherited exact reasoning is rooted from its existing provider-return/Scroll evidence without rewriting the historical Scroll.
+> **Status: Adopted and implemented for House Hearth wake packets, provider reasoning artifacts, and Result Exhale attention exposures.** Inherited Hearth packets remain exact; inherited exact reasoning is rooted from its existing provider-return/Scroll evidence without rewriting the historical Scroll. Exposure custody is forward-only and fabricates no history for pre-installation omissions.
 
 ## Promise
 
@@ -27,6 +27,8 @@ The Hearth receipt, Session Scroll tool-result row, host-return Scrub receipt, r
 ## Storage shape
 
 `root_artifacts` is the immutable content-addressed registry. `root_wake_packets` supplies the structured Hearth coordinate. `root_reasoning_artifacts` deduplicates exact provider reasoning by SHA-256 and byte length. `root_edges` connects either artifact to external authorities without copying those authorities. Every Roots table rejects update and deletion.
+
+`root_attention_exposures` coordinates each provider-visible Result trail sign or reopened Result projection with its exact wake, Glass, Scrub, Spine, pointer, projection, and packet hashes. `root_attention_exposure_events` closes the prepared artifact as presented or never dispatched without rewriting it. Exposure payloads declare `respiration: prohibited`, `forestExhaleEligible: false`, and no action authority. Roots never supply these records to a Forest selector or ordinary provider context.
 
 For a new provider assistant return, provider-return Scrub and Spine retain the exact selected return. If it contains `reasoning_content`, Roots stores that text once and appends causal edges to the producing Spine record, wake, and Session Scroll row. The new Scroll row retains visible speech or tool intent plus a typed `reasoning_ref`; it does not duplicate the reasoning body.
 

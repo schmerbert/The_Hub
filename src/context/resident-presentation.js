@@ -7,6 +7,7 @@ export const RESIDENT_PRESENTATION_CATALOG = Object.freeze({
   world_current_ground: { owner: 'src/world/graph.js#presenceMessage', when: 'when room presence is requested', why: 'project verified current World state', register: 'clinical_world_projection' },
   tool_current_ground: { owner: 'src/context/resident-presentation.js', when: 'when actions are fitted', why: 'explain what is presently within reach', register: 'experiential_disclosure' },
   attention_current_ground: { owner: 'src/context/resident-presentation.js and src/context/tool-pairs.js', when: 'when prior material is omitted', why: 'disclose bounded attention without pretending material vanished', register: 'clinical_disclosure' },
+  result_trail_sign: { owner: 'src/context/result-exhale.js', when: 'when a completed Result Rack exchange leaves immediate attention', why: 'retain a bounded deterministic return path without surfacing result content', register: 'exhale_pointer' },
   clinical_wake_anchor: { owner: 'src/context/glass-cast.js', when: 'direct inherited continuity', why: 'bound ancestry claims', register: 'clinical_continuity' },
   source_exact_inheritance: { owner: 'src/context/glass-cast.js', when: 'selected prior atoms', why: 'carry exact attributable voice across sessions', register: 'continuity' },
   prior_horizon: { owner: 'src/context/glass-cast.js', when: 'direct inherited continuity', why: 'make the unseen boundary explicit', register: 'clinical_disclosure' },

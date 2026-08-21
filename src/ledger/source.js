@@ -445,6 +445,19 @@ export class HubDatabase {
     return this.sqlite.prepare('SELECT * FROM host_return_scrub_receipts WHERE id=?').get(receiptId);
   }
 
+  getHostReturnScrubReceipt(receiptId) {
+    if (typeof receiptId !== 'string' || !receiptId) return null;
+    const row = this.sqlite.prepare(`SELECT id,session_id AS sessionId,wake_id AS wakeId,tool_name AS toolName,
+      receipt_json AS receiptJson,result_json AS resultJson,created_at AS createdAt
+      FROM host_return_scrub_receipts WHERE id=?`).get(receiptId);
+    if (!row) return null;
+    try {
+      const receipt = JSON.parse(row.receiptJson); const result = JSON.parse(row.resultJson);
+      if (receipt?.receiptId !== row.id || receipt?.toolName !== row.toolName || receipt?.sourceResultHash !== sha256(row.resultJson)) return null;
+      return { ...row, receipt, result };
+    } catch { return null; }
+  }
+
   recordProviderRequest({ sessionId, wakeId, phase, requestBody, messageSources, spineRecordId, attention = null }) {
     const ordinal = this.sqlite.prepare('SELECT COUNT(*) AS count FROM provider_requests WHERE wake_id=?').get(wakeId).count + 1;
     const requestId = id('provider_request');
@@ -634,6 +647,9 @@ export class HubDatabase {
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(eventId, wake.threadId, wake.sessionId, wakeId, 'resident', 'utterance', response.content, 'model_signed', wake.provider, response.resolvedModel || wake.requestedModel, now());
       this.appendSessionHistory({ sessionId: wake.sessionId, wakeId, message: response.message || { role: 'assistant', content: response.content }, messageKind: 'resident', sourceEventId: eventId, returnScrub: response.returnScrub });
+      const residentHistory = this.sqlite.prepare(`SELECT id,message_json AS messageJson FROM session_history
+        WHERE wake_id=? AND message_kind='resident' AND source_event_id=? ORDER BY ordinal DESC LIMIT 1`).get(wakeId, eventId);
+      if (residentHistory) this.roots.linkAttentionExposuresToScroll({ wakeId, historyId: residentHistory.id, historyHash: sha256(residentHistory.messageJson) });
       this.sqlite.prepare(`UPDATE wakes SET status='committed', resolved_model=?, provider_response_id=?, finish_reason=?, system_fingerprint=?, usage_json=?, completed_at=? WHERE id=?`).run(
         response.resolvedModel || null, response.responseId || null, response.finishReason || null, response.systemFingerprint || null,
         response.usage ? JSON.stringify(response.usage) : null, now(), wakeId);
