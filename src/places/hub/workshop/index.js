@@ -15,5 +15,6 @@ export {
 export { SandboxRecipeRunner } from './sandbox-recipes.js';
 export { applySandboxPromotion } from './promotion.js';
 export { assertWorkshopRepositoryPath, resolveRepositoryPath } from './path-law.js';
+export { ContinuitySeed, createContinuitySeed, defaultSeedStateRoot } from './seed-store.js';
 
 export const WORKSHOP_PACKAGE_VERSION = 2;
