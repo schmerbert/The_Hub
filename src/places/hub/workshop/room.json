@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "apiVersion": "room-installation.v1",
-  "identity": { "id": "room.workshop", "kind": "room", "version": "1.0.0" },
+  "identity": { "id": "room.workshop", "kind": "room", "version": "1.1.0" },
   "status": { "classification": "standing", "autoInstall": false },
   "package": { "entrypoint": "index.js", "declarationExport": "WORKSHOP" },
   "placement": { "requestedParent": "place.hub", "hostOwnsDoor": true },

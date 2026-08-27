@@ -95,6 +95,14 @@ export function listRoomInstallationReceipts(sqlite) {
     .map(({ receipt_json }) => deepFreeze(JSON.parse(receipt_json)));
 }
 
+export function assertValidRoomInstallationReceipt(receipt) {
+  const { receiptId, receiptHash, ...body } = receipt || {};
+  if (!receiptId || !receiptHash || receiptHash !== sha256(canonicalize(body)) || receiptId !== `room_installation_${receiptHash.slice(0, 20)}`) {
+    throw Object.assign(new Error('Room installation receipt hash is invalid.'), { code: 'room_installation_receipt_invalid' });
+  }
+  return receipt;
+}
+
 function epochRow(row) { return { epochId: row.epoch_id, boundaryKind: row.boundary_kind, openedAt: row.opened_at }; }
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {

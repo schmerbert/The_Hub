@@ -1,6 +1,6 @@
 # Forest Exhale v2 — Bounded Breath, Rooted Exposure
 
-> **Status: Recoverable Result Exhale implemented; semantic Forest Exhale staged.** This specification revises the deferred Forest Exhale direction retained by [`HEARTH_NOTES_FOREST_EXHALE_V1.md`](HEARTH_NOTES_FOREST_EXHALE_V1.md) so it fits current Glass, Result Rack, Session Scroll trace, and Roots law. Verified Result Rack trail signs, the universal `reopen_result` crossing, and non-respirable Roots exposure custody are installed. Semantic Forest selection remains uninstalled and shadow-only until its downwind behavior is reviewed and explicitly enabled.
+> **Status: Recoverable Result Exhale and ambient vector-feather shadow selection implemented; live semantic Forest Exhale uninstalled.** This specification revises the deferred Forest Exhale direction retained by [`HEARTH_NOTES_FOREST_EXHALE_V1.md`](HEARTH_NOTES_FOREST_EXHALE_V1.md) so it fits current Glass, Result Rack, Session Scroll trace, and Roots law. Verified Result Rack trail signs, the universal `reopen_result` crossing, non-respirable Roots exposure custody, and the Home-only semantic shadow checkpoint are installed. No semantic Forest feather enters Glass or provider attention until downwind behavior is reviewed and live breathing is explicitly enabled.
 
 ## 1. Pressure and classification
 
@@ -88,6 +88,12 @@ Forest jurisdiction and admission
 
 Ranking cannot grant eligibility, standing, truth authority, action authority, or identity. Weak evidence produces silence.
 
+The installed shadow selector uses the `lexical_anchor/v2` policy. Its boundedness applies to returned candidates, not to a newest-only history horizon. The Forest candidate surface performs an all-Home per-term lookup, records corpus document frequencies, orders term lanes rarest-first, and caps both each lane and the union. An explicit definitional clause such as `what is the faun?` names a focus anchor when that bounded term exists in Home; selected atoms must match the anchor or the decision is silent. Non-focus preamble terms cannot outweigh that anchor.
+
+That policy remains retained as the lexical pressure baseline. Real-session review showed that it reached old terrain and shaped exact packets but overfit phrasing, treated incidental rare terms as anchors, and mistook leaf quotation for the final breath. It is superseded in the active runtime by the v4 ambient vector-feather shadow below.
+
+Rarity-weighted ranking favors concentrated exact matches and gives a small attribution preference to human-authored Marble descriptions without treating them as truth authority. Selection suppresses near-duplicate bodies. The packet contains at most two exact contiguous source spans, at most 1,000 UTF-8 bytes per atom and 1,800 UTF-8 bytes total. Each atom separately retains the admitted source-body hash, exact span coordinates, and exact-span hash. This revises the disproven newest-512 mechanism while preserving deterministic, bounded, Home-only, source-exact selection.
+
 ## 4. Roots exposure custody
 
 Every provider-visible Result trail-sign packet, Result reopening, or semantic Forest Exhale is paired atomically with one immutable Roots artifact of kind `attention_exposure`.
@@ -151,6 +157,47 @@ Shadow review evaluates at least:
 
 Moving from shadow to live semantic Exhale requires an explicit status change and reviewed pressure corpus. Passing custody tests alone is insufficient.
 
+### 6.1 Installed shadow policy
+
+The first installed shadow policy is `semantic_forest_exhale_shadow/v1`. It is a replaceable deterministic lexical/entity baseline, not the final semantic selector and not an embedding claim.
+
+`semantic_forest_exhale_shadow/v2` widened that baseline to all-history rare-term lanes and exact bounded spans. It remains accepted ancestry and a test oracle for exact custody, but it is not the active selector.
+
+### 6.2 Ambient vector-feather selection and live Home Exhale
+
+The active selection witness is `semantic_forest_exhale_shadow/v4` with selector `ambient_vector_feathers/v2`. A nonempty accepted packet is presented under `semantic_forest_exhale_live/v1`.
+
+The Forest owns a separate rebuildable semantic projection store. Each generation binds the immutable source-Forest schema creation identity, local embedding provider, exact model identity, dimensions, normalization, numeric representation, query instruction, and projection policy. Each vector binds one exact Home entry ID, Source event ID, body hash, and projection hash. The store owns no Source text and grants no Forest, attention, truth, path, or action authority.
+
+The initial local runtime uses `Xenova/bge-small-en-v1.5`, 384 normalized dimensions, and quantized local inference through Transformers.js. Ordinary Hub startup refuses remote model resolution. `npm run forest:embeddings:setup` is the explicit model-acquisition operation; no Forest text is sent while acquiring the model or during inference.
+
+Startup warms the model and incrementally fills the active derived generation in the background. A human turn does not wait for initial backfill. Until the generation is ready, shadow selection records lawful `embedding_warming` silence; model or index failure records `embedding_unavailable` silence. Once ready, exact new Home entries are added incrementally before selection.
+
+The first human turn of a lifespan always records `first_turn_quiet` and performs no query: a greeting does not need a blast of Forest continuity. On later turns the current message is embedded and compared with eligible Home projections. The selector retains a bounded wider neighborhood, rejects a candidate that substantially repeats the triggering utterance, applies a deterministic quiet prior, graduated provisional similarity floors, and near-duplicate suppression, and returns zero to at most three ambient feathers. A rare query term that occurs in bounded Forest terrain may lawfully clear a lower first-feather floor; this preserves named anchors such as the Faun or Foldin without making every topical resemblance breathe. The first feather has the lowest evidence cost, the second a higher cost, and the third the highest; no slot is filled merely because it exists. Each feather carries:
+
+- one stable exact Forest entry bearing;
+- a bounded exact glint with source span and hashes, anchored at the end of the source thought and expanded backward by complete sentences while budget remains;
+- an exact bearing stating whether material beyond the preview remains unread; and
+- no explanation of why the association matters.
+
+The graduated similarity floors are policy, not truth. They exist to let a breath end naturally before three feathers and must be tuned against real shadow runs without excluding ordinary language by topic or tone. A feather may be direct, oblique, funny, counterposed, or quiet. The selector must not force a dictionary answer or generate an oracle explanation.
+
+The startup full Forest proof remains the trust boundary. Request-time shadow readiness uses the verified connection head, exact admitted tail, intake settlement, operational count, and SQLite external-write version rather than re-running the full historical proof. External write drift, lag, held intake, or unresolved intake refuses the crossing. This removes the observed request-time full-verification delay without weakening startup verification.
+
+Nesting-doll canopy projection, following a feather, Forest traversal, and the Faun's two-bird inverse lane remain later slices. The initial live feathers point to exact leaf bearings with bounded previews; they do not yet claim a complete higher-canopy doll implementation.
+
+For each accepted human turn with active verified Forest custody, wake orchestration runs the selector exactly once after admitting the current utterance to Home and before assembling the first provider phase. Forest exposes only bounded exact Home candidates through its public candidate contract. The current utterance and every Source event already present in active Session Scroll attention are ineligible before ranking. Wild, Roots, Glass, Scrub, provider-return, Result Rack, and room-owned stores are not candidate sources.
+
+The selector receives the exact triggering text. The versioned embedding policy applies weak-evidence silence, graduated per-feather evidence floors, near-duplicate suppression, stable tie-breaking, and a maximum of three selected atoms. It does not claim automatic supersession or contradiction detection. Room and fixture identity remain recorded situational evidence but do not make an atom eligible or exclude otherwise eligible continuity.
+
+Every run, including silence, creates one immutable Roots selection witness with a dedicated semantic-shadow binding. It retains the trigger coordinates and hash, versions, bounded ordered candidates and exclusions, selected Forest and Source identities, exact packet, situational signals, traversal boundary, and terminal `shadowed` disposition. This artifact describes selection before presentation and therefore has no Glass or Spine edge.
+
+When that witness contains atoms, the same exact packet becomes a named `semantic_forest_exhale` attention-ground item below stable continuity and before the causal human edge. The packet may remain unchanged through tool continuations of that wake. Each actual crossing creates a separate prepared Roots exposure bound to its exact Glass ordinal, Scrub receipt, and Spine request, becoming `presented` only at dispatch or `never_dispatched` on failure. Silence and rejected echoes never receive presentation custody. Both artifact kinds are non-respirable, Forest-ineligible, and grant no action authority.
+
+For the next two human turns after a presented packet, Glass may carry one content-free departure footprint stating only that a Forest breath crossed recently and has left immediate attention. The footprint resolves to the prior presented Roots artifacts, replays no glint or bearing, creates no new exposure, and cannot enter Forest intake. Its purpose is happenedness: absence of the transient packet is not evidence that the Resident fabricated it. After two turns the footprint also leaves attention.
+
+Failure to verify Forest eligibility, exact selected hashes, or Roots closure fails the wake before provider dispatch. Identical retry is idempotent; a conflicting decision under the same trigger and policy refuses rather than rewriting custody.
+
 ## 7. Downwind witness
 
 The complete inspectable chain is:
@@ -211,13 +258,16 @@ The implementation must verify:
 - no Roots table, inspection result, pointer text, or exposure packet can enter the Forest selector candidate pool;
 - presentation alone creates no Home entry;
 - recent Exhale-influenced Home material is excluded from immediate reselection;
+- rare named Marble anchors can retrieve exact material beyond the former newest-512 horizon;
+- an explicit anchor cannot be replaced by generic co-occurring prose, and an unmatched anchor produces silence;
+- near-duplicate atoms are not selected together and packet spans obey per-atom and total UTF-8 ceilings;
 - one selector decision per human turn across tool continuations;
 - duplicate retry idempotence and changed-input conflict refusal;
 - failure/incompleteness cannot be hidden by a pointer budget; and
 - historical stores and pre-boundary events remain unchanged.
 
-The implemented first checkpoint claims only recoverable Result Exhale pointers, bounded reopening, and their rooted exposure ancestry. It does not claim live semantic Forest Exhale, causal interpretation, rolling-fold generation, or safe outside/Spotlight use.
+The implemented checkpoints claim recoverable Result Exhale pointers, bounded reopening, their rooted exposure ancestry, and Home-only ambient vector-feather selection with exact live presentation after the first turn. They include direct-echo suppression, a rebuildable local embedding projection, and background/incremental indexing. They do not claim higher-canopy dolls, Faun feathers, causal interpretation, rolling-fold generation, or safe outside/Spotlight use.
 
 ## 11. Deliberately deferred
 
-Live semantic selector policy, embeddings, learned rankers, generated folds, automatic counterweight discovery, Resident citation/adoption ceremonies, broad cross-session reopening, artifact browsing, retention/disposal policy, semantic pollution scoring, Spotlight input, and any action derived from an Exhale remain deferred.
+Learned rankers, generated folds, automatic counterweight discovery, Resident citation/adoption ceremonies, broad cross-session reopening, artifact browsing, retention/disposal policy, semantic pollution scoring, Wild or Spotlight input, and any action derived from an Exhale remain deferred. The Faun remains out of scope until the Forest is walkable for the Resident.

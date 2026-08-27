@@ -9,6 +9,7 @@ import {
   wrapBlessingV1,
 } from '../resident/charter.js';
 import { sha256 } from '../core/hash.js';
+import { renderFoldDisclosure } from './resident-presentation.js';
 
 function ritualError(message) { return Object.assign(new Error(message), { code: 'wake_ritual_invalid' }); }
 
@@ -88,7 +89,7 @@ export function buildContext({
     });
   }
   if (omitted > 0) {
-    const disclosure = `Context disclosure: ${omitted} older utterance${omitted === 1 ? '' : 's'} omitted because the message-count ceiling is ${ceiling}; no summary was created.`;
+    const disclosure = renderFoldDisclosure(`Context disclosure: ${omitted} older utterance${omitted === 1 ? '' : 's'} omitted because the message-count ceiling is ${ceiling}; no summary was created.`);
     items.push({ ordinal: ordinal++, itemKind: 'disclosure', actorRole: 'system', content: disclosure,
       sourceDescription: 'Host context-ceiling disclosure', authority: 'host_receipt', included: true,
       contentHash: sha256(disclosure) });

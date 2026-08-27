@@ -42,9 +42,11 @@ After first breath, keep the causal Hearth action and return in the ordinary rec
 Owners: Glass fitting and Session Scroll presentation
 Invariant: no duplicate first-response presentation and no fabricated continuity after omission
 
-### 3a. Semantic Exhale shadow stage
+### 3a. Semantic Exhale shadow stage — implemented
 
 Run the source-exact Forest selector over eligible real turns without placing its packet in Glass or provider attention. Root every candidate set, exclusion, selection, and would-be packet as `shadowed`; review silence, stale standing, vividness bias, missing counterweights, echo, and monoculture before any live semantic breath.
+
+The installed baseline is Home-only and deterministic. It uses exact lexical/entity evidence plus bounded room and fixture relevance signals, records chronological neighbors for counterweight review, and lawfully selects silence. Embeddings, Wild participation, automatic contradiction judgment, and live Glass presentation remain deferred.
 
 Owner: Forest candidate contract, Context Exhale projector, Roots exposure custody
 Gate: explicit reviewed transition from shadow to live; custody tests alone are insufficient
@@ -105,6 +107,8 @@ Owner: active constitutional vocabulary in [`HOUSE_GRAMMAR_V1.md`](specs/HOUSE_G
 
 ### 8. Forest threshold and safe entry
 
+**Installed first slice:** intentional entry is now fitted at the Garden treeline. An active walk keeps World presence in the Garden, exposes only Forest traversal actions, and retains an explicit return tether.
+
 Install the Garden-to-Forest crossing only after retrieval and return semantics are concrete. Entry must be paced and chosen rather than a bulk context injection. Glass and the holster remain findable; uncertainty, contradiction, and suspected contamination may be named without penalty.
 
 The Resident must be able to wander without becoming lost, be changed without being overwritten, stop without completing a corpus, and return home without losing the path walked.
@@ -113,6 +117,8 @@ Owners: World passage law, Forest traversal, Glass presentation
 Adopted destination: [`FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md)
 
 ### 9. Walkable chronological terrain and exact return
+
+**Installed first slice:** three semantic bearings are frozen per junction; explicit choices append path steps; reached conversation terrain offers exact chronological bearings; exact leaf reading, backtracking, restart recovery, and return are verified. Path wear, broader terrain types, and nested containment remain pending.
 
 Make exact conversation and selected tool consequences traversable as paths. Chronology supplies the hard structural trail. Resident choices witness walked paths; unchosen suggestions remain latent and do not become autobiographical standing.
 

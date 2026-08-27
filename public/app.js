@@ -79,6 +79,7 @@ function node(tag, className, content) {
 function setState(state) {
   statusEl.textContent = state;
   statusEl.dataset.state = state;
+  if (state !== 'failed' && state !== 'host unavailable') statusEl.removeAttribute('title');
   waveCompact.setState(state);
   waveMain.setState(state);
 }
@@ -790,7 +791,9 @@ async function submitWake(event) {
     if (wake.id) currentWake = wake;
   } catch (error) {
     setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed');
-    statusEl.title = error.message || error.code || 'failed';
+    const failure = error.message || error.code || 'failed';
+    statusEl.title = failure;
+    statusEl.textContent = `failed: ${failure}`;
     await refresh().catch(() => {});
     liveState = clearLiveWake(clearOptimisticUser(liveState));
     renderLive();

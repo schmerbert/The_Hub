@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { sha256 } from '../core/hash.js';
 import { completeProvider, prepareProviderRequest } from '../providers/dispatch.js';
 import { planOldToolExchangeOmissions, projectSourceRefs } from '../context/tool-pairs.js';
@@ -15,6 +16,8 @@ import {
   REOPEN_RESULT_TOOL, RESULT_REOPEN_TOOL_NAME, parseReopenResultArguments,
   recoverablePointerFromHostReceipt,
 } from '../context/result-exhale.js';
+import { runSemanticForestShadow, runAmbientFeatherShadow, buildSemanticRoomSignals, renderAmbientFeatherPacket, renderDepartedFeatherFootprint } from '../context/semantic-exhale.js';
+import { FOREST_WALK_TOOL_NAMES } from '../forest/traversal.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -23,15 +26,8 @@ function providerCancellation() {
 }
 
 function renderToolRoundBudget({ used, remaining, limit, finalOpportunity = false }) {
-  const actionState = finalOpportunity
-    ? 'This is the reserved final response opportunity. No action schemas are available; provide the final response now.'
-    : 'The resident may request bounded actions in this continuation.';
-  return [
-    'Workshop action budget (host receipt):',
-    `action rounds used: ${used}; action rounds remaining: ${remaining}; configured action-round limit: ${limit}.`,
-    actionState,
-    'This budget is a host boundary, not a resident instruction or an action authority.',
-  ].join(' ');
+  if (finalOpportunity) return 'Action horizon: no further actions are available in this wake. This is the reserved final response.';
+  return `Action horizon: up to ${remaining} further action round${remaining === 1 ? '' : 's'} may be used in this wake before the reserved final response.`;
 }
 
 function awaitProviderWithAbort(operation, signal) {
@@ -58,11 +54,14 @@ function awaitProviderWithAbort(operation, signal) {
 }
 
 export class WakeService {
-  constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null }) {
+  constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null, ambientFeatherService = null, forestTraversalService = null }) {
     this.config = config;
     this.db = db;
     this.provider = provider;
     this.forest = forest;
+    this.ambientFeatherService = ambientFeatherService;
+    this.forestTraversalService = forestTraversalService;
+    this.forestDataVersion = typeof forest?.dataVersion === 'function' ? forest.dataVersion() : null;
     this.spine = spine;
     this.world = world;
     this.gateway = gateway;
@@ -275,6 +274,8 @@ export class WakeService {
     const firstTurn = !db.sessionHasOrientation();
     const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;
     const created = db.createSessionWake({ provider: providerName, model: config.model, content: submitted });
+    const triggerEvent = db.getEvent(created.eventId);
+    if (!firstTurn) world.ageHearthSettlement?.(created.sessionId);
     this.activeWakeId = created.wakeId;
     this.publish('wake.accepted', {
       sessionId: created.sessionId,
@@ -282,6 +283,7 @@ export class WakeService {
       payload: { status: 'assembling', provider: providerName, requestedModel: config.model },
       source: { userEventId: created.eventId },
     });
+    let semanticExhale = null;
     if (forest) {
       try { forest.ingestEvent(db.getEvent(created.eventId), { spineStatus: 'live', predecessorSourceEventId: priorEligible }); }
       catch (error) {
@@ -294,9 +296,80 @@ export class WakeService {
         return completionProjection === 'compact' ? db.getWakeCompletion(created.wakeId) : db.getWake(created.wakeId);
       }
     }
+    if (forest) {
+      // Startup performs the expensive custody proof once. Request-time checks
+      // bind that verified head to this connection and the exact admitted tail.
+      const intake = typeof forest.intakeStatus === 'function' ? forest.intakeStatus() : { held: 0, unresolved: 0 };
+      const externalDrift = this.forestDataVersion !== null && forest.dataVersion() !== this.forestDataVersion;
+      const forestReady = !externalDrift && intake.held === 0 && intake.unresolved === 0 && forest.count() === db.listEligibleUtteranceEvents().length;
+      if (!forestReady) {
+        const failure = { code: 'forest_semantic_shadow_unavailable', message: 'The Forest is not verified and caught up for the Semantic Forest shadow crossing.' };
+        const failureEventId = db.failSessionWake(created.wakeId, failure);
+        this.publish('wake.failed', { sessionId: created.sessionId, wakeId: created.wakeId, payload: failure, source: { failureEventId } });
+        return completionProjection === 'compact' ? db.getWakeCompletion(created.wakeId) : db.getWake(created.wakeId);
+      }
+      {
+        const location = world.current(created.sessionId);
+        const roomSignals = buildSemanticRoomSignals({
+          roomId: location.room_node_id,
+          roomType: world.node(location.room_node_id)?.node_type || null,
+          engagedFixtureId: location.engaged_fixture_id || null,
+        });
+        const activeSourceEventIds = db.getSessionHistory(created.sessionId).map(row => row.sourceEventId).filter(Boolean);
+        const forestWalk = this.forestTraversalService?.projection(created.sessionId) || null;
+        const featherExcludeEntryIds = forestWalk?.active ? this.forestTraversalService.featherExclusions(created.sessionId) : [];
+        const shadow = this.ambientFeatherService ? await runAmbientFeatherShadow({
+          service: this.ambientFeatherService,
+          utterance: triggerEvent.content,
+          trigger: {
+            sessionId: created.sessionId,
+            wakeId: created.wakeId,
+            sourceEventId: triggerEvent.id,
+            sourceEventHash: sha256(triggerEvent.content),
+            contentHash: sha256(triggerEvent.content),
+            threadId: triggerEvent.threadId,
+            turnOrdinal: created.turnOrdinal,
+            sourceTimestamp: triggerEvent.createdAt,
+          },
+          activeSourceEventIds,
+          excludeEntryIds: featherExcludeEntryIds,
+          forestWalk,
+          roomSignals,
+          firstTurn,
+        }) : runSemanticForestShadow({ forest, utterance: triggerEvent.content, trigger: {
+          sessionId: created.sessionId, wakeId: created.wakeId, sourceEventId: triggerEvent.id,
+          sourceEventHash: sha256(triggerEvent.content), contentHash: sha256(triggerEvent.content),
+          threadId: triggerEvent.threadId, turnOrdinal: created.turnOrdinal, sourceTimestamp: triggerEvent.createdAt,
+        }, activeSourceEventIds, roomSignals });
+        if (!shadow.bypassed) {
+          semanticExhale = shadow.packet?.atoms?.length ? shadow.packet : null;
+          try {
+            const rootedShadow = db.roots.recordSemanticShadowDecision({
+              sessionId: created.sessionId,
+              wakeId: created.wakeId,
+              trigger: shadow.decision.trigger,
+              policyVersion: shadow.decision.policyVersion,
+              selectorVersion: shadow.decision.selectorVersion,
+              decision: shadow.decision,
+              roomSignals,
+            });
+            if (forestWalk?.active && semanticExhale) this.forestTraversalService.landFeathers({
+              sessionId:created.sessionId, wakeId:created.wakeId, generationId:this.ambientFeatherService.generationId,
+              rootsArtifactId:rootedShadow.artifactId, packet:semanticExhale,
+            });
+          } catch (error) {
+            const failure = { code: 'roots_semantic_shadow_failed', message: error?.message || 'Roots could not retain the Semantic Forest shadow decision.' };
+            const failureEventId = db.failSessionWake(created.wakeId, failure);
+            this.publish('wake.failed', { sessionId: created.sessionId, wakeId: created.wakeId, payload: failure, source: { failureEventId } });
+            return completionProjection === 'compact' ? db.getWakeCompletion(created.wakeId) : db.getWake(created.wakeId);
+          }
+        }
+      }
+    }
     db.markCalling(created.wakeId);
     let wakeInheritance = null;
     let silverBulletHolster = firstTurn ? null : db.getSessionSilverBulletHolster(created.sessionId);
+    const departedFeathers = firstTurn ? [] : db.roots.recentSemanticExhaleDepartures({ sessionId: created.sessionId, beforeTurnOrdinal: created.turnOrdinal, retainTurns: 2 });
     const callPhase = async (phase, historyRows, options = {}) => {
       if (this.closing) throw providerCancellation();
       const thinking = options.orientation ? 'disabled' : config.thinking;
@@ -317,6 +390,7 @@ export class WakeService {
             const verified = this.resultRack.validateProjectionReceipt(pointer, { sessionId: created.sessionId });
             return verified ? { ...pointer, ...verified } : null;
           },
+          hearthResolver: wakeId => db.getHearthReturn?.(wakeId),
         });
       if (continuityMode === 'direct' || continuityMode === 'none') {
         const promotion = planPromotedHearthOmissions(historyRows);
@@ -341,7 +415,12 @@ export class WakeService {
         kind: 'orientation_ground', authority: 'host_receipt', sourceEventId: null,
         message: { role: 'system', content: renderOrientationGround({ completed: true }) },
       });
-      if (options.roomPresence !== false) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: world.presenceMessage(created.sessionId) } });
+      const forestProjection = this.forestTraversalService?.projection(created.sessionId);
+      if (options.roomPresence !== false && !forestProjection?.active) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: world.presenceMessage(created.sessionId) } });
+      const forestThreshold = this.forestTraversalService?.thresholdMessage(created.sessionId, world.current(created.sessionId).room_node_id);
+      if (forestThreshold) currentGround.push({ kind: 'forest_threshold_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: forestThreshold } });
+      const forestPresence = this.forestTraversalService?.presenceMessage(created.sessionId);
+      if (forestPresence) currentGround.push({ kind: 'forest_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: forestPresence } });
       if (options.toolProfile?.omittedCount && !toolsDisabled) {
         currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: renderToolAttentionGround(options.toolProfile) } });
       }
@@ -350,9 +429,28 @@ export class WakeService {
         message: { role: 'system', content: renderToolRoundBudget(options.toolRoundBudget) },
       });
       if (omissionPlan.disclosure) currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: omissionPlan.disclosure } });
+      const departedFeatherMarkdown = !options.orientation ? renderDepartedFeatherFootprint(departedFeathers) : null;
+      if (departedFeatherMarkdown) currentGround.push({
+        kind: 'semantic_forest_departure', authority: 'host_receipt', sourceEventId: null,
+        departureArtifacts: structuredClone(departedFeathers),
+        message: { role: 'system', content: departedFeatherMarkdown },
+      });
+      const semanticExhaleMarkdown = !options.orientation && semanticExhale ? renderAmbientFeatherPacket(semanticExhale) : null;
+      if (semanticExhaleMarkdown) currentGround.push({
+        kind: 'semantic_forest_exhale', authority: 'host_receipt', sourceEventId: null,
+        packet: structuredClone(semanticExhale),
+        message: { role: 'system', content: semanticExhaleMarkdown },
+      });
       for (const sign of omissionPlan.trailSigns || []) currentGround.push({
         ...sign,
         kind: 'result_trail_sign',
+        authority: 'host_receipt',
+        sourceEventId: null,
+        message: structuredClone(sign.message),
+      });
+      for (const sign of omissionPlan.hearthTrailSigns || []) currentGround.push({
+        ...sign,
+        kind: 'hearth_trail_sign',
         authority: 'host_receipt',
         sourceEventId: null,
         message: structuredClone(sign.message),
@@ -436,7 +534,7 @@ export class WakeService {
         crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
         world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
         tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
-        attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground']) },
+        attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: this.forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure']) },
         continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
       };
       const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });
@@ -449,9 +547,10 @@ export class WakeService {
         const exposureArtifacts = exposureRefs.flatMap(({ ref, ordinal, glassItem }) => {
           const isTrail = ref.kind === 'result_trail_sign' && ref.receipt?.pointer;
           const isReopen = ref.kind === 'tool_result' && ref.historyId && db.getHostReturnScrubReceipt(ref.scrubReceiptId)?.receipt?.toolName === RESULT_REOPEN_TOOL_NAME;
-          if (!isTrail && !isReopen) return [];
-          const pointer = isTrail ? ref.receipt.pointer : recoverablePointerFromHostReceipt(db.getHostReturnScrubReceipt(ref.scrubReceiptId), { sessionId: created.sessionId });
-          const packet = {
+          const isForestExhale = ref.kind === 'semantic_forest_exhale' && ref.packet?.atoms?.length;
+          if (!isTrail && !isReopen && !isForestExhale) return [];
+          const pointer = isTrail ? ref.receipt.pointer : isReopen ? recoverablePointerFromHostReceipt(db.getHostReturnScrubReceipt(ref.scrubReceiptId), { sessionId: created.sessionId }) : null;
+          const packet = isForestExhale ? structuredClone(ref.packet) : {
             kind: ref.kind,
             messageHash: sha256(JSON.stringify(ref.message)),
             ...(pointer ? { pointer } : {}),
@@ -459,7 +558,7 @@ export class WakeService {
             ...(Array.isArray(ref.pointers) ? { pointers: ref.pointers } : {}),
           };
           return [db.roots.recordAttentionExposure({
-            sessionId: created.sessionId, wakeId: created.wakeId, phase, exposureKind: isTrail ? 'result_trail_sign' : 'result_reopen', pointer,
+            sessionId: created.sessionId, wakeId: created.wakeId, phase, exposureKind: isForestExhale ? 'semantic_forest_exhale' : isTrail ? 'result_trail_sign' : 'result_reopen', pointer,
             packet, glassBand: glassItem?.band || 'living_edge', glassOrdinal: glassItem?.ordinal || ordinal,
             glassCastReceiptId: persistedGlass.receiptId, glassCastReceiptHash: persistedGlass.receiptHash,
             scrubReceiptHash: glassReceipt.presentationScrubSha256, spineRecordId: requestFrame.record_id, spineRecordHash: requestFrame.record_hash,
@@ -599,7 +698,24 @@ export class WakeService {
     const runResidentRounds = async (phase = 'response', options = {}) => {
       for (let round = 0; round <= config.maxToolRounds; round += 1) {
         const finalOpportunity = round === config.maxToolRounds;
-        const fittedProfile = residentToolProfile(world, created.sessionId);
+        const location = world.current(created.sessionId);
+        const roomId = location.room_node_id;
+        const forestTools = this.forestTraversalService?.tools(created.sessionId, roomId) || [];
+        const forestState = this.forestTraversalService?.projection(created.sessionId) || { active:false };
+        const forestActive = forestState.active === true;
+        const fittedWorldTools = schemasForResidentSession(world, created.sessionId, {
+          workshopMaxLines: config.workshopMaxLines,
+          workshopMaxResults: config.workshopMaxResults,
+        });
+        const worldTools = forestActive
+          ? forestState.entranceRegister === 'physical' ? fittedWorldTools.filter(tool => tool.function.name === 'move_through_passage') : []
+          : fittedWorldTools;
+        const fittedProfile = forestActive
+          ? { roomId:'place.forest', activeGroup: 'forest_walk', names: [...worldTools.map(tool => tool.function.name), ...forestTools.map(tool => tool.function.name)], completeCount: worldTools.length + forestTools.length, omittedCount: 0 }
+          : (() => {
+            const profile = residentToolProfile(world, created.sessionId);
+            return { ...profile, names: [...profile.names, ...forestTools.map(tool => tool.function.name)], completeCount: profile.completeCount + forestTools.length };
+          })();
         const toolProfile = {
           ...fittedProfile,
           names: [...fittedProfile.names, RESULT_REOPEN_TOOL_NAME],
@@ -607,10 +723,7 @@ export class WakeService {
         };
         const response = await callPhase(phase, db.getSessionHistory(created.sessionId), {
           ...options,
-          tools: finalOpportunity ? [] : [...schemasForResidentSession(world, created.sessionId, {
-            workshopMaxLines: config.workshopMaxLines,
-            workshopMaxResults: config.workshopMaxResults,
-          }), REOPEN_RESULT_TOOL],
+          tools: finalOpportunity ? [] : [...worldTools, ...forestTools, REOPEN_RESULT_TOOL],
           toolsDisabled: finalOpportunity,
           toolProfile,
           toolRoundBudget: { used: round, remaining: Math.max(config.maxToolRounds - round, 0), limit: config.maxToolRounds, finalOpportunity },
@@ -650,13 +763,42 @@ export class WakeService {
             source: { toolCallEventId, providerRequestId: response.requestId },
           });
           try {
+            const isForestTool = FOREST_WALK_TOOL_NAMES.has(call.function?.name);
             action = call.function?.name === RESULT_REOPEN_TOOL_NAME
               ? reopenResult(call, { requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id })
+              : isForestTool && this.forestTraversalService
+                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: created.eventId, queryFallback: triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call })
               : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
+            if (isForestTool && action && !action.resultRack) {
+              const custody = gateway.captureResultSafely({
+                sessionId: created.sessionId,
+                wakeId: created.wakeId,
+                toolName: action.name || call.function?.name || 'unknown',
+                result: action.result,
+                sourceActionReceiptId: action.actionReceipt?.receiptId || null,
+                requestRecordId: response.requestId,
+                spineRecordId: response.requestFrame?.record_id,
+              });
+              if (custody.resultRack) {
+                let args = {};
+                try { args = JSON.parse(call.function?.arguments || '{}'); } catch {}
+                action = {
+                  ...action,
+                  resultRack: custody.resultRack,
+                  resultCustodyFailure: null,
+                  scrub: scrubHostReturn({
+                    toolName: action.name || call.function?.name || 'unknown', toolCallId: call.id || null, arguments: args, result: action.result,
+                    content: custody.resultRack.projection.content, renderPolicy: 'result_rack_projection_v1', projection: custody.resultRack.projection,
+                    roomId, actionReceiptId: action.actionReceipt?.receiptId || null, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id,
+                  }),
+                };
+              } else action = { ...action, resultCustodyFailure: custody.failure, resultCustodyFailureReceipt: custody.failureReceipt };
+            }
           }
           catch (error) { action = gateway.refuse({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call, error }); }
           const toolName = action.name || call.function?.name || 'unknown';
           const hostEventId = db.recordToolResult({ wakeId: created.wakeId, sessionId: created.sessionId, toolName, result: action.result, hostReturnScrub: action.scrub });
+          if (toolName === 'move_through_passage' && action.result?.toLocationId === 'place.garden') this.forestTraversalService?.completePhysicalReturn({ sessionId:created.sessionId,wakeId:created.wakeId,toolCallId:call.id || toolName,toPlaceId:action.result.toLocationId });
           const refused = action.result?.ok === false;
           this.publish(refused ? 'tool.refused' : 'tool.completed', {
             sessionId: created.sessionId, wakeId: created.wakeId, phase,
@@ -699,6 +841,7 @@ export class WakeService {
         silverBulletHolster = packet.receipt.silverBulletSlots;
         const hearthScrub = scrubHostReturn({ toolName: 'tend_hearth', toolCallId: action.toolCallId, arguments: {}, result: { markdown: packet.markdown, hearthPacket: packet.receipt }, content: packet.markdown, renderPolicy: 'house_hearth_packet_markdown_v1' });
         const hearthReturnRecord = db.recordHearthReturn({ wakeId: created.wakeId, sessionId: created.sessionId, toolCallId: action.toolCallId, returnValue: packet.receipt, scrollMarkdown: packet.markdown, scrollHash: packet.markdownHash, actionEventId, returnHash: hearthReturnHash(packet.receipt), hostReturnScrub: hearthScrub });
+        world.setHearthSettlement?.(created.sessionId, { wakeId: created.wakeId, packetHash: packet.markdownHash });
         this.publish('tool.completed', {
           sessionId: created.sessionId, wakeId: created.wakeId, phase: 'orientation',
           payload: this.toolCardPayload(action.toolCallId, 'tend_hearth', 'completed', { status: 'completed' }),

@@ -200,6 +200,14 @@ export class ForestStore {
     catch (error) { try { this.sqlite.exec('ROLLBACK'); } catch {} throw error; }
   }
 
+  dataVersion() { return this.sqlite.prepare('PRAGMA data_version').get().data_version; }
+
+  semanticProjectionIdentity() {
+    const metadata = this.sqlite.prepare('SELECT schema_name AS schemaName,schema_version AS schemaVersion,created_at AS createdAt FROM forest_metadata WHERE metadata_id=1').get();
+    if (!metadata) throw Object.assign(new Error('Forest metadata is unavailable for semantic projection.'), { code: 'forest_projection_identity_missing' });
+    return metadata;
+  }
+
   ensureIntakeOffer({ sourceKind, sourceId, sourceLocator, sourceHash, intendedJurisdiction, intendedBucket, predecessorSourceId = null, sourceTimestamp = null, scrubPolicy, scrubVersion, offeredAt = now() }) {
     const locatorJson = canonicalize(sourceLocator || {});
     const offerId = `intake_${sha256(canonicalize({ sourceKind, sourceId, sourceLocator: sourceLocator || {} }))}`;
@@ -354,6 +362,132 @@ export class ForestStore {
 
   listWildEntries() { return this.sqlite.prepare('SELECT * FROM wild_entries ORDER BY created_at,entry_id').all(); }
 
+  // Rebuildable semantic projections may enumerate exact Home terrain. This is
+  // not a request-time candidate surface and grants no presentation authority.
+  listSemanticProjectionAtoms() {
+    return this.sqlite.prepare(`SELECT entry_id AS entryId,source_event_id AS sourceEventId,source_event_hash AS sourceEventHash,
+      source_timestamp AS sourceTimestamp,actor_kind AS actorKind,body,body_hash AS bodyHash
+      FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance' ORDER BY source_timestamp,source_event_id`).all().map(entry => {
+      if (sha256(entry.body) !== entry.bodyHash) throw Object.assign(new Error('Forest semantic projection source integrity failed.'), { code: 'forest_projection_integrity' });
+      return entry;
+    });
+  }
+
+  homeAtom(entryId) {
+    const entry = this.sqlite.prepare(`SELECT entry_id AS entryId,source_event_id AS sourceEventId,source_event_hash AS sourceEventHash,
+      source_timestamp AS sourceTimestamp,thread_id AS threadId,wake_id AS wakeId,actor_kind AS actorKind,body,body_hash AS bodyHash
+      FROM forest_entries WHERE entry_id=? AND jurisdiction='home' AND bucket='utterance'`).get(entryId);
+    if (!entry || sha256(entry.body) !== entry.bodyHash) throw Object.assign(new Error('Exact Forest Home terrain is unavailable.'), { code: 'forest_walk_entry_unavailable' });
+    return entry;
+  }
+
+  homeAtomForSourceEvent(sourceEventId) {
+    const row = this.sqlite.prepare('SELECT entry_id AS entryId FROM forest_entries WHERE source_event_id=?').get(sourceEventId);
+    return row ? this.homeAtom(row.entryId) : null;
+  }
+
+  homeAtomWithChronology(entryId) {
+    const entry = this.homeAtom(entryId);
+    const predecessor = this.sqlite.prepare(`SELECT prior.entry_id AS entryId FROM forest_edges edge JOIN forest_entries prior ON prior.entry_id=edge.to_entry_id
+      WHERE edge.edge_type='responds_to' AND edge.from_entry_id=?`).get(entryId) || null;
+    const successor = this.sqlite.prepare(`SELECT later.entry_id AS entryId FROM forest_edges edge JOIN forest_entries later ON later.entry_id=edge.from_entry_id
+      WHERE edge.edge_type='responds_to' AND edge.to_entry_id=? ORDER BY later.source_timestamp,later.source_event_id LIMIT 1`).get(entryId) || null;
+    return { ...entry, chronology: { predecessor, successor } };
+  }
+
+  // This is the only candidate surface semantic Forest selection may use.
+  // Wild, intake, and presentation custody never crosses into this contract.
+  listEligibleHomeAtoms({ excludeSourceEventIds = [], excludeEntryIds = [], includeExclusions = false, maxEntries = 512 } = {}) {
+    if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 2048) throw Object.assign(new Error('Forest Home candidate bound is invalid.'), { code: 'forest_candidate_bound_invalid' });
+    const excludedSources = new Set(excludeSourceEventIds.filter(Boolean));
+    const excludedEntries = new Set(excludeEntryIds.filter(Boolean));
+    const entries = []; const exclusions = [];
+    const totalEligibleCount = this.sqlite.prepare("SELECT COUNT(*) AS count FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance'").get().count;
+    const rows = this.sqlite.prepare(`SELECT entry_id AS entryId, source_event_id AS sourceEventId, source_event_hash AS sourceEventHash,
+      source_timestamp AS sourceTimestamp, thread_id AS threadId, wake_id AS wakeId, actor_kind AS actorKind,
+      jurisdiction, bucket, body, body_hash AS bodyHash, spine_status AS spineStatus
+      FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance'
+      ORDER BY source_timestamp DESC, source_event_id DESC LIMIT ?`).all(maxEntries);
+    const atomRef = row => row ? {
+      entryId: row.entryId, sourceEventId: row.sourceEventId, sourceEventHash: row.sourceEventHash,
+      bodyHash: row.bodyHash, sourceTimestamp: row.sourceTimestamp, actorKind: row.actorKind,
+    } : null;
+    for (const entry of rows) {
+      if (excludedSources.has(entry.sourceEventId) || excludedEntries.has(entry.entryId)) {
+        exclusions.push({ entryId: entry.entryId, sourceEventId: entry.sourceEventId, sourceEventHash: entry.sourceEventHash, bodyHash: entry.bodyHash, reason: 'active_context' });
+        continue;
+      }
+      if (sha256(entry.body) !== entry.bodyHash) {
+        exclusions.push({ entryId: entry.entryId, sourceEventId: entry.sourceEventId, sourceEventHash: entry.sourceEventHash, bodyHash: entry.bodyHash, reason: 'body_integrity' });
+        continue;
+      }
+      if (!['live', 'pre_spine'].includes(entry.spineStatus)) {
+        exclusions.push({ entryId: entry.entryId, sourceEventId: entry.sourceEventId, sourceEventHash: entry.sourceEventHash, bodyHash: entry.bodyHash, reason: 'spine_status_invalid' });
+        continue;
+      }
+      const predecessor = this.sqlite.prepare(`SELECT prior.entry_id AS entryId,prior.source_event_id AS sourceEventId,
+        prior.source_event_hash AS sourceEventHash,prior.body_hash AS bodyHash,prior.source_timestamp AS sourceTimestamp,prior.actor_kind AS actorKind
+        FROM forest_edges edge JOIN forest_entries prior ON prior.entry_id=edge.to_entry_id
+        WHERE edge.edge_type='responds_to' AND edge.from_entry_id=?`).get(entry.entryId);
+      const successor = this.sqlite.prepare(`SELECT later.entry_id AS entryId,later.source_event_id AS sourceEventId,
+        later.source_event_hash AS sourceEventHash,later.body_hash AS bodyHash,later.source_timestamp AS sourceTimestamp,later.actor_kind AS actorKind
+        FROM forest_edges edge JOIN forest_entries later ON later.entry_id=edge.from_entry_id
+        WHERE edge.edge_type='responds_to' AND edge.to_entry_id=? ORDER BY later.source_timestamp,later.source_event_id LIMIT 1`).get(entry.entryId);
+      entries.push({ ...entry, chronology: { relation: 'responds_to', predecessor: atomRef(predecessor), successor: atomRef(successor) }, supersession: { supported: false } });
+    }
+    const boundary = { order: 'newest_first', maxEntries, totalEligibleCount, examinedCount: rows.length, complete: rows.length === totalEligibleCount };
+    return includeExclusions ? { contractVersion: 'forest_home_candidates/v1', jurisdiction: 'home', entries, exclusions, boundary } : entries;
+  }
+  searchEligibleHomeAtoms({ queryTerms = [], excludeSourceEventIds = [], excludeEntryIds = [], includeExclusions = false, maxEntries = 512, perTermLimit = 96 } = {}) {
+    if (!Array.isArray(queryTerms) || !queryTerms.length || queryTerms.some(term => typeof term !== 'string' || !term.trim())) throw Object.assign(new Error('Forest Home lexical query is invalid.'), { code: 'forest_candidate_query_invalid' });
+    if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 2048 || !Number.isInteger(perTermLimit) || perTermLimit < 1 || perTermLimit > 256) throw Object.assign(new Error('Forest Home lexical candidate bound is invalid.'), { code: 'forest_candidate_bound_invalid' });
+    const terms = [...new Set(queryTerms.map(term => term.normalize('NFKC').toLocaleLowerCase('en-US')).filter(Boolean))];
+    const totalEligibleCount = this.sqlite.prepare("SELECT COUNT(*) AS count FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance'").get().count;
+    const frequency = new Map(terms.map(term => [term, this.sqlite.prepare("SELECT COUNT(*) AS count FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance' AND instr(lower(body),?)>0").get(term).count]));
+    const orderedTerms = [...terms].sort((left, right) => frequency.get(left) - frequency.get(right) || left.localeCompare(right));
+    const byId = new Map();
+    for (const term of orderedTerms) {
+      const rows = this.sqlite.prepare(`SELECT entry_id AS entryId, source_event_id AS sourceEventId, source_event_hash AS sourceEventHash,
+        source_timestamp AS sourceTimestamp, thread_id AS threadId, wake_id AS wakeId, actor_kind AS actorKind,
+        jurisdiction, bucket, body, body_hash AS bodyHash, spine_status AS spineStatus
+        FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance' AND instr(lower(body),?)>0
+        ORDER BY source_timestamp DESC, source_event_id DESC LIMIT ?`).all(term, perTermLimit);
+      for (const row of rows) if (!byId.has(row.entryId) && byId.size < maxEntries) byId.set(row.entryId, row);
+    }
+    const excludedSources = new Set(excludeSourceEventIds.filter(Boolean));
+    const excludedEntries = new Set(excludeEntryIds.filter(Boolean));
+    const entries = []; const exclusions = [];
+    const atomRef = row => row ? {
+      entryId: row.entryId, sourceEventId: row.sourceEventId, sourceEventHash: row.sourceEventHash,
+      bodyHash: row.bodyHash, sourceTimestamp: row.sourceTimestamp, actorKind: row.actorKind,
+    } : null;
+    for (const entry of byId.values()) {
+      if (excludedSources.has(entry.sourceEventId) || excludedEntries.has(entry.entryId)) {
+        exclusions.push({ entryId: entry.entryId, sourceEventId: entry.sourceEventId, sourceEventHash: entry.sourceEventHash, bodyHash: entry.bodyHash, reason: 'active_context' });
+        continue;
+      }
+      if (sha256(entry.body) !== entry.bodyHash) {
+        exclusions.push({ entryId: entry.entryId, sourceEventId: entry.sourceEventId, sourceEventHash: entry.sourceEventHash, bodyHash: entry.bodyHash, reason: 'body_integrity' });
+        continue;
+      }
+      if (!['live', 'pre_spine'].includes(entry.spineStatus)) {
+        exclusions.push({ entryId: entry.entryId, sourceEventId: entry.sourceEventId, sourceEventHash: entry.sourceEventHash, bodyHash: entry.bodyHash, reason: 'spine_status_invalid' });
+        continue;
+      }
+      const predecessor = this.sqlite.prepare(`SELECT prior.entry_id AS entryId,prior.source_event_id AS sourceEventId,
+        prior.source_event_hash AS sourceEventHash,prior.body_hash AS bodyHash,prior.source_timestamp AS sourceTimestamp,prior.actor_kind AS actorKind
+        FROM forest_edges edge JOIN forest_entries prior ON prior.entry_id=edge.to_entry_id
+        WHERE edge.edge_type='responds_to' AND edge.from_entry_id=?`).get(entry.entryId);
+      const successor = this.sqlite.prepare(`SELECT later.entry_id AS entryId,later.source_event_id AS sourceEventId,
+        later.source_event_hash AS sourceEventHash,later.body_hash AS bodyHash,later.source_timestamp AS sourceTimestamp,later.actor_kind AS actorKind
+        FROM forest_edges edge JOIN forest_entries later ON later.entry_id=edge.from_entry_id
+        WHERE edge.edge_type='responds_to' AND edge.to_entry_id=? ORDER BY later.source_timestamp,later.source_event_id LIMIT 1`).get(entry.entryId);
+      entries.push({ ...entry, chronology: { relation: 'responds_to', predecessor: atomRef(predecessor), successor: atomRef(successor) }, supersession: { supported: false } });
+    }
+    const termDocumentFrequencies = Object.fromEntries(terms.map(term => [term, frequency.get(term)]));
+    const boundary = { order: 'rarest_term_then_newest', maxEntries, perTermLimit, totalEligibleCount, examinedCount: byId.size, complete: orderedTerms.every(term => frequency.get(term) <= perTermLimit), queryTerms: terms, termDocumentFrequencies };
+    return includeExclusions ? { contractVersion: 'forest_home_lexical_candidates/v2', jurisdiction: 'home', entries, exclusions, boundary } : entries;
+  }
   listEntries() { return this.sqlite.prepare('SELECT * FROM forest_entries ORDER BY thread_id, source_timestamp, source_event_id').all(); }
   listIntakeHolds() { return this.sqlite.prepare(`SELECT o.*,d.decision_id,d.revision,d.reason_code,d.reason_detail,d.predecessor_source_id AS decision_predecessor_source_id,d.decided_at
     FROM forest_intake_offers o JOIN forest_intake_decisions d ON d.offer_id=o.offer_id
@@ -383,5 +517,4 @@ export class ForestStore {
   }
   close() { this.sqlite.close(); }
 }
-
 export function forestSchemaSql() { return SCHEMA; }

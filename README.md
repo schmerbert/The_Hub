@@ -23,7 +23,7 @@ Open <http://localhost:3000>. The fake adapter does not claim to be DeepSeek or 
 npm run desktop
 ```
 
-On Windows, double-click `start.bat` from the repository root. It delegates to the pinned `start-hub.bat` launcher; launching it again expands the existing single instance. Use `stop-hub.bat` for a graceful stop.
+On Windows, double-click `The Hub.exe` from the repository root. It launches the pinned Electron runtime without opening a console; launching it again expands the existing single instance. If startup fails, the launcher shows the recorded failure and log path. `start.bat` remains as a compatibility launcher, and `stop-hub.bat` performs a graceful stop.
 
 [`BUILDER_CHANNEL.md`](BUILDER_CHANNEL.md) is the shared Resident–Builder correspondence file. It is read and edited through ordinary Workshop affordances and does not automatically enter Glass or Forest continuity.
 

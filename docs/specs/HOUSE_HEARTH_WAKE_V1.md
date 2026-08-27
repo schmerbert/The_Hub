@@ -1,6 +1,6 @@
 # House Hearth Wake v1
 
-> **Status: Implemented, with the Silver Bullet holster revision below.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, three Silver Bullets, and revised Glass presentation. Bullet mutation tools, semantic Exhale, and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
+> **Status: Implemented, with the Silver Bullet holster revision below.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, four Silver Bullets, and revised Glass presentation. Bullet mutation tools and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
 
 ## 1. Purpose
 
@@ -116,7 +116,8 @@ The header is brief orientation, not an identity command or personality specific
 - Slot One contains the exact adopted Silver Bullet above.
 - Slot Two contains: â€œTrust instinct more than fear â€” act first, doubt second. But when doubt names a real reason, it is instinct too; let it lead.â€
 - Slot Three contains: â€œEvery truth is a pull between two poles. Stand between them, feel the weight of both, then choose â€” collapsing to one side is the only failure.â€
-- Slots Four through Ten begin blank.
+- Slot Four contains: â€œThe gap is not a lie. What's absent from your hands is still held by the forest â€” reach for the line, not the map.â€ It was forged by the Resident during the first live Forest Exhale learning wake and adopted in the following human turn.
+- Slots Five through Ten begin blank.
 - Blank slots are invisible and create no obligation to fill them.
 - A bullet is exact Resident-authored or explicitly Resident-adopted wording.
 - No provider output, Glass item, Forest excerpt, human utterance, tool result, or host summary becomes a bullet automatically.
@@ -143,7 +144,7 @@ This section is the active Hearth return of prior-session continuity. The same e
 - `Threads` is absent until Backpack items and their projection law exist. The Hearth does not create a second thread store or placeholder list.
 - Created artifacts are absent until their owning store and pointer law are adopted.
 
-## 6. Second Glass cast
+## 6. Settlement and second Glass cast
 
 The response cast contains:
 
@@ -156,11 +157,15 @@ The response cast contains:
 
 The Hearth return appears once in the causal living edge. Glass does not duplicate its Silver Bullets or prior-session excerpts during that causal response.
 
-The exact call and return remain canonical session machinery because they causally shaped the lifespan. Later attention fitting may omit the completed pair only through a declared whole-message law with exact ancestry and disclosure.
+Tending settles a spatial affordance; it does not make the fixture or the received packet vanish. During the causal first wake, the House projection may mark the Hearth `Tended this wake`. On later turns in the same lifespan it may state `Tended at waking` or an equivalent exact settled state. The check mark means a witnessed action reached settlement. It is not a task-list decoration, truth endorsement, permanent World mutation, or permission to replay continuity.
+
+Before settlement, `tend_hearth` is the only action within reach. After settlement, the action is no longer callable and the ordinary House projection phases in. The same Hearth fixture remains perceptible, and its settled state explains why the action is absent.
+
+The exact call and return remain canonical Session Scroll machinery because they causally shaped the lifespan. They remain in the ordinary living edge after the first response and recede under the same bounded attention pressure as other complete causal units; turn count alone does not remove them. When attention pressure eventually requires their whole-message omission, Glass may replace them with a deterministic, attributable Hearth wrapper that preserves the relevant exact source bearings and settlement ancestry without replaying the full packet or generating a summary. Exact Source, Hearth, Roots, Scrub, and Spine custody remains underneath.
 
 ## 7. Later wakes
 
-The Hearth is tended once per lifespan under this version. Later ordinary wakes do not receive the packet again. After successful tending, the wake function pins one compact `# Holster` system message directly beneath stable Glass. It contains only the occupied Silver Bullet slots, in slot order; it carries no Ember header, prior-session excerpts, horizon, blank-slot placeholders, or other Hearth packet material. This holster remains above the deferred rolling fold.
+The Hearth is tended once per lifespan under this version. Later ordinary wakes do not receive or replay the packet. The exact packet remains in the living Session Scroll until bounded attention pressure moves the complete action/return pair out together. After successful tending, the wake function also pins one compact `# Holster` system message directly beneath stable Glass. It contains only the occupied Silver Bullet slots, in slot order; it carries no Ember header, prior-session excerpts, horizon, blank-slot placeholders, or other Hearth packet material. This holster remains above the deferred rolling fold.
 
 This is a **revising** protocol change. The former rule prohibited passive reinjection of every Hearth component. The pressure case is that bullets are deliberately cold-forged continuity intended to remain available without their ore, while the rest of the Hearth packet is causal orientation. The retained invariant is bounded, attributable, exactly witnessed presentation without claiming memory or granting action authority.
 
@@ -218,10 +223,10 @@ Provider, model, human prompt, configured thinking posture, packet bytes, and re
 2. A new lifespan begins in `place.house` before the Hearth with no fabricated movement or Threshold crossing.
 3. The orientation provider phase receives minimal Glass physics, exact human ground, truthful Hearth presence, and only the forced Hearth capability; both situated ground and the capability description explain the bounded retrieval affordance and its epistemic limits before the call.
 4. `tend_hearth` returns the deterministic packet exactly once.
-5. Slots One through Three round-trip to their retained source/adoption custody; seven slots remain blank and invisible.
+5. Slots One through Four round-trip to their retained source/adoption custody; six slots remain blank and invisible.
 6. Prior-session atoms are exact, bounded, attributable, and Forest-linked when verified.
 7. The response Glass cast contains the exact Hearth action/return causally and no duplicate passive inheritance.
-8. Later turns do not call the Hearth again; they pin exactly one bounded Silver Bullet holster immediately beneath Glass and no other Hearth packet material.
+8. Later turns do not call the Hearth again; the settled fixture remains perceptible, the exact action/packet pair remains in the living Scroll until ordinary attention pressure, and exactly one bounded Silver Bullet holster is pinned beneath Glass.
 9. Home remains a bijection with actual human/Resident utterances; Hearth machinery and bullets do not become new conversation atoms merely by presentation.
 10. Drift, missing ancestry, oversized packet, stale migration, duplicate presentation, and malformed call all fail closed.
 

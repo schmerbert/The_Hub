@@ -41,15 +41,16 @@ test('fresh Glass casts close every source into a durable witness and provider d
   } finally { await f.hub.close(); await rm(f.dir, { recursive: true, force: true }); }
 });
 
-test('later casts name exact omitted Scroll coordinates rather than source-array positions alone', async () => {
+test('later casts retain the exact Hearth Scroll pair until ordinary attention pressure', async () => {
   const f = await fixture();
   try {
     await f.hub.wake('first packet');
     const second = await f.hub.wake('second packet');
     const trace = second.phases[0].glassTrace.manifest;
-    const omittedHearth = trace.items.filter(item => item.disposition.kind === 'omitted' && /Hearth/.test(item.disposition.reason));
-    assert.equal(omittedHearth.length, 2);
-    assert.equal(omittedHearth.every(item => item.source.authority === 'Session Scroll' && item.source.historyId && Number.isInteger(item.source.ordinal)), true);
+    const hearthHistoryIds = new Set(f.hub.db.getSessionHistory(second.sessionId).filter(row => (row.messageKind === 'assistant_tool_call' || row.messageKind === 'tool_result') && (row.messageJson.includes('tend_hearth') || row.messageJson.includes('# Hearth'))).map(row => row.id));
+    const hearthItems = trace.items.filter(item => hearthHistoryIds.has(item.source?.historyId));
+    assert.equal(hearthItems.length, 2);
+    assert.equal(hearthItems.every(item => item.disposition.kind === 'presented' && item.source.authority === 'Session Scroll' && item.source.historyId && Number.isInteger(item.source.ordinal)), true);
   } finally { await f.hub.close(); await rm(f.dir, { recursive: true, force: true }); }
 });
 

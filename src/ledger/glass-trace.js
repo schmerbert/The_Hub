@@ -1,10 +1,34 @@
 import { canonicalize, id, sha256 } from '../core/hash.js';
-import { STABLE_GLASS_TEXT, STABLE_GLASS_V1_TEXT } from '../context/glass-cast.js';
+import { STABLE_GLASS_TEXT, STABLE_GLASS_TRANSITIONAL_V2_TEXT, STABLE_GLASS_V1_TEXT, STABLE_GLASS_V2_TEXT, STABLE_GLASS_V3_TEXT } from '../context/glass-cast.js';
 
-const GLASS_HASH_BY_VERSION = new Map([[1, sha256(STABLE_GLASS_V1_TEXT)], [2, sha256(STABLE_GLASS_TEXT)]]);
+const GLASS_HASHES_BY_VERSION = new Map([
+  [1, new Set([sha256(STABLE_GLASS_V1_TEXT)])],
+  [2, new Set([sha256(STABLE_GLASS_V2_TEXT), sha256(STABLE_GLASS_TRANSITIONAL_V2_TEXT)])],
+  [3, new Set([sha256(STABLE_GLASS_V3_TEXT)])],
+  [4, new Set([sha256(STABLE_GLASS_TEXT)])],
+]);
 
 function now() { return new Date().toISOString(); }
 function row(value) { return value ? { ...value } : null; }
+
+function rootedHistoricalTrailSign(sqlite, item, cast) {
+  if (item.kind !== 'result_trail_sign') return false;
+  const available = sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='root_attention_exposures'").get();
+  if (!available) return false;
+  const candidates = sqlite.prepare(`SELECT e.packet_hash AS packetHash,e.glass_cast_receipt_hash AS glassCastReceiptHash,
+    a.payload_json AS payloadJson,a.content_hash AS contentHash
+    FROM root_attention_exposures e JOIN root_artifacts a ON a.id=e.artifact_id
+    WHERE e.exposure_kind='result_trail_sign' AND e.glass_cast_receipt_id=?`).all(cast.id);
+  return candidates.some(candidate => {
+    let payload;
+    try { payload = JSON.parse(candidate.payloadJson); } catch { return false; }
+    return candidate.glassCastReceiptHash === cast.receiptHash &&
+      candidate.contentHash === sha256(candidate.payloadJson) &&
+      candidate.packetHash === sha256(canonicalize(payload?.packet)) &&
+      payload?.exposureKind === 'result_trail_sign' &&
+      payload?.packet?.messageHash === item.messageHash;
+  });
+}
 
 export class GlassTraceLedger {
   constructor(sqlite) { this.sqlite = sqlite; }
@@ -52,14 +76,14 @@ export class GlassTraceLedger {
         if (item.source?.authority === 'glass_ground_receipt') {
           const ground = this.sqlite.prepare('SELECT receipt_hash AS receiptHash,receipt_json AS receiptJson FROM glass_ground_receipts WHERE id=? AND provider_request_id=?').get(item.source.receiptId, cast.providerRequestId);
           if (!ground || ground.receiptHash !== item.source.receiptHash || sha256(ground.receiptJson) !== ground.receiptHash) add({ code: 'glass_trace_ground_unresolved', sourceOrdinal: item.sourceOrdinal });
-          else if (!JSON.parse(ground.receiptJson).sourceMessageHashes?.includes(item.messageHash)) add({ code: 'glass_trace_ground_message_mismatch', sourceOrdinal: item.sourceOrdinal });
+          else if (!JSON.parse(ground.receiptJson).sourceMessageHashes?.includes(item.messageHash) && !rootedHistoricalTrailSign(this.sqlite, item, cast)) add({ code: 'glass_trace_ground_message_mismatch', sourceOrdinal: item.sourceOrdinal });
         } else if (item.source?.authority === 'Session Scroll') {
           const history = this.sqlite.prepare('SELECT session_id AS sessionId,ordinal,message_json AS messageJson FROM session_history WHERE id=?').get(item.source.historyId);
           if (!history || history.sessionId !== item.source.sessionId || history.ordinal !== item.source.ordinal || sha256(history.messageJson) !== item.source.messageHash) add({ code: 'glass_trace_scroll_unresolved', sourceOrdinal: item.sourceOrdinal });
         } else if (item.source?.authority === 'Source') {
           const event = this.sqlite.prepare('SELECT content FROM events WHERE id=?').get(item.source.eventId);
           if (!event || (item.source.contentHash && sha256(event.content) !== item.source.contentHash)) add({ code: 'glass_trace_source_unresolved', sourceOrdinal: item.sourceOrdinal });
-        } else if (item.source?.authority === 'code_owned_glass' && GLASS_HASH_BY_VERSION.get(item.source.version) !== item.source.contentHash) add({ code: 'glass_trace_stable_glass_mismatch', sourceOrdinal: item.sourceOrdinal });
+        } else if (item.source?.authority === 'code_owned_glass' && !GLASS_HASHES_BY_VERSION.get(item.source.version)?.has(item.source.contentHash)) add({ code: 'glass_trace_stable_glass_mismatch', sourceOrdinal: item.sourceOrdinal });
         else if (!['code_owned_glass','glass_ground_receipt','Session Scroll','Source'].includes(item.source?.authority)) add({ code: 'glass_trace_authority_unknown', sourceOrdinal: item.sourceOrdinal });
       }
     }

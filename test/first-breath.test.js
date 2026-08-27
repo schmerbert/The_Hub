@@ -60,13 +60,36 @@ test('context ordering and hashes match actual adapter input', async () => {
     assert.match(presented[1].content, /does not certify memory, identity, authority, or truth/);
     assert.match(presented[2].content, /Tend the Hearth now/);
     assert.match(presented[2].content, /Do not invent or anticipate its contents/);
-    assert.match(presented[3].content, /^Current location: place\.house\./);
+    assert.match(presented[3].content, /^Current World ground for this phase\. Current location: place\.house\./);
     assert.match(presented[3].content, /fixture\.hearth/);
     assert.equal(presented[1].content.includes(result.body.sessionId), false);
     assert.equal(presented[1].content.includes(result.body.id), false);
     assert.deepEqual(included.map(item => item.content), [STABLE_GLASS_TEXT, 'Exact words.']);
     assert.equal(result.body.glassCasts.length, 2);
     for (const item of result.body.context) assert.equal(item.contentHash, sha256(item.content));
+  } finally { await f.close(); }
+});
+
+test('Hearth remains a spatial fixture whose affordance settles for the lifespan', async () => {
+  const f = await fixture({ HUB_RESIDENT_MODE: 'fake' });
+  try {
+    const sessionId = f.hub.db.session.id;
+    const before = f.hub.world.projection(sessionId).fixtures.find(item => item.id === 'fixture.hearth');
+    assert.deepEqual(before.state.affordance, { name: 'tend_hearth', state: 'available', symbol: '○', label: 'Tend the Hearth', available: true });
+    const first = await post(f.base, '/api/wakes', 'Tend the room.');
+    const settled = f.hub.world.projection(sessionId).fixtures.find(item => item.id === 'fixture.hearth');
+    assert.equal(first.response.status, 200);
+    assert.equal(settled.state.affordance.state, 'completed');
+    assert.equal(settled.state.affordance.symbol, '✓');
+    assert.equal(settled.state.affordance.label, 'Tended this wake');
+    assert.equal(settled.state.affordance.available, false);
+    assert.equal(settled.state.affordance.wakeId, first.body.id);
+    const later = await post(f.base, '/api/wakes', 'Continue from the room.');
+    const aged = f.hub.world.projection(sessionId).fixtures.find(item => item.id === 'fixture.hearth');
+    assert.equal(later.response.status, 200);
+    assert.equal(aged.state.affordance.symbol, '✓');
+    assert.equal(aged.state.affordance.label, 'Recently tended');
+    assert.equal(aged.state.affordance.available, false);
   } finally { await f.close(); }
 });
 

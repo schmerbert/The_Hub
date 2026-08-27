@@ -87,10 +87,10 @@ test('tool-round budget is disclosed and the final opportunity is schema-free', 
     assert.equal(requests.length, 3);
     assert.ok(requests[1].tools.some(tool => tool.function.name === 'move_through_passage'));
     assert.ok(requests[1].tools.some(tool => tool.function.name === 'reopen_result'));
-    assert.match(requests[1].messages.find(message => message.content.includes('Workshop action budget')).content, /action rounds used: 0; action rounds remaining: 1/);
+    assert.match(requests[1].messages.find(message => message.content.includes('Action horizon')).content, /up to 1 further action round may be used/);
     assert.deepEqual(requests[2].tools, []);
-    assert.match(requests[2].messages.find(message => message.content.includes('Workshop action budget')).content, /action rounds used: 1; action rounds remaining: 0/);
-    assert.match(requests[2].messages.find(message => message.content.includes('Workshop action budget')).content, /reserved final response opportunity/);
+    assert.match(requests[2].messages.find(message => message.content.includes('Action horizon')).content, /no further actions are available/);
+    assert.match(requests[2].messages.find(message => message.content.includes('Action horizon')).content, /reserved final response/);
   } finally {
     await f.close();
   }

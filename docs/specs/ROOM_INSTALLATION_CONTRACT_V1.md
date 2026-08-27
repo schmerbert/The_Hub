@@ -1,6 +1,6 @@
 # Room Installation Contract v1
 
-> **Status: Adopted and partially installed.** The manifest contract, Workshop reference manifest, deterministic host-owned Workshop installation witness, and forward-only installation-receipt boundary are implemented and verified. Generic discovery, signature/provenance verification, installation transactions, dynamic Ceiling/Gateway composition, lifecycle persistence, removal tooling, and any marketplace are not implemented.
+> **Status: Adopted and partially installed.** The manifest contract, Workshop reference manifest, deterministic host-owned Workshop installation witness, forward-only installation-receipt boundary, and explicit Workshop receipt-revision path are implemented and verified. Generic discovery, signature/provenance verification, dynamic Ceiling/Gateway composition, lifecycle persistence, removal tooling, and any marketplace are not implemented.
 
 ## Purpose
 
@@ -80,7 +80,9 @@ Market-facing security work must define publisher identity, signatures, reproduc
 
 The host produces `room-installation-witness.v1` from the exact manifest bytes and independently inspected installed surfaces. The witness includes topology, parent containment, entrance, fixtures, schema hashes, Ceiling and mounting presence, Gateway handlers, approval classes, socket bindings, and custody bindings. It has a deterministic hash and is verified only when `gaps` is empty. Required missing wires fail verification; declared optional Forest Wild wiring may remain honestly `optional_unwired`.
 
-The bounded Builder World inspection exposes this witness. The installation-receipt boundary binds an exact verified witness to one exact World event, package and manifest hashes, host bindings, an admission statement, and installation time. Workshop predates this boundary, so its receipt honestly records `inherited_pre_boundary` and `admission.status: not_recorded`; it does not invent a historical admission decision. A future room installed after the boundary must use `forward_installation` and record the actual host admission. The receipt journal witnesses history; it does not yet perform installation or make multi-surface wiring transactional.
+The bounded Builder World inspection exposes this witness. The installation-receipt boundary binds an exact verified witness to one exact World event, package and manifest hashes, host bindings, an admission statement, and installation time. Workshop predates this boundary, so its original receipt honestly records `inherited_pre_boundary` and `admission.status: not_recorded`; it does not invent a historical admission decision. Workshop `1.1.0` advances that standing through one strict `room.installation.revised/v1` World event and one `forward_installation` receipt that binds the prior receipt and exact new witness. The prior receipt remains immutable.
+
+Startup only inspects this standing. A mismatch fails with `room_installation_upgrade_required`; it never edits the store. `npm run room:migrate-workshop` is read-only inspection by default. Applying the single supported revision requires `--apply --backup-confirmed`, an exactly verified World, and an operator-created recoverable backup. The event and forward receipt append in one transaction and retries are idempotent. This bounded repair is not generic room installation or lifecycle machinery.
 
 The Spotlight capsule remains an experiment. Its `room-capsule.v1` laboratory contract proves inert discovery and activation for observational code; it is not silently promoted to this production contract. Adoption requires an explicit migration once the production host exists.
 

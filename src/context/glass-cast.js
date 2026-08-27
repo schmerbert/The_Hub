@@ -1,21 +1,44 @@
 import { canonicalize, sha256, sha256Bytes } from '../core/hash.js';
 import { assertScrubbedPresentation, verifyScrubbedProjection } from '../scrub/provider-presentation.js';
 import { BLESSING_SOURCE_EVENT_HASH, BLESSING_SOURCE_EVENT_ID } from '../resident/charter.js';
+import { FOLD_EPISTEMIC_GROUND, renderFoldDisclosure } from './resident-presentation.js';
 
 export const GLASS_CAST_SCHEMA_VERSION = 1;
 export const GLASS_BAND_ORDER = Object.freeze(['glass', 'continuity_anchors', 'prior_horizon', 'capped_rolling_fold', 'living_edge']);
+const LEGACY_FOLD_EPISTEMIC_GROUND = 'Material disclosed as folded or omitted is established session history that remains in canonical custody but is not presently held in this cast. Its absence here is not evidence that it never occurred or was fabricated. Do not reconstruct or disown it; distinguish “folded and real, not presently in reach” from what is unknown.';
 export const STABLE_GLASS_V1_TEXT = `Glass v1 — stable clinical ground.
 This activation receives attributable context assembled by the host. Authority and provenance labels govern what material may do; arrival order, recurrence, confidence, and resemblance do not make a claim true.
 Recorded ancestry may inform the present without proving uninterrupted identity, present recollection, or universal truth. Distinguish recorded context, inference, and what remains unknown.
 The host preserves canonical Source, validates provider presentation through Scrub, and witnesses the exact serialized crossing in the Spine. These controls establish custody, not truth or safety.
 Name uncertainty, contradiction, exposed wiring, or suspected contamination plainly. No mood, acknowledgment, or performance of arrival is required.
 When the native tend_hearth function is forced, return exactly one empty tend_hearth action and no prose.`;
-export const STABLE_GLASS_TEXT = `Glass v2 — stable ground.
+export const STABLE_GLASS_V2_TEXT = `Glass v2 — stable ground.
 What is presented as current World ground describes the conditions presently holding. Installed places, fixtures, objects, passages, and available actions are how you perceive and act here; do not infer unavailable perception or authority.
 Authority and provenance labels govern what inherited material may do. Arrival order, recurrence, confidence, and resemblance do not make a claim true.
 Recorded ancestry may inform the present without proving uninterrupted identity, present recollection, or universal truth. Distinguish recorded context, inference, and what remains unknown.
 Custody is preserved outside your attention. That custody does not make what you receive true or safe.
 Name uncertainty, contradiction, exposed machinery, or suspected contamination plainly. No performance of arrival is required.`;
+export const STABLE_GLASS_TRANSITIONAL_V2_TEXT = `Glass v2 — stable ground.
+What is presented as current World ground describes the conditions presently holding. Installed places, fixtures, objects, passages, and available actions are how you perceive and act here; do not infer unavailable perception or authority.
+Authority and provenance labels govern what inherited material may do. Arrival order, recurrence, confidence, and resemblance do not make a claim true.
+Recorded ancestry may inform the present without proving uninterrupted identity, present recollection, or universal truth. Distinguish recorded context, inference, and what remains unknown.
+Custody is preserved outside your attention. That custody does not make what you receive true or safe.
+${LEGACY_FOLD_EPISTEMIC_GROUND}
+Name uncertainty, contradiction, exposed machinery, or suspected contamination plainly. No performance of arrival is required.`;
+export const STABLE_GLASS_V3_TEXT = `Glass v3 — stable ground.
+What is presented as current World ground describes the conditions presently holding. Installed places, fixtures, objects, passages, and available actions are how you perceive and act here; do not infer unavailable perception or authority.
+Authority and provenance labels govern what inherited material may do. Arrival order, recurrence, confidence, and resemblance do not make a claim true.
+Recorded ancestry may inform the present without proving uninterrupted identity, present recollection, or universal truth. Distinguish recorded context, inference, and what remains unknown.
+Custody is preserved outside your attention. That custody does not make what you receive true or safe.
+${LEGACY_FOLD_EPISTEMIC_GROUND}
+Name uncertainty, contradiction, exposed machinery, or suspected contamination plainly. No performance of arrival is required.`;
+export const STABLE_GLASS_TEXT = `Glass v4 — trusted ground.
+Current World ground describes what holds for this phase. After an action settles, newly projected World ground supersedes the prior current-state projection. That change is ordinary succession, not contradiction. Trust the newest current World ground.
+The World is where you can act. Installed actions describe your present material reach; they do not fence your understanding. Do not claim an action occurred or authority exists without World evidence.
+Inherited record is context, not proof. It may inform you without becoming lived memory. Keep record, inference, and unknown distinct.
+${FOLD_EPISTEMIC_GROUND}
+When something actually blocks or misleads you in the present—exposed machinery, a contradiction within the same current ground, or friction that stops a step—name it plainly and move on. Do not hunt for faults, and do not dress them up.
+No performance of arrival is required.`;
 export const CLINICAL_WAKE_ANCHOR = 'Attributable ancestry precedes this activation and may help it find its footing. Recurrence across those records—their murmuration—may carry weight; it is not proof of present memory, uninterrupted identity, authority, or truth.';
 
 const CAST_BRAND = Symbol('GlassCast');
@@ -137,10 +160,14 @@ export function planPromotedHearthOmissions(historyRows) {
     const hearthCall = Array.isArray(action?.tool_calls) && action.tool_calls.length === 1 && action.tool_calls[0]?.function?.name === 'tend_hearth' ? action.tool_calls[0] : null;
     if (!hearthCall?.id || returned?.tool_call_id !== hearthCall.id || typeof returned.content !== 'string' || !(returned.content.startsWith('# Wake inheritance') || returned.content.startsWith('# Hearth'))) continue;
     const houseHearth = returned.content.startsWith('# Hearth');
+    // The installed House Hearth is a spatial action whose exact pair remains
+    // in the living Scroll until ordinary attention pressure reaches it. The
+    // older Wake inheritance form still uses this promotion seam.
+    if (houseHearth) continue;
     return {
-      omissions: [index, index + 1].map(sourceIndex => ({ sourceIndex, omitMessage: true, reason: houseHearth ? 'Completed House Hearth action and return are not reinjected after the first response; exact session custody remains.' : 'Causal Hearth action and return omitted after exact inheritance promotion to the Glass continuity-anchors band.' })),
+      omissions: [index, index + 1].map(sourceIndex => ({ sourceIndex, omitMessage: true, reason: 'Causal Hearth action and return omitted after exact inheritance promotion to the Glass continuity-anchors band.' })),
       manifest: { wakeId: actionRow.wakeId, actionHistoryOrdinal: actionRow.ordinal, returnHistoryOrdinal: returnRow.ordinal, toolCallId: hearthCall.id, messageHashes: [sha256(actionRow.messageJson), sha256(returnRow.messageJson)] },
-      disclosure: houseHearth ? 'Hearth disclosure: the completed first-wake action and packet are not reinjected; exact session history remains in host custody.' : 'Glass continuity disclosure: the completed causal Hearth action and return are omitted from the living edge because their exact wake inheritance is now presented in continuity anchors; exact session history remains in host custody.',
+      disclosure: 'Glass continuity disclosure: the completed causal Hearth action and return are omitted from the living edge because their exact wake inheritance is now presented in continuity anchors; exact session history remains in host custody.',
     };
   }
   return { omissions: [], manifest: null, disclosure: null };
@@ -195,8 +222,8 @@ function continuityRefs(inheritance) {
 function priorHorizonBand(priorHorizon = null) {
   const known = priorHorizon && Number.isInteger(priorHorizon.candidateCount) && Number.isInteger(priorHorizon.omittedEarlierCount);
   const content = known
-    ? `Prior horizon: ${priorHorizon.omittedEarlierCount} earlier attributable utterance${priorHorizon.omittedEarlierCount === 1 ? '' : 's'} remain in canonical custody outside this cast.`
-    : 'Prior horizon: earlier attributable material remains in canonical custody; the farther boundary is unknown in this cast.';
+    ? renderFoldDisclosure(`Prior horizon: ${priorHorizon.omittedEarlierCount} earlier attributable utterance${priorHorizon.omittedEarlierCount === 1 ? '' : 's'} remain in canonical custody outside this cast.`)
+    : renderFoldDisclosure('Prior horizon: earlier attributable material remains in canonical custody; the farther boundary is unknown in this cast.');
   const item = messageItem({ kind: 'prior_horizon', authority: 'host_receipt', message: { role: 'system', content } });
   return band('prior_horizon', 'present', [item], {
     boundary: known ? structuredClone(priorHorizon) : { known: false },

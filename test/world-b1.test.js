@@ -254,7 +254,7 @@ test('builder inspection exposes bounded B1 passage and object-state projections
   const dir = await mkdtemp(join(tmpdir(), 'hub-world-b1-builder-')); const env = { HUB_RESIDENT_MODE: 'fake', HUB_DB_PATH: join(dir, 'hub.sqlite'), HUB_SPINE_PATH: join(dir, 'spine.jsonl'), HUB_WORLD_PATH: join(dir, 'world.sqlite'), HUB_RESULT_PATH: join(dir, 'results.sqlite'), HUB_WORKSHOP_ROOT: dir };
   const hub = createHub({ env }); await new Promise(resolve => hub.server.listen(0, '127.0.0.1', resolve)); const base = `http://127.0.0.1:${hub.server.address().port}`;
   try {
-    let response = await fetch(`${base}/api/world`); let body = await response.json(); assert.equal(response.status, 200); assert.equal(body.graph.passages.length, 6); assert.equal(body.graph.objectStates.length, 2);
+    let response = await fetch(`${base}/api/world`); let body = await response.json(); assert.equal(response.status, 200); assert.equal(body.graph.passages.length, 8); assert.equal(body.graph.objectStates.length, 2);
     hub.world.sqlite.prepare("UPDATE world_object_states SET state_json=? WHERE object_id='object.front_door'").run('x'.repeat(300000));
     hub.world.sqlite.exec('PRAGMA foreign_keys=OFF;');
     const insert = hub.world.sqlite.prepare(`INSERT INTO world_passages(${PASSAGE_COLUMNS.join(',')}) VALUES(?,?,?,?,?,?,?,?)`);

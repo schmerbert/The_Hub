@@ -107,6 +107,16 @@ test('direct Glass promotion declares omission of only the completed causal Hear
   assert.equal(plan.manifest.actionHistoryOrdinal, 2);
 });
 
+test('House Hearth is not promoted out of the living Scroll by a special immediate rule', () => {
+  const plan = planPromotedHearthOmissions([
+    { ordinal: 1, wakeId: 'wake-first', messageKind: 'assistant_tool_call', messageJson: JSON.stringify({ role: 'assistant', content: null, tool_calls: [{ id: 'hearth-1', type: 'function', function: { name: 'tend_hearth', arguments: '{}' } }] }) },
+    { ordinal: 2, wakeId: 'wake-first', messageKind: 'tool_result', messageJson: JSON.stringify({ role: 'tool', tool_call_id: 'hearth-1', content: '# Hearth\n\nexact packet' }) },
+  ]);
+  assert.deepEqual(plan.omissions, []);
+  assert.equal(plan.manifest, null);
+  assert.equal(plan.disclosure, null);
+});
+
 test('wake inheritance excludes the retired Longshore blessing even when it is newest ancestry', () => {
   const inheritance = buildGlassWakeInheritance({
     prior: {
@@ -168,12 +178,12 @@ test('runtime persists exact casts, promotes Hearth inheritance once, and keeps 
     assert.equal(direct.cast.bands[1].itemCount, 1);
     assert.equal(direct.cast.bands[1].items[0].kind, 'silver_bullet_holster');
     const ordinaryMessages = JSON.parse(ordinary.requestBody).messages;
-    assert.equal(ordinaryMessages.some(message => message.role === 'tool' && message.content.startsWith('# Wake inheritance')), false);
-    assert.equal(ordinaryMessages.some(message => message.tool_calls?.some(call => call.function?.name === 'tend_hearth')), false);
-    assert.equal(ordinaryMessages.some(message => message.role === 'system' && message.content.endsWith(inheritedAtom.excerpt)), false);
+    assert.equal(ordinaryMessages.some(message => message.role === 'tool' && message.content.startsWith('# Hearth')), true);
+    assert.equal(ordinaryMessages.some(message => message.tool_calls?.some(call => call.function?.name === 'tend_hearth')), true);
+    assert.equal(ordinaryMessages.some(message => message.role === 'tool' && message.content.includes(inheritedAtom.excerpt)), true);
     assert.equal(ordinaryMessages.some(message => message.content === 'first words in the new lifespan'), true);
     assert.equal(ordinaryMessages.some(message => typeof message.content === 'string' && message.content.startsWith('FAKE MODE')), true);
-    assert.equal(direct.presentationScrub.omissions.filter(item => /not reinjected/.test(item.reason)).length, 2);
+    assert.equal(direct.presentationScrub.omissions.filter(item => /not reinjected/.test(item.reason)).length, 0);
     assert.equal(direct.requestBodySha256, sha256(ordinary.requestBody));
     assert.equal(direct.presentedMessagesSha256, sha256(JSON.stringify(ordinaryMessages)));
     assert.equal(direct.crossing.sessionId, later.sessionId);

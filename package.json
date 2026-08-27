@@ -15,16 +15,27 @@
     "forest:wild:apply": "node src/scripts/forest-wild-apply.js",
     "forest:intake:plan": "node src/scripts/forest-intake-plan.js",
     "forest:intake:apply": "node src/scripts/forest-intake-apply.js",
+    "forest:embeddings:setup": "node src/scripts/forest-embedding-setup.js",
+    "forest:traversal:migrate-v3": "node scripts/migrate-forest-traversal-v3.mjs",
     "spine:verify": "node src/scripts/spine-verify.js",
     "world:verify": "node src/scripts/world-verify.js",
     "world:migrate-a2": "node src/scripts/world-migrate-a2.js",
     "world:migrate-b1": "node src/scripts/world-migrate-b1.js",
     "world:migrate-hearth": "node src/scripts/world-migrate-hearth.js",
+    "world:migrate-forest": "node src/scripts/world-migrate-forest.js",
+    "room:migrate-workshop": "node src/scripts/room-migrate-workshop.js",
     "trace:establish": "node src/scripts/trace-establish.js",
     "glass-trace:establish": "node src/scripts/glass-trace-establish.js",
     "roots:establish": "node src/scripts/roots-establish.js"
   },
   "devDependencies": {
     "electron": "43.2.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0"
+  },
+  "overrides": {
+    "adm-zip": "^0.6.0",
+    "sharp": "^0.35.0"
   }
 }

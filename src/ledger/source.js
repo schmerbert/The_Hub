@@ -16,7 +16,7 @@ import { assertScrubbedProviderReturn } from '../scrub/provider-return.js';
 import { assertScrubbedHostReturn } from '../scrub/host-return.js';
 import { STABLE_GLASS_TEXT } from '../context/glass-cast.js';
 import { WakeStreamJournal } from './wake-stream.js';
-import { ROOTS_SCHEMA, RootsLedger } from './roots.js';
+import { ROOTS_SCHEMA, RootsLedger, migrateSemanticShadowFeatherLimit, migrateAttentionExposureKinds } from './roots.js';
 import { ScrollTraceLedger } from './scroll-trace.js';
 import { GlassTraceLedger } from './glass-trace.js';
 import { LEDGER_SCHEMA } from './schema.js';
@@ -31,6 +31,8 @@ export class HubDatabase {
     const existingSource = Boolean(this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_history'").get());
     this.sqlite.exec('PRAGMA foreign_keys = ON;');
     this.sqlite.exec(`${LEDGER_SCHEMA}\n${ROOTS_SCHEMA}`);
+    migrateSemanticShadowFeatherLimit(this.sqlite);
+    migrateAttentionExposureKinds(this.sqlite);
     this.migrateContextItems();
     this.migrateCustodyFailureColumns();
     this.migrateSessionColumns();
@@ -359,7 +361,7 @@ export class HubDatabase {
       this.appendScrollTraceManifest({ historyId, sessionId: session.id, wakeId, ordinal: historyOrdinal, messageKind: 'user', sourceEventId: eventId, scrubReceipt: null });
       this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
       for (const item of [
-        { ordinal: 1, itemKind: 'clinical_anchor', actorRole: 'system', content: STABLE_GLASS_TEXT, sourceDescription: 'Stable Glass v2', authority: 'host_receipt', included: true },
+        { ordinal: 1, itemKind: 'clinical_anchor', actorRole: 'system', content: STABLE_GLASS_TEXT, sourceDescription: 'Stable Glass v4', authority: 'host_receipt', included: true },
         { ordinal: 2, itemKind: 'utterance', actorRole: 'user', content, sourceEventId: eventId, sourceDescription: 'Current session human message', authority: 'ground', included: true },
       ]) {
         this.sqlite.prepare(`INSERT INTO wake_context_items
@@ -531,7 +533,7 @@ export class HubDatabase {
       const omission = omitted.get(sourceIndex);
       if (!omission) presentedOrdinal += 1;
       let source;
-      if (ref.kind === 'stable_glass') source = { authority: 'code_owned_glass', version: 2, contentHash: sha256(ref.message.content) };
+      if (ref.kind === 'stable_glass') source = { authority: 'code_owned_glass', version: 4, contentHash: sha256(ref.message.content) };
       else if (ref.historyId) source = { authority: 'Session Scroll', historyId: ref.historyId, sessionId: ref.historySessionId, ordinal: ref.historyOrdinal, sourceEventId: ref.sourceEventId || null, messageHash: ref.historyMessageHash };
       else if (ref.sourceEventId || ref.glassSourceEventId) source = { authority: 'Source', eventId: ref.sourceEventId || ref.glassSourceEventId, contentHash: ref.sourceContentHash || null };
       else {
@@ -575,6 +577,14 @@ export class HubDatabase {
     const slots = receipt?.silverBulletSlots;
     if (receipt?.kind !== 'house_hearth_packet' || receipt?.schemaVersion !== 1 || slots?.count !== 10 || !Array.isArray(slots.occupied)) return null;
     return structuredClone(slots);
+  }
+
+  getHearthReturn(wakeId) {
+    const row = this.sqlite.prepare('SELECT return_json AS returnJson, return_hash AS returnHash, scroll_hash AS scrollHash FROM hearth_receipts WHERE wake_id=?').get(wakeId);
+    if (!row) return null;
+    try {
+      return { returnValue: JSON.parse(row.returnJson), returnHash: row.returnHash, scrollHash: row.scrollHash };
+    } catch { return null; }
   }
 
   completeProviderRequest(requestId, result, outcome = null, returnScrub = null) {

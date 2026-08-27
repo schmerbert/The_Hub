@@ -6,3 +6,10 @@ node_modules/
 .env
 .env.*
 !.env.example
+*.exe
+*.dll
+*.deps.json
+*.runtimeconfig.json
+*.zip
+launcher/bin/
+launcher/obj/

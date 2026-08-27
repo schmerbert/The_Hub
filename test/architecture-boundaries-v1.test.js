@@ -71,6 +71,7 @@ test('large modules have explicit cohesion standing instead of silently growing'
     ['src/world/graph.js', 'universal World transaction and migration facade; place behavior is prohibited here'],
     ['src/world/events.js', 'closed deterministic reducer, replay, and forensic verifier for universal World law'],
     ['src/runtime/wake-service.js', 'wake choreography; provider crossing extracts only with the adopted return-trace contract'],
+    ['src/forest/store.js', 'exact Forest custody facade; Home chronology access remains joined to entry integrity and append-only edge ownership'],
   ]);
   const unaccounted = [];
   for (const path of await filesUnder(SRC)) {

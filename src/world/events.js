@@ -3,6 +3,7 @@ import { canonicalize, id, sha256 } from '../core/hash.js';
 import { installedTopologyHash, installedTopologyManifest } from './topology.js';
 import { extendedTopologyHash, extendedTopologyManifest } from './topology-b1.js';
 import { hearthTopologyHash, hearthTopologyManifest } from './topology-hearth.js';
+import { forestTopologyHash, forestTopologyManifest } from './topology-forest.js';
 
 export const WORLD_PROJECTOR_VERSION = 4;
 export const WORLD_EVENT_GENESIS_HASH = '0'.repeat(64);
@@ -35,6 +36,8 @@ export const WORLD_EVENT_KINDS = deepFreeze({
   'approval.reconciliation_required/v1': { schemaVersion: 1, stretch: 'A2' },
   'topology.extended/v1': { schemaVersion: 1, stretch: 'B1' },
   'topology.hearth_installed/v1': { schemaVersion: 1, stretch: 'H1' },
+  'topology.forest_installed/v1': { schemaVersion: 1, stretch: 'F1' },
+  'room.installation.revised/v1': { schemaVersion: 1, stretch: 'B1' },
   'location.crossed/v1': { schemaVersion: 1, stretch: 'B1' },
   'passage.operated/v1': { schemaVersion: 1, stretch: 'B1' },
   'fixture.turned/v1': { schemaVersion: 1, stretch: 'B1' },
@@ -146,7 +149,7 @@ export function installWorldEventSchema(sqlite) {
   }
 }
 
-export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], passages: [], objectStates: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, rootBoundary: null, operationalBoundary: null, topologyExtension: null, hearthExtension: null }; }
+export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], passages: [], objectStates: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, rootBoundary: null, operationalBoundary: null, topologyExtension: null, hearthExtension: null, forestExtension: null }; }
 function copyState(state) {
   return {
     nodes: state.nodes.map(row => ({ ...row })), edges: state.edges.map(row => ({ ...row })), locations: state.locations.map(row => ({ ...row })),
@@ -156,6 +159,7 @@ function copyState(state) {
     operationalBoundary: state.operationalBoundary ? { ...state.operationalBoundary } : null,
     topologyExtension: state.topologyExtension ? { ...state.topologyExtension } : null,
     hearthExtension: state.hearthExtension ? { ...state.hearthExtension } : null,
+    forestExtension: state.forestExtension ? { ...state.forestExtension } : null,
     rootBoundary: state.rootBoundary || null,
   };
 }
@@ -262,6 +266,35 @@ function hearthExtensionRows(payload, event, priorState) {
     return { id: edge.id, edge_type: edge.edgeType, from_node_id: edge.fromNodeId, to_node_id: edge.toNodeId, door_identity: null, label: edge.label, created_at: event.occurred_at, ...pointer(event) };
   });
   return { nodes, edges };
+}
+
+function forestExtensionRows(payload, event, priorState) {
+  exactKeys(payload, ['manifestSha256', 'nodes', 'edges', 'passages'], 'Forest topology payload');
+  const manifest = { nodes: payload.nodes, edges: payload.edges, passages: payload.passages };
+  if (payload.manifestSha256 !== sha256(canonicalize(manifest)) || payload.manifestSha256 !== forestTopologyHash() || canonicalize(manifest) !== canonicalize(forestTopologyManifest())) throw new Error('Forest topology does not match the code-owned manifest.');
+  if (!priorState.hearthExtension || priorState.forestExtension) throw new Error('Forest topology requires the Hearth generation and may be installed only once.');
+  const installedIds = new Set(priorState.nodes.map(row => row.id));
+  const nodes = payload.nodes.map(node => {
+    exactKeys(node, ['id', 'nodeType', 'residentText', 'state', 'lifecycle', 'revision'], 'Forest node');
+    if (node.id !== 'place.forest' || node.nodeType !== 'place' || node.lifecycle !== 'standing' || node.revision !== 1 || installedIds.has(node.id)) throw new Error('Forest place node is invalid.');
+    canonicalObject(node.state, 'Forest place state'); installedIds.add(node.id);
+    return { id: node.id, node_type: node.nodeType, resident_text: node.residentText, state_json: canonicalize(node.state), lifecycle: node.lifecycle, revision: 1, created_at: event.occurred_at, ...pointer(event) };
+  });
+  const edgeIds = new Set(priorState.edges.map(row => row.id));
+  const edges = payload.edges.map(edge => {
+    exactKeys(edge, ['id', 'edgeType', 'fromNodeId', 'toNodeId', 'doorIdentity', 'label'], 'Forest edge');
+    if (edge.edgeType !== 'passage' || edge.doorIdentity !== null || edgeIds.has(edge.id) || !installedIds.has(edge.fromNodeId) || !installedIds.has(edge.toNodeId)) throw new Error('Forest path edge is invalid.');
+    edgeIds.add(edge.id);
+    return { id: edge.id, edge_type: edge.edgeType, from_node_id: edge.fromNodeId, to_node_id: edge.toNodeId, door_identity: null, label: edge.label, created_at: event.occurred_at, ...pointer(event) };
+  });
+  const edgeById = new Map(edges.map(row => [row.id, row]));
+  const passages = payload.passages.map(row => {
+    exactKeys(row, ['edgeId', 'passageId', 'passageKind', 'fromNodeId', 'toNodeId', 'governedObjectId'], 'Forest passage');
+    const edge = edgeById.get(row.edgeId);
+    if (!edge || row.passageId !== 'passage.garden_forest' || row.passageKind !== 'opening' || row.governedObjectId !== null || edge.from_node_id !== row.fromNodeId || edge.to_node_id !== row.toNodeId) throw new Error('Forest passage definition is invalid.');
+    return { edge_id: row.edgeId, passage_id: row.passageId, passage_kind: row.passageKind, from_node_id: row.fromNodeId, to_node_id: row.toNodeId, governed_object_id: null, ...pointer(event) };
+  });
+  return { nodes, edges, passages };
 }
 
 function legacyRows(payload, event) {
@@ -391,7 +424,19 @@ export function reduceWorldEvent(priorState, event) {
     return { ...emptyWorldState(), ...legacyRows(payload, event), rootBoundary: 'legacy' };
   }
   const state = copyState(priorState);
-  if (event.event_kind === 'topology.extended/v1') {
+  if (event.event_kind === 'room.installation.revised/v1') {
+    exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'room installation revision causation');
+    if (causation.boundary !== 'room_installation_revision_v1' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Room installation revision causation is invalid.');
+    if (event.aggregate_kind !== 'room_installation' || event.aggregate_id !== 'room.workshop' || event.session_id !== null || event.wake_id !== null || event.command_id !== null || event.actor !== 'world_migration') throw new Error('Room installation revision aggregate envelope is invalid.');
+    exactKeys(payload, ['roomId', 'priorReceiptId', 'priorReceiptHash', 'priorPackageVersion', 'priorManifestHash', 'priorWitnessHash', 'newPackageVersion', 'newManifestHash', 'newWitnessHash', 'reason', 'admission'], 'room installation revision payload');
+    if (payload.roomId !== 'room.workshop') throw new Error('Room installation revision room identity is invalid.');
+    for (const [value, label] of [[payload.priorReceiptId, 'prior receipt identity'], [payload.priorPackageVersion, 'prior package version'], [payload.priorManifestHash, 'prior manifest hash'], [payload.priorWitnessHash, 'prior witness hash'], [payload.newPackageVersion, 'new package version'], [payload.newManifestHash, 'new manifest hash'], [payload.newWitnessHash, 'new witness hash'], [payload.reason, 'revision reason']]) requiredString(value, label);
+    for (const hash of [payload.priorReceiptHash, payload.priorManifestHash, payload.priorWitnessHash, payload.newManifestHash, payload.newWitnessHash]) if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Room installation revision hash is invalid.');
+    if (!payload.priorReceiptId.startsWith('room_installation_')) throw new Error('Room installation prior receipt identity is invalid.');
+    if (payload.priorPackageVersion === payload.newPackageVersion || payload.priorManifestHash === payload.newManifestHash || payload.priorWitnessHash === payload.newWitnessHash) throw new Error('Room installation revision must advance package, manifest, and witness identity.');
+    canonicalObject(payload.admission, 'room installation revision admission');
+    return state;
+  } else if (event.event_kind === 'topology.extended/v1') {
     exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'topology extension causation');
     if (causation.boundary !== 'b1_topology_extension' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Topology extension boundary causation is invalid.');
     if (event.aggregate_kind !== 'topology_extension' || event.aggregate_id !== 'installed' || event.aggregate_revision !== 1 || event.session_id !== null || event.wake_id !== null || event.command_id !== null || !['world_bootstrap', 'world_migration'].includes(event.actor)) throw new Error('Topology extension aggregate envelope is invalid.');
@@ -410,6 +455,13 @@ export function reduceWorldEvent(priorState, event) {
     const extension = hearthExtensionRows(payload, event, state);
     state.nodes.push(...extension.nodes); state.edges.push(...extension.edges);
     state.hearthExtension = { sequence: event.sequence, eventHash: event.event_hash };
+  } else if (event.event_kind === 'topology.forest_installed/v1') {
+    exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'Forest topology causation');
+    if (causation.boundary !== 'forest_place_v1' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Forest topology boundary causation is invalid.');
+    if (event.aggregate_kind !== 'topology_extension' || event.aggregate_id !== 'forest' || event.aggregate_revision !== 1 || event.session_id !== null || event.wake_id !== null || event.command_id !== null || !['world_bootstrap', 'world_migration'].includes(event.actor)) throw new Error('Forest topology aggregate envelope is invalid.');
+    const extension = forestExtensionRows(payload, event, state);
+    state.nodes.push(...extension.nodes); state.edges.push(...extension.edges); state.passages.push(...extension.passages);
+    state.forestExtension = { sequence: event.sequence, eventHash: event.event_hash };
   } else if (event.event_kind === 'operational_snapshot.imported/v1') {
     exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'operational snapshot causation');
     if (causation.boundary !== 'pre_a2_operational_projection' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Operational snapshot boundary causation is invalid.');
@@ -704,11 +756,13 @@ export function readWorldA2Projection(sqlite) {
 export function readWorldProjection(sqlite) {
   const projection = readWorldA2Projection(sqlite);
   const topologyExtension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.extended/v1' ORDER BY sequence LIMIT 1").get();
+  const forestExtension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.forest_installed/v1' ORDER BY sequence LIMIT 1").get();
   return {
     ...projection,
     passages: sqlite.prepare(`SELECT ${PASSAGE_COLUMNS.join(',')} FROM world_passages ORDER BY edge_id`).all(),
     objectStates: sqlite.prepare(`SELECT ${OBJECT_STATE_COLUMNS.join(',')} FROM world_object_states ORDER BY object_id`).all(),
     topologyExtension: topologyExtension ? { sequence: topologyExtension.sequence, eventHash: topologyExtension.event_hash } : null,
+    forestExtension: forestExtension ? { sequence: forestExtension.sequence, eventHash: forestExtension.event_hash } : null,
   };
 }
 
@@ -850,7 +904,15 @@ function verifyCustody(sqlite, events, state, mismatches, limit) {
   }
 }
 
-export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', requireHearth = true } = {}) {
+export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', requireHearth = true, requireForest = false } = {}) {
+  if (scope === 'b1' && requireForest && tableExists(sqlite, 'world_event_journal')) {
+    let forest = null;
+    try { forest = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.forest_installed/v1' LIMIT 1").get(); } catch {}
+    if (!forest) {
+      const hearth = verifyWorldSqlite(sqlite, { mismatchLimit, scope, requireHearth: true, requireForest: false });
+      if (hearth.verified) return { ...hearth, verified: false, status: 'upgrade_required', upgradeRequired: true, projectorVersion: WORLD_PROJECTOR_VERSION, mismatches: [{ code: 'forest_upgrade_required', message: 'The exact Hearth World requires the explicit backup-confirmed Forest-place migration.' }] };
+    }
+  }
   if (scope === 'b1' && requireHearth && tableExists(sqlite, 'world_event_journal')) {
     let hearth = null;
     try { hearth = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.hearth_installed/v1' LIMIT 1").get(); } catch {}
@@ -937,6 +999,7 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
     else if (scope === 'a1' && registration.stretch !== 'A1') addMismatch(mismatches, mismatchLimit, { code: 'later_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (scope === 'a2' && registration.stretch === 'B1') addMismatch(mismatches, mismatchLimit, { code: 'b1_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (!requireHearth && registration.stretch === 'H1') addMismatch(mismatches, mismatchLimit, { code: 'hearth_event_present', sequence: event.sequence, eventKind: event.event_kind });
+    else if (!requireForest && registration.stretch === 'F1') addMismatch(mismatches, mismatchLimit, { code: 'forest_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (registration.schemaVersion !== event.event_schema_version) addMismatch(mismatches, mismatchLimit, { code: 'event_schema_version_unknown', sequence: event.sequence, eventKind: event.event_kind, version: event.event_schema_version });
     const aggregateKey = `${event.aggregate_kind}:${event.aggregate_id}`;
     const expectedRevision = (aggregateRevisions.get(aggregateKey) || 0) + 1;

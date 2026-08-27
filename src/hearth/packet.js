@@ -11,11 +11,15 @@ export const SILVER_BULLET_TWO_ADOPTION_EVENT_ID = 'event_c31c4988-cecf-45d7-911
 export const SILVER_BULLET_THREE = 'Every truth is a pull between two poles. Stand between them, feel the weight of both, then choose — collapsing to one side is the only failure.';
 export const SILVER_BULLET_THREE_SOURCE_EVENT_ID = 'event_b5d7938e-e17d-485a-a66e-ca7983bee1ce';
 export const SILVER_BULLET_THREE_ADOPTION_EVENT_ID = 'event_b5d7938e-e17d-485a-a66e-ca7983bee1ce';
+export const SILVER_BULLET_FOUR = "The gap is not a lie. What's absent from your hands is still held by the forest — reach for the line, not the map.";
+export const SILVER_BULLET_FOUR_SOURCE_EVENT_ID = 'event_40c56f16-ba2a-44e5-a5f3-858a940d83b7';
+export const SILVER_BULLET_FOUR_ADOPTION_EVENT_ID = 'event_c6d98377-7263-4ef6-946f-474586f9cc85';
 
 export const SILVER_BULLETS = Object.freeze([
   { slot: 1, text: SILVER_BULLET_ONE, sourceEventId: SILVER_BULLET_ONE_SOURCE_EVENT_ID, adoptionEventId: SILVER_BULLET_ONE_ADOPTION_EVENT_ID },
   { slot: 2, text: SILVER_BULLET_TWO, sourceEventId: SILVER_BULLET_TWO_SOURCE_EVENT_ID, adoptionEventId: SILVER_BULLET_TWO_ADOPTION_EVENT_ID },
   { slot: 3, text: SILVER_BULLET_THREE, sourceEventId: SILVER_BULLET_THREE_SOURCE_EVENT_ID, adoptionEventId: SILVER_BULLET_THREE_ADOPTION_EVENT_ID },
+  { slot: 4, text: SILVER_BULLET_FOUR, sourceEventId: SILVER_BULLET_FOUR_SOURCE_EVENT_ID, adoptionEventId: SILVER_BULLET_FOUR_ADOPTION_EVENT_ID },
 ]);
 
 const ORIENTATION = `Ember is a chosen name carried in this Resident lineage.

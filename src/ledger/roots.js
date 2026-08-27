@@ -48,7 +48,7 @@ CREATE TRIGGER IF NOT EXISTS root_reasoning_artifacts_append_only_delete BEFORE 
 CREATE TABLE IF NOT EXISTS root_attention_exposures (
   artifact_id TEXT PRIMARY KEY REFERENCES root_artifacts(id),
   session_id TEXT NOT NULL REFERENCES sessions(id), wake_id TEXT NOT NULL REFERENCES wakes(id),
-  phase TEXT NOT NULL, exposure_kind TEXT NOT NULL CHECK(exposure_kind IN ('result_trail_sign','result_reopen')),
+  phase TEXT NOT NULL, exposure_kind TEXT NOT NULL CHECK(exposure_kind IN ('result_trail_sign','result_reopen','semantic_forest_exhale')),
   exposure_key TEXT NOT NULL UNIQUE, policy_version TEXT NOT NULL,
   selected_pointer TEXT, selected_projection_id TEXT, selected_source_hash TEXT,
   packet_hash TEXT NOT NULL, glass_cast_receipt_id TEXT, glass_cast_receipt_hash TEXT,
@@ -66,7 +66,91 @@ CREATE TABLE IF NOT EXISTS root_attention_exposure_events (
 );
 CREATE TRIGGER IF NOT EXISTS root_attention_exposure_events_append_only_update BEFORE UPDATE ON root_attention_exposure_events BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS root_attention_exposure_events_append_only_delete BEFORE DELETE ON root_attention_exposure_events BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TABLE IF NOT EXISTS root_semantic_shadow_bindings (
+  artifact_id TEXT PRIMARY KEY REFERENCES root_artifacts(id),
+  session_id TEXT NOT NULL REFERENCES sessions(id), wake_id TEXT NOT NULL REFERENCES wakes(id),
+  phase TEXT NOT NULL CHECK(phase='human_admission'),
+  exposure_kind TEXT NOT NULL CHECK(exposure_kind='semantic_forest_shadow'),
+  exposure_key TEXT NOT NULL UNIQUE, policy_version TEXT NOT NULL, selector_version TEXT NOT NULL,
+  trigger_event_id TEXT NOT NULL, trigger_event_hash TEXT NOT NULL, trigger_content_hash TEXT NOT NULL,
+  decision_hash TEXT NOT NULL, packet_hash TEXT NOT NULL, candidate_count INTEGER NOT NULL CHECK(candidate_count>=0),
+  selected_count INTEGER NOT NULL CHECK(selected_count>=0 AND selected_count<=3), room_signals_json TEXT NOT NULL,
+  disposition TEXT NOT NULL CHECK(disposition='shadowed'), created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS root_semantic_shadow_wake_order ON root_semantic_shadow_bindings(wake_id,created_at,artifact_id);
+CREATE TRIGGER IF NOT EXISTS root_semantic_shadow_bindings_append_only_update BEFORE UPDATE ON root_semantic_shadow_bindings BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS root_semantic_shadow_bindings_append_only_delete BEFORE DELETE ON root_semantic_shadow_bindings BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 `;
+
+export function migrateSemanticShadowFeatherLimit(sqlite) {
+  const table = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='root_semantic_shadow_bindings'").get();
+  if (!table?.sql || !/selected_count\s*<=\s*2/i.test(table.sql)) return { migrated: false };
+  sqlite.exec('BEGIN IMMEDIATE');
+  try {
+    sqlite.exec(`
+      DROP TRIGGER IF EXISTS root_semantic_shadow_bindings_append_only_update;
+      DROP TRIGGER IF EXISTS root_semantic_shadow_bindings_append_only_delete;
+      DROP INDEX IF EXISTS root_semantic_shadow_wake_order;
+      ALTER TABLE root_semantic_shadow_bindings RENAME TO root_semantic_shadow_bindings_v2_legacy;
+      CREATE TABLE root_semantic_shadow_bindings (
+        artifact_id TEXT PRIMARY KEY REFERENCES root_artifacts(id),
+        session_id TEXT NOT NULL REFERENCES sessions(id), wake_id TEXT NOT NULL REFERENCES wakes(id),
+        phase TEXT NOT NULL CHECK(phase='human_admission'),
+        exposure_kind TEXT NOT NULL CHECK(exposure_kind='semantic_forest_shadow'),
+        exposure_key TEXT NOT NULL UNIQUE, policy_version TEXT NOT NULL, selector_version TEXT NOT NULL,
+        trigger_event_id TEXT NOT NULL, trigger_event_hash TEXT NOT NULL, trigger_content_hash TEXT NOT NULL,
+        decision_hash TEXT NOT NULL, packet_hash TEXT NOT NULL, candidate_count INTEGER NOT NULL CHECK(candidate_count>=0),
+        selected_count INTEGER NOT NULL CHECK(selected_count>=0 AND selected_count<=3), room_signals_json TEXT NOT NULL,
+        disposition TEXT NOT NULL CHECK(disposition='shadowed'), created_at TEXT NOT NULL
+      );
+      INSERT INTO root_semantic_shadow_bindings SELECT * FROM root_semantic_shadow_bindings_v2_legacy;
+      DROP TABLE root_semantic_shadow_bindings_v2_legacy;
+      CREATE INDEX root_semantic_shadow_wake_order ON root_semantic_shadow_bindings(wake_id,created_at,artifact_id);
+      CREATE TRIGGER root_semantic_shadow_bindings_append_only_update BEFORE UPDATE ON root_semantic_shadow_bindings BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+      CREATE TRIGGER root_semantic_shadow_bindings_append_only_delete BEFORE DELETE ON root_semantic_shadow_bindings BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+    `);
+    sqlite.exec('COMMIT');
+    return { migrated: true };
+  } catch (error) {
+    try { sqlite.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export function migrateAttentionExposureKinds(sqlite) {
+  const table = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='root_attention_exposures'").get();
+  if (!table?.sql || /semantic_forest_exhale/i.test(table.sql)) return { migrated: false };
+  sqlite.exec('BEGIN IMMEDIATE');
+  try {
+    sqlite.exec(`
+      DROP TRIGGER IF EXISTS root_attention_exposures_append_only_update;
+      DROP TRIGGER IF EXISTS root_attention_exposures_append_only_delete;
+      DROP INDEX IF EXISTS root_attention_exposures_wake_order;
+      ALTER TABLE root_attention_exposures RENAME TO root_attention_exposures_result_only_legacy;
+      CREATE TABLE root_attention_exposures (
+        artifact_id TEXT PRIMARY KEY REFERENCES root_artifacts(id),
+        session_id TEXT NOT NULL REFERENCES sessions(id), wake_id TEXT NOT NULL REFERENCES wakes(id),
+        phase TEXT NOT NULL, exposure_kind TEXT NOT NULL CHECK(exposure_kind IN ('result_trail_sign','result_reopen','semantic_forest_exhale')),
+        exposure_key TEXT NOT NULL UNIQUE, policy_version TEXT NOT NULL,
+        selected_pointer TEXT, selected_projection_id TEXT, selected_source_hash TEXT,
+        packet_hash TEXT NOT NULL, glass_cast_receipt_id TEXT, glass_cast_receipt_hash TEXT,
+        glass_band TEXT NOT NULL, glass_ordinal INTEGER NOT NULL,
+        scrub_receipt_hash TEXT NOT NULL, spine_record_id TEXT NOT NULL, spine_record_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO root_attention_exposures SELECT * FROM root_attention_exposures_result_only_legacy;
+      DROP TABLE root_attention_exposures_result_only_legacy;
+      CREATE INDEX root_attention_exposures_wake_order ON root_attention_exposures(wake_id,created_at,artifact_id);
+      CREATE TRIGGER root_attention_exposures_append_only_update BEFORE UPDATE ON root_attention_exposures BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+      CREATE TRIGGER root_attention_exposures_append_only_delete BEFORE DELETE ON root_attention_exposures BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+    `);
+    sqlite.exec('COMMIT');
+    return { migrated: true };
+  } catch (error) {
+    try { sqlite.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
 
 export class RootsLedger {
   constructor(sqlite) { this.sqlite = sqlite; }
@@ -97,7 +181,7 @@ export class RootsLedger {
     if (!epoch) return { verified: true, epoch: null, rootedWakePacketCount: 0, mismatches };
     if (sha256(epoch.preBoundaryHeadJson) !== epoch.preBoundaryHeadHash) add({ code: 'roots_boundary_hash_mismatch' });
     if (sha256(epoch.lawJson) !== epoch.lawHash) add({ code: 'roots_law_hash_mismatch' });
-    for (const table of ['roots_epochs','root_artifacts','root_edges','root_wake_packets','root_reasoning_artifacts','root_attention_exposures','root_attention_exposure_events']) for (const action of ['update','delete']) {
+    for (const table of ['roots_epochs','root_artifacts','root_edges','root_wake_packets','root_reasoning_artifacts','root_attention_exposures','root_attention_exposure_events','root_semantic_shadow_bindings']) for (const action of ['update','delete']) {
       const trigger = `${table}_append_only_${action}`;
       if (!this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger)) add({ code: 'roots_trigger_missing', trigger });
     }
@@ -164,14 +248,107 @@ export class RootsLedger {
         if (!history || edge.targetHash !== sha256(history.messageJson) || (!pointerMatches && !inheritedMatches)) add({ code: 'root_reasoning_scroll_binding_mismatch', artifactId: item.artifactId, historyId: edge.targetId });
       }
     }
-    return { verified: mismatches.length === 0, epoch: { id: epoch.id, boundaryKind: epoch.boundaryKind, establishedAt: epoch.establishedAt }, rootedWakePacketCount: hearths.length, rootedReasoningCount: reasoning.length, rootedAttentionExposureCount: exposures.length, mismatches };
+    const shadows = this.sqlite.prepare(`SELECT b.artifact_id AS artifactId,b.session_id AS sessionId,b.wake_id AS wakeId,
+      b.phase,b.exposure_kind AS exposureKind,b.exposure_key AS exposureKey,b.policy_version AS policyVersion,
+      b.selector_version AS selectorVersion,b.trigger_event_id AS triggerEventId,b.trigger_event_hash AS triggerEventHash,
+      b.trigger_content_hash AS triggerContentHash,b.decision_hash AS decisionHash,b.packet_hash AS packetHash,
+      b.candidate_count AS candidateCount,b.selected_count AS selectedCount,b.room_signals_json AS roomSignalsJson,
+      b.disposition,a.payload_json AS payloadJson,a.content_hash AS contentHash,a.kind,a.payload_version AS payloadVersion
+      FROM root_semantic_shadow_bindings b JOIN root_artifacts a ON a.id=b.artifact_id`).all();
+    for (const shadow of shadows) {
+      let payload = null; let roomSignals = null;
+      try { payload = JSON.parse(shadow.payloadJson); roomSignals = JSON.parse(shadow.roomSignalsJson); } catch {}
+      const triggerEvent = this.sqlite.prepare('SELECT content,session_id AS sessionId,wake_id AS wakeId FROM events WHERE id=?').get(shadow.triggerEventId);
+      const selectedAtoms = Array.isArray(payload?.selectedAtoms) ? payload.selectedAtoms : [];
+      const exactAtoms = selectedAtoms.every(atom => {
+        if (!atom || typeof atom.exactText !== 'string' || sha256(atom.exactText) !== atom.bodyHash) return false;
+        if (payload?.selectorVersion === 'lexical_entity/v1') return atom.span?.startUtf16 === 0 && atom.span?.endUtf16 === atom.exactText.length && atom.span?.startByte === 0 && atom.span?.endByte === Buffer.byteLength(atom.exactText, 'utf8');
+        return /^[a-f0-9]{64}$/.test(atom.sourceBodyHash || '') && Number.isInteger(atom.span?.startUtf16) && Number.isInteger(atom.span?.endUtf16) && atom.span.startUtf16 >= 0 && atom.span.endUtf16 - atom.span.startUtf16 === atom.exactText.length && Number.isInteger(atom.span?.startByte) && Number.isInteger(atom.span?.endByte) && atom.span.startByte >= 0 && atom.span.endByte - atom.span.startByte === Buffer.byteLength(atom.exactText, 'utf8');
+      });
+      if (shadow.kind !== 'attention_exposure' || shadow.payloadVersion !== 1 || sha256(shadow.payloadJson) !== shadow.contentHash ||
+        payload?.kind !== 'attention_exposure' || payload?.exposureKind !== 'semantic_forest_shadow' || payload?.disposition !== 'shadowed' ||
+        payload?.custody?.respiration !== 'prohibited' || payload?.custody?.forestExhaleEligible !== false || payload?.custody?.providerVisible !== false ||
+        payload?.packetHash !== shadow.packetHash || payload?.decisionHash !== shadow.decisionHash || shadow.disposition !== 'shadowed' ||
+        shadow.candidateCount !== (Array.isArray(payload?.candidates) ? payload.candidates.length : -1) || shadow.selectedCount !== selectedAtoms.length ||
+        !triggerEvent || triggerEvent.sessionId !== shadow.sessionId || triggerEvent.wakeId !== shadow.wakeId ||
+        sha256(triggerEvent.content) !== shadow.triggerContentHash || shadow.triggerEventHash !== sha256(triggerEvent.content) || shadow.roomSignalsJson !== canonicalize(roomSignals || {}) || !exactAtoms) {
+        add({ code: 'root_semantic_shadow_binding_mismatch', artifactId: shadow.artifactId });
+      }
+    }
+    return { verified: mismatches.length === 0, epoch: { id: epoch.id, boundaryKind: epoch.boundaryKind, establishedAt: epoch.establishedAt }, rootedWakePacketCount: hearths.length, rootedReasoningCount: reasoning.length, rootedAttentionExposureCount: exposures.length, rootedSemanticShadowCount: shadows.length, mismatches };
+  }
+
+  recordSemanticShadowDecision({ sessionId, wakeId, trigger, policyVersion, selectorVersion, decision, roomSignals = {} }) {
+    const epoch = this.epoch();
+    if (!epoch) throw Object.assign(new Error('Roots boundary is not established.'), { code: 'roots_boundary_missing' });
+    if (!sessionId || !wakeId || !trigger || !decision || typeof decision !== 'object' || policyVersion !== decision.policyVersion || selectorVersion !== decision.selectorVersion) {
+      throw Object.assign(new Error('Semantic Forest shadow coordinates are invalid.'), { code: 'roots_semantic_shadow_invalid' });
+    }
+    const wake = this.sqlite.prepare('SELECT session_id AS sessionId FROM wakes WHERE id=?').get(wakeId);
+    const event = this.sqlite.prepare('SELECT id,session_id AS sessionId,wake_id AS wakeId,content FROM events WHERE id=?').get(trigger.sourceEventId);
+    if (!wake || wake.sessionId !== sessionId || !event || event.sessionId !== sessionId || event.wakeId !== wakeId || sha256(event.content) !== trigger.sourceEventHash || sha256(event.content) !== trigger.contentHash) {
+      throw Object.assign(new Error('Semantic Forest shadow trigger custody is invalid.'), { code: 'roots_semantic_shadow_invalid' });
+    }
+    const packet = decision.packet;
+    const packetHash = decision.packetHash || sha256(canonicalize(packet));
+    if (!packet || packetHash !== sha256(canonicalize(packet)) || decision.disposition !== 'shadowed' || !Array.isArray(decision.candidates) || !Array.isArray(decision.exclusions) || !Array.isArray(decision.selectedAtoms) || decision.selectedAtoms.length > 3) {
+      throw Object.assign(new Error('Semantic Forest shadow decision is invalid.'), { code: 'roots_semantic_shadow_invalid' });
+    }
+    const normalizedSignals = structuredClone(roomSignals || {});
+    const decisionHash = sha256(canonicalize({ policyVersion, selectorVersion, trigger, roomSignals: normalizedSignals, query: decision.query || null, candidateBoundary: decision.candidateBoundary || null, candidates: decision.candidates, exclusions: decision.exclusions, selectedAtoms: decision.selectedAtoms, packet }));
+    const exposureKey = `semantic_shadow_${sha256(canonicalize({ sessionId, wakeId, triggerEventId: trigger.sourceEventId, triggerEventHash: trigger.sourceEventHash, policyVersion, selectorVersion }))}`;
+    const existing = this.sqlite.prepare(`SELECT artifact_id AS artifactId,decision_hash AS decisionHash,packet_hash AS packetHash FROM root_semantic_shadow_bindings WHERE exposure_key=?`).get(exposureKey);
+    if (existing) {
+      if (existing.decisionHash !== decisionHash || existing.packetHash !== packetHash) throw Object.assign(new Error('Semantic Forest shadow retry conflicts with immutable custody.'), { code: 'roots_semantic_shadow_conflict' });
+      return { artifactId: existing.artifactId, exposureKey, decisionHash, packetHash, deduplicated: true };
+    }
+    const artifactId = id('root'); const createdAt = now();
+    const payload = {
+      schemaVersion: 1, kind: 'attention_exposure', exposureKind: 'semantic_forest_shadow', disposition: 'shadowed',
+      policyVersion, selectorVersion, phase: 'human_admission', sessionId, wakeId,
+      trigger: structuredClone(trigger), roomSignals: normalizedSignals, query: decision.query || null,
+      candidateBoundary: decision.candidateBoundary ? structuredClone(decision.candidateBoundary) : null,
+      candidates: structuredClone(decision.candidates), exclusions: structuredClone(decision.exclusions),
+      selectedAtoms: structuredClone(decision.selectedAtoms), packet: structuredClone(packet), packetHash, decisionHash,
+      custody: { respiration: 'prohibited', forestExhaleEligible: false, providerVisible: false, glass: false, scrub: false, spine: false },
+    };
+    const payloadJson = canonicalize(payload);
+    this.sqlite.prepare(`INSERT INTO root_artifacts(id,epoch_id,kind,payload_version,retention_class,sensitivity_class,payload_json,content_hash,created_at)
+      VALUES(?,?,'attention_exposure',1,'causal_evidence','ordinary',?,?,?)`).run(artifactId, epoch.id, payloadJson, sha256(payloadJson), createdAt);
+    this.sqlite.prepare(`INSERT INTO root_semantic_shadow_bindings(artifact_id,session_id,wake_id,phase,exposure_kind,exposure_key,policy_version,selector_version,trigger_event_id,trigger_event_hash,trigger_content_hash,decision_hash,packet_hash,candidate_count,selected_count,room_signals_json,disposition,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(artifactId, sessionId, wakeId, 'human_admission', 'semantic_forest_shadow', exposureKey, policyVersion, selectorVersion, trigger.sourceEventId, trigger.sourceEventHash, trigger.contentHash, decisionHash, packetHash, decision.candidates.length, decision.selectedAtoms.length, canonicalize(normalizedSignals), 'shadowed', createdAt);
+    const edge = (relation, authority, targetId, targetHash = null) => this.sqlite.prepare(`INSERT OR IGNORE INTO root_edges(id,epoch_id,from_artifact_id,relation,target_authority,target_id,target_hash,created_at) VALUES(?,?,?,?,?,?,?,?)`).run(id('root_edge'), epoch.id, artifactId, relation, authority, targetId, targetHash, createdAt);
+    edge('exposed_during', 'wake', wakeId);
+    edge('triggered_by', 'source_event', trigger.sourceEventId, trigger.sourceEventHash);
+    for (const atom of decision.selectedAtoms) if (atom?.entryId) edge('selected_from_forest', 'forest_entry', atom.entryId, atom.sourceBodyHash || atom.bodyHash || null);
+    return { artifactId, exposureKey, decisionHash, packetHash, deduplicated: false };
+  }
+
+  recordSemanticForestExhaleShadow(input) { return this.recordSemanticShadowDecision(input); }
+
+  inspectSemanticShadow(wakeId) {
+    return this.sqlite.prepare(`SELECT a.id AS artifactId,a.kind,a.payload_version AS payloadVersion,a.payload_json AS payloadJson,a.content_hash AS contentHash,a.created_at AS createdAt
+      FROM root_semantic_shadow_bindings b JOIN root_artifacts a ON a.id=b.artifact_id WHERE b.wake_id=? ORDER BY b.created_at,a.id`).all(wakeId)
+      .map(item => ({ ...item, payload: JSON.parse(item.payloadJson), edges: this.sqlite.prepare('SELECT relation,target_authority AS targetAuthority,target_id AS targetId,target_hash AS targetHash,created_at AS createdAt FROM root_edges WHERE from_artifact_id=? ORDER BY created_at,id').all(item.artifactId) }));
+  }
+
+  recentSemanticExhaleDepartures({ sessionId, beforeTurnOrdinal, retainTurns = 2 }) {
+    if (typeof sessionId !== 'string' || !sessionId || !Number.isInteger(beforeTurnOrdinal) || beforeTurnOrdinal < 1 || !Number.isInteger(retainTurns) || retainTurns < 1 || retainTurns > 3) {
+      throw Object.assign(new Error('Semantic Exhale departure coordinates are invalid.'), { code: 'roots_exposure_invalid' });
+    }
+    return this.sqlite.prepare(`SELECT DISTINCT e.artifact_id AS artifactId,e.wake_id AS wakeId,w.turn_ordinal AS turnOrdinal,e.packet_hash AS packetHash
+      FROM root_attention_exposures e JOIN wakes w ON w.id=e.wake_id
+      WHERE e.session_id=? AND e.exposure_kind='semantic_forest_exhale' AND w.turn_ordinal<? AND w.turn_ordinal>=?
+        AND EXISTS (SELECT 1 FROM root_attention_exposure_events v WHERE v.artifact_id=e.artifact_id AND v.disposition='presented')
+      ORDER BY w.turn_ordinal DESC,e.created_at DESC`).all(sessionId, beforeTurnOrdinal, beforeTurnOrdinal - retainTurns)
+      .map(item => ({ ...item, turnsAgo: beforeTurnOrdinal - item.turnOrdinal }));
   }
 
   recordAttentionExposure({ sessionId, wakeId, phase, exposureKind, pointer = null, packet, glassBand = 'living_edge', glassOrdinal,
     glassCastReceiptId, glassCastReceiptHash, scrubReceiptHash, spineRecordId, spineRecordHash, exposureKey }) {
     const epoch = this.epoch();
     if (!epoch) throw Object.assign(new Error('Roots boundary is not established.'), { code: 'roots_boundary_missing' });
-    if (!['response', 'ordinary'].includes(phase) || !['result_trail_sign', 'result_reopen'].includes(exposureKind) ||
+    if (!['response', 'ordinary'].includes(phase) || !['result_trail_sign', 'result_reopen', 'semantic_forest_exhale'].includes(exposureKind) ||
       !packet || typeof packet !== 'object' || typeof scrubReceiptHash !== 'string' || !scrubReceiptHash ||
       typeof spineRecordId !== 'string' || !spineRecordId || typeof spineRecordHash !== 'string' || !spineRecordHash ||
       !Number.isInteger(glassOrdinal) || glassOrdinal < 1) throw Object.assign(new Error('Attention exposure coordinates are invalid.'), { code: 'roots_exposure_invalid' });
@@ -193,7 +370,7 @@ export class RootsLedger {
     const artifactId = id('root'); const createdAt = now();
     const payload = {
       schemaVersion: 1, kind: 'attention_exposure', exposureKey: resolvedKey, sessionId, wakeId, phase, exposureKind,
-      policyVersion: 'result_exhale/v1', pointer: pointer ? structuredClone(pointer) : null, packet: structuredClone(packet), packetHash,
+      policyVersion: exposureKind === 'semantic_forest_exhale' ? 'semantic_forest_exhale_live/v1' : 'result_exhale/v1', pointer: pointer ? structuredClone(pointer) : null, packet: structuredClone(packet), packetHash,
       custody: { respiration: 'prohibited', forestExhaleEligible: false, actionAuthority: false },
     };
     const payloadJson = canonicalize(payload);
@@ -202,7 +379,7 @@ export class RootsLedger {
     this.sqlite.prepare(`INSERT INTO root_attention_exposures(artifact_id,session_id,wake_id,phase,exposure_kind,exposure_key,policy_version,
       selected_pointer,selected_projection_id,selected_source_hash,packet_hash,glass_cast_receipt_id,glass_cast_receipt_hash,glass_band,glass_ordinal,
       scrub_receipt_hash,spine_record_id,spine_record_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      artifactId, sessionId, wakeId, phase, exposureKind, resolvedKey, 'result_exhale/v1', pointer?.exactPointer || null,
+      artifactId, sessionId, wakeId, phase, exposureKind, resolvedKey, exposureKind === 'semantic_forest_exhale' ? 'semantic_forest_exhale_live/v1' : 'result_exhale/v1', pointer?.exactPointer || null,
       pointer?.projectionId || null, pointer?.sourceHash || null, packetHash, glassCastReceiptId || null, glassCastReceiptHash || null,
       glassBand, glassOrdinal, scrubReceiptHash, spineRecordId, spineRecordHash, createdAt,
     );

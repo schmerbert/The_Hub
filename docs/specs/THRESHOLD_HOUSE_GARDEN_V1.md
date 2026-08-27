@@ -8,6 +8,8 @@ This specification installs the first sparse exterior reality around the Hub wit
 
 The Hub remains a place containing the Center and its rooms. The Center is not the whole Hub. The Garden is the exterior junction: House west, Forest north, Road east, and the Hub south.
 
+> **Later revision:** [`FOREST_PATHS_ROLLING_FOLD_V1.md`](FOREST_PATHS_ROLLING_FOLD_V1.md) supersedes only B1's closed Forest boundary. B1 remains exact ancestry. The Road boundary remains closed.
+
 ## Installed shape
 
 The B1 extension installs these identities:

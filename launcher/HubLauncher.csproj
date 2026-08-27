@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>The Hub</AssemblyName>
+    <RootNamespace>TheHubLauncher</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SelfContained>false</SelfContained>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+</Project>
