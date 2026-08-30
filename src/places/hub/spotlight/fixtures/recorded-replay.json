@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "dataset.spotlight.first_marble",
+  "instrument": { "id": "card.example_001", "label": "Example 001", "quote": "USD" },
+  "normalization": { "price": "median_completed_sale_usd", "volume": "completed_sales_per_interval" },
+  "observations": [
+    { "id": "observation.001", "sourceRef": "source.recorded_market/row/001", "observedAt": "2026-01-01T00:00:00.000Z", "price": 100, "volume": 10, "dataCompleteness": 1 },
+    { "id": "observation.002", "sourceRef": "source.recorded_market/row/002", "observedAt": "2026-01-01T00:05:00.000Z", "price": 102, "volume": 12, "dataCompleteness": 1 },
+    { "id": "observation.003", "sourceRef": "source.recorded_market/row/003", "observedAt": "2026-01-01T00:10:00.000Z", "price": 110, "volume": 25, "dataCompleteness": 0.9 },
+    { "id": "observation.004", "sourceRef": "source.recorded_market/row/004", "observedAt": "2026-01-01T00:15:00.000Z", "price": 111, "volume": 24, "dataCompleteness": 0.9 }
+  ],
+  "analogues": [
+    { "id": "analogue.201", "sourceRefs": ["source.recorded_market/episode/201"], "priceReturn": 0.11, "volumeRatio": 2.4, "outcome": "held_above_boundary_for_30m" },
+    { "id": "analogue.202", "sourceRefs": ["source.recorded_market/episode/202"], "priceReturn": 0.09, "volumeRatio": 2.1, "outcome": "returned_below_boundary_in_10m" }
+  ]
+}

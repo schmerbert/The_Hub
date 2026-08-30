@@ -55,6 +55,7 @@ let currentApprovals = [];
 let currentWorld = null;
 let currentWorldTab = 'marble';
 let currentMarbleSelection = 'overview';
+let currentMarbleRoomId = null;
 const wakeSlips = new Map();
 let slipPoll = null;
 let slipPollBusy = false;
@@ -483,9 +484,22 @@ function renderWitnessDetail(witness, selection) {
 }
 
 function renderMarbleInspector(world) {
-  const witness = world.installations?.[0];
+  const witnesses = world.installations || [];
+  const witness = witnesses.find(item => item.roomId === currentMarbleRoomId) || witnesses[0];
   const panel = node('div', 'marble-inspector');
   if (!witness) { appendBlock(panel, 'Installation witness', 'No room installation witness is available.', 'omitted'); return panel; }
+  currentMarbleRoomId = witness.roomId;
+  if (witnesses.length > 1) {
+    const rooms = node('nav', 'marble-room-nav');
+    for (const item of witnesses) {
+      const button = node('button', 'marble-nav-item', item.roomId);
+      button.type = 'button';
+      button.setAttribute('aria-current', String(item.roomId === witness.roomId));
+      button.addEventListener('click', () => { currentMarbleRoomId = item.roomId; currentMarbleSelection = 'overview'; renderWorldSurface(); });
+      rooms.append(button);
+    }
+    panel.append(rooms);
+  }
   const summary = node('div', 'marble-summary');
   summary.append(node('div', 'marble-orb', witness.verified ? '●' : '!'));
   const title = node('div');
@@ -562,7 +576,7 @@ function renderApprovals(approvals) {
 }
 
 async function inspectWorld() {
-  try { currentWorld = await request('/api/world'); currentWorldTab = 'marble'; currentMarbleSelection = 'overview'; trayHeading.textContent = 'Marble inspector'; app.dataset.surface = 'marble'; tray.hidden = false; renderWorldSurface(); panelHost.focus({ preventScroll: true }); }
+  try { currentWorld = await request('/api/world'); currentWorldTab = 'marble'; currentMarbleSelection = 'overview'; currentMarbleRoomId = null; trayHeading.textContent = 'Marble inspector'; app.dataset.surface = 'marble'; tray.hidden = false; renderWorldSurface(); panelHost.focus({ preventScroll: true }); }
   catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
 }
 

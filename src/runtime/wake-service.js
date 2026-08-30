@@ -315,7 +315,15 @@ export class WakeService {
           roomType: world.node(location.room_node_id)?.node_type || null,
           engagedFixtureId: location.engaged_fixture_id || null,
         });
-        const activeSourceEventIds = db.getSessionHistory(created.sessionId).map(row => row.sourceEventId).filter(Boolean);
+        const activeHistory = db.getSessionHistory(created.sessionId);
+        const activeSourceEventIds = activeHistory.map(row => row.sourceEventId).filter(Boolean);
+        const activeContextTexts = activeHistory
+          .filter(row => row.sourceEventId !== triggerEvent.id)
+          .map(row => {
+            try { return JSON.parse(row.messageJson)?.content; } catch { return null; }
+          })
+          .filter(content => typeof content === 'string' && content.trim())
+          .slice(-8);
         const forestWalk = this.forestTraversalService?.projection(created.sessionId) || null;
         const featherExcludeEntryIds = forestWalk?.active ? this.forestTraversalService.featherExclusions(created.sessionId) : [];
         const shadow = this.ambientFeatherService ? await runAmbientFeatherShadow({
@@ -332,6 +340,7 @@ export class WakeService {
             sourceTimestamp: triggerEvent.createdAt,
           },
           activeSourceEventIds,
+          activeContextTexts,
           excludeEntryIds: featherExcludeEntryIds,
           forestWalk,
           roomSignals,
@@ -524,7 +533,7 @@ export class WakeService {
       const requestFrame = spine?.prepareRequest({ requestBody: requestBodyString, threadId: wakeRecord.threadId, wakeId: wakeRecord.id, provider: wakeRecord.provider, model: config.model, authorizationPresent: config.mode === 'live' && Boolean(config.apiKey), requestPhase: phase });
       if (!requestFrame) throw { code: 'glass_cast_invalid', message: 'Glass Casting requires an exact Spine request frame.' };
       const requestId = db.recordProviderRequest({ sessionId: created.sessionId, wakeId: created.wakeId, phase, requestBody: requestBodyString, messageSources: presentedRefs, spineRecordId: requestFrame?.record_id, attention });
-      const worldVerification = world.verification({ mismatchLimit: 1 });
+      const worldVerification = world.verification({ mismatchLimit: 1, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true });
       if (!worldVerification.verified || !worldVerification.journalHead) throw { code: 'glass_trace_invalid', message: 'Glass World ground requires a verified World journal head.' };
       const worldProjection = world.projection(created.sessionId);
       const toolSchemas = tools || [];
@@ -767,7 +776,7 @@ export class WakeService {
             action = call.function?.name === RESULT_REOPEN_TOOL_NAME
               ? reopenResult(call, { requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id })
               : isForestTool && this.forestTraversalService
-                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: created.eventId, queryFallback: triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call })
+                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: created.eventId, queryFallback: triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
               : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
             if (isForestTool && action && !action.resultRack) {
               const custody = gateway.captureResultSafely({
@@ -780,6 +789,14 @@ export class WakeService {
                 spineRecordId: response.requestFrame?.record_id,
               });
               if (custody.resultRack) {
+                if (call.function?.name === 'write_journal' && action.result?.entryId && this.forest) {
+                  this.forest.appendJournalCustody({
+                    entryId: action.result.entryId,
+                    actionReceiptId: action.actionReceipt?.receiptId || action.result.actionReceiptId,
+                    hostReturnReceiptId: action.scrub?.receipt?.receiptId,
+                    resultRack: custody.resultRack,
+                  });
+                }
                 let args = {};
                 try { args = JSON.parse(call.function?.arguments || '{}'); } catch {}
                 action = {

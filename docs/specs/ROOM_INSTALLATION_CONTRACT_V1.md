@@ -44,7 +44,7 @@ An installation manifest uses `apiVersion: room-installation.v1` and declares:
 - a stable `room.*` identity and package version;
 - standing or experimental classification and `autoInstall: false`;
 - a safe package-relative entrypoint and inert declaration export;
-- a requested `place.*` parent while affirming that the host owns the door;
+- a requested `place.*` parent while affirming that the host owns the door, plus an optional `installed` or `withheld` entrance policy;
 - named sockets whose capabilities are supplied by the host;
 - affordance groups bound to declared fixtures, including their effect class, required sockets, host-owned approval policy, and offered tool names;
 - host-installed custody routes;
@@ -52,6 +52,8 @@ An installation manifest uses `apiVersion: room-installation.v1` and declares:
 - host-decided removal that preserves retained custody.
 
 The manifest is bounded data. It makes claims for inspection; it does not prove its own claims or cause installation.
+
+An omitted entrance policy retains the original `installed` expectation. `withheld` is a host-verifiable fit-out state for a room that must be completed before its threshold is offered: the installation witness fails if an entrance is present unexpectedly, and the manifest still cannot create one. A later entrance requires a new versioned installation witness and explicit World migration; changing prose or wiring alone cannot make the room reachable.
 
 ## Host law
 

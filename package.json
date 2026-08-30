@@ -23,7 +23,10 @@
     "world:migrate-b1": "node src/scripts/world-migrate-b1.js",
     "world:migrate-hearth": "node src/scripts/world-migrate-hearth.js",
     "world:migrate-forest": "node src/scripts/world-migrate-forest.js",
+    "world:migrate-binder-window": "node src/scripts/world-migrate-binder-window.js",
+    "world:migrate-spotlight": "node src/scripts/world-migrate-spotlight.js",
     "room:migrate-workshop": "node src/scripts/room-migrate-workshop.js",
+    "binder-window:capture": "node src/scripts/binder-window-capture.js",
     "trace:establish": "node src/scripts/trace-establish.js",
     "glass-trace:establish": "node src/scripts/glass-trace-establish.js",
     "roots:establish": "node src/scripts/roots-establish.js"

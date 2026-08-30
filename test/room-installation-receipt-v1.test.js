@@ -57,9 +57,12 @@ test('Hub startup opens the boundary once and exposes inherited Workshop ancestr
   };
   const hub = createHub({ env: { HUB_MODE: 'fake', HUB_WORKSHOP_ROOT: dir }, ...paths });
   const inspection = projectWorldBuilderInspection(hub.world, hub.db.session.id);
-  assert.equal(inspection.installationReceipts.length, 1);
+  assert.equal(inspection.installationReceipts.length, 2);
   assert.equal(inspection.installationReceipts[0].roomId, 'room.workshop');
   assert.equal(inspection.installationReceipts[0].ancestry, 'inherited_pre_boundary');
+  assert.equal(inspection.installationReceipts[1].roomId, 'room.spotlight');
+  assert.equal(inspection.installationReceipts[1].ancestry, 'forward_installation');
+  assert.equal(inspection.installationReceipts[1].bindings.entrancePolicy, 'withheld');
   await hub.close();
 });
 

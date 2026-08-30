@@ -1,6 +1,6 @@
 # Outside Organs v1 — Window, Watering Hole, and Manhole
 
-> **Status: Adopted architectural direction; not installed.** The Binder, The Box, and The Pipes are independent working systems outside this repository. This specification adopts them as the intended starting organisms for portfolio presentation, outside data, and deliberate web passage. It does not connect them to the Hub, install a Road crossing, expose credentials, authorize payment, or make their current APIs conformant merely by naming them.
+> **Status: Adopted architectural direction; Binder Window first slice implemented in code, configured World migration pending.** The Binder, The Box, and The Pipes are independent working systems outside this repository. [`BINDER_WINDOW_V1.md`](BINDER_WINDOW_V1.md) owns the passive Center fixture and frozen dashboard-snapshot crossing. This direction does not connect The Box or Pipes, install a Road crossing, expose credentials, authorize payment, or make their current APIs conformant merely by naming them.
 
 ## 1. Pressure and classification
 
@@ -34,7 +34,7 @@ These are organs joined by crossings, not rooms created merely because their imp
 
 The Binder is the intended source authority for what the person holds. The Box may supply observations about those holdings; it must not become the ownership ledger. The Window joins these claims for presentation while retaining their separate authority and timestamps.
 
-The first Hub-facing Binder contract should be a purpose-built, bounded, read-only projection. It should be archive-only by default and disclose freshness, basis, completeness, and holes. It must not expose the Binder's generic mutation surface or trigger a Box request, reprice, network call, payment, or portfolio mutation merely because the Window was viewed.
+The first Hub-facing Binder contract is the bounded, read-only projection owned by [`BINDER_WINDOW_V1.md`](BINDER_WINDOW_V1.md). It consumes one deliberately captured local `GET /api/dashboard` snapshot, discloses freshness, completeness, and holes, and exposes no Binder mutation surface. Viewing never triggers a Box request, reprice, network call, payment, or portfolio mutation.
 
 Active refresh and repricing are separate witnessed actions. Disposal remains a Binder ledger event. Stocks and crypto may extend the Binder's instrument and position vocabulary, but their adoption must preserve instrument identity, account/custody, quantity, cost basis, disposal, and observation-source distinctions rather than flatten unlike assets into presentation rows.
 
@@ -103,5 +103,4 @@ No runtime claim is made until a narrower implementation specification defines a
 - bypass tests proving that Window display cannot refresh, spend, browse, trade, or plant continuity; and
 - compatibility and migration treatment for each independently deployed system.
 
-The first favored slice is the passive Binder Window projection. Box active inspection and Pipes live knocks remain later deliberate Road actions even if their external services already run.
-
+The first passive Binder Window slice is implemented in code and awaits the configured World's explicit backup-confirmed topology migration plus a locally captured snapshot. Box active inspection and Pipes live knocks remain later deliberate Road actions even if their external services already run.

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, sha256 } from '../core/hash.js';
-import { readSpineFrames } from '../spine/store.js';
+import { readSpineLedgerFrames, spineLedgerExists } from '../spine/store.js';
 import { metadataForEvent } from './admission.js';
 import { APPEND_ONLY_TABLES } from './store.js';
 
@@ -68,7 +68,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
     }
     if (strictBijection && edges.length !== Math.max(0, eligible.length - eventThreads.size)) throw new Error('Forest responds_to edge count is invalid.');
 
-    const spineFrames = spinePath && existsSync(spinePath) ? readSpineFrames(spinePath) : [];
+    const spineFrames = spinePath && spineLedgerExists(spinePath) ? readSpineLedgerFrames(spinePath) : [];
     const preparedFrames = spineFrames.filter(frame => frame.frame_type === 'request_prepared');
     const preparedById = new Map(preparedFrames.map(frame => [frame.record_id, frame]));
     const lifecycleByRequest = new Map(preparedFrames.map(frame => [frame.record_id, { dispatched: false, outcome: null }]));
@@ -288,6 +288,35 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       const offer = offersById.get(offerId); const latest = latestByOffer.get(offerId);
       if (!offer || offer.source_kind !== 'world_action_span' || offer.source_id !== entry.action_receipt_id || offer.source_locator_json !== canonicalize(locator) || offer.source_hash !== entry.body_hash || offer.intended_jurisdiction !== 'wild' || offer.intended_bucket !== 'workshop_source' || offer.predecessor_source_id || offer.source_timestamp || offer.scrub_policy !== 'workshop_exact_source' || offer.scrub_version !== 'v1' || latest?.state !== 'admitted' || latest.predecessor_source_id || latest.destination_entry_id !== entry.entry_id) throw new Error(`Forest Wild intake custody mismatch for ${entry.entry_id}.`);
     }
+    const journalEntries = forest.prepare('SELECT * FROM forest_journal_entries ORDER BY source_timestamp,entry_id').all();
+    const journalCustody = forest.prepare('SELECT * FROM forest_journal_custody ORDER BY entry_id,revision').all();
+    const custodyByEntry = new Map();
+    for (const row of journalCustody) {
+      if (!custodyByEntry.has(row.entry_id)) custodyByEntry.set(row.entry_id, []);
+      custodyByEntry.get(row.entry_id).push(row);
+    }
+    for (const entry of journalEntries) {
+      if (entry.jurisdiction !== 'home' || entry.bucket !== 'journal' || entry.actor_kind !== 'resident' || entry.signature !== 'actor:resident' || entry.source_authority !== 'model_signed' || entry.tool_name !== 'write_journal' || entry.scrub_policy !== 'journal_identity' || entry.scrub_version !== 'v1' || entry.body_hash !== sha256(entry.body) || entry.body_byte_length !== Buffer.byteLength(entry.body, 'utf8')) throw new Error(`Forest Journal entry custody mismatch for ${entry.entry_id}.`);
+      const event = op.prepare(`SELECT id,thread_id AS threadId,session_id AS sessionId,wake_id AS wakeId,actor_kind AS actorKind,event_kind AS eventKind,content,authority,created_at AS createdAt FROM events WHERE id=?`).get(entry.source_event_id);
+      if (!event || event.threadId !== entry.thread_id || event.sessionId !== entry.session_id || event.wakeId !== entry.wake_id || event.actorKind !== 'resident' || event.eventKind !== 'state' || event.authority !== 'model_signed' || event.createdAt !== entry.source_timestamp || sha256(event.content) !== entry.source_event_hash) throw new Error(`Forest Journal Source ancestry mismatch for ${entry.entry_id}.`);
+      let message; let args;
+      try { message = JSON.parse(event.content); args = JSON.parse(entry.arguments_json); } catch { throw new Error(`Forest Journal exact arguments are malformed for ${entry.entry_id}.`); }
+      const call = message?.tool_calls?.find(candidate => candidate?.id === entry.tool_call_id && candidate?.function?.name === 'write_journal');
+      if (!call || call.function.arguments !== entry.arguments_json || args?.entry !== entry.body || Object.keys(args).some(key => key !== 'entry')) throw new Error(`Forest Journal tool intent mismatch for ${entry.entry_id}.`);
+      const request = op.prepare('SELECT id,session_id AS sessionId,wake_id AS wakeId,spine_record_id AS spineRecordId FROM provider_requests WHERE id=?').get(entry.request_record_id);
+      const frame = preparedById.get(entry.spine_record_id);
+      if (!request || request.sessionId !== entry.session_id || request.wakeId !== entry.wake_id || request.spineRecordId !== entry.spine_record_id || !frame || frame.wake_id !== entry.wake_id) throw new Error(`Forest Journal request/Spine ancestry mismatch for ${entry.entry_id}.`);
+      const hostReceipt = op.prepare('SELECT id,session_id AS sessionId,wake_id AS wakeId,tool_name AS toolName FROM host_return_scrub_receipts WHERE id=?').get(entry.host_return_receipt_id);
+      if (!hostReceipt || hostReceipt.sessionId !== entry.session_id || hostReceipt.wakeId !== entry.wake_id || hostReceipt.toolName !== 'write_journal') throw new Error(`Forest Journal host-return ancestry mismatch for ${entry.entry_id}.`);
+      const history = custodyByEntry.get(entry.entry_id) || [];
+      if (!history.length || history.some((row, index) => row.revision !== index + 1 || row.action_receipt_id !== entry.action_receipt_id || row.host_return_receipt_id !== entry.host_return_receipt_id)) throw new Error(`Forest Journal custody chain mismatch for ${entry.entry_id}.`);
+      const locator = { threadId:entry.thread_id,sessionId:entry.session_id,wakeId:entry.wake_id,actorKind:'resident',toolCallId:entry.tool_call_id,toolName:'write_journal' };
+      const offerId = `intake_${sha256(canonicalize({ sourceKind:'source_event',sourceId:entry.source_event_id,sourceLocator:locator }))}`;
+      expectedOfferIds.add(offerId);
+      const offer = offersById.get(offerId); const latest = latestByOffer.get(offerId);
+      if (!offer || offer.source_kind !== 'source_event' || offer.source_id !== entry.source_event_id || offer.source_locator_json !== canonicalize(locator) || offer.source_hash !== entry.source_event_hash || offer.intended_jurisdiction !== 'home' || offer.intended_bucket !== 'journal' || offer.source_timestamp !== entry.source_timestamp || offer.scrub_policy !== 'journal_identity' || offer.scrub_version !== 'v1' || latest?.state !== 'admitted' || latest.destination_entry_id !== entry.entry_id) throw new Error(`Forest Journal intake custody mismatch for ${entry.entry_id}.`);
+    }
+    for (const row of journalCustody) if (!journalEntries.some(entry => entry.entry_id === row.entry_id)) throw new Error('Forest Journal contains orphan custody.');
     for (const offer of offers) {
       const latest = latestByOffer.get(offer.offer_id);
       if (!latest) continue;
@@ -295,6 +324,6 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
     }
     const intakeHeldCount = [...latestByOffer.values()].filter(decision => decision.state === 'held').length;
     const intakeUnresolvedCount = offers.filter(offer => !latestByOffer.has(offer.offer_id)).length;
-    return { ok: true, entryCount: entries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length, wildCount, eligibleWildCount, intakeOfferCount: offers.length, intakeHeldCount, intakeUnresolvedCount };
+    return { ok: true, entryCount: entries.length, journalCount: journalEntries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length, wildCount, eligibleWildCount, intakeOfferCount: offers.length, intakeHeldCount, intakeUnresolvedCount };
   } finally { world?.close(); forest.close(); op.close(); }
 }

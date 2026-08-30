@@ -202,11 +202,11 @@ provisional -> committed
 - **Provisional** — display or consideration that has not terminally committed.
 - **Committed** — an attributable completed event; not necessarily Home or true.
 
-Current Home admission is bijective with eligible human and resident utterances under identity/non-transformative Scrub. Current Wild admits typed outside sources such as exact Workshop source returns. Thinking and provisional provider text enter neither canonical history nor Forest.
+Current Home has two distinct exact crossings: eligible human and Resident utterances under identity/non-transformative Scrub, and deliberate Resident `write_journal` acts into `home/journal`. Journal planting does not create conversation chronology or elevate truth. Current Wild admits typed outside sources such as exact Workshop source returns. Thinking and provisional provider text enter neither canonical history nor Forest.
 
 Home and Wild are scale-relative relationships, not intrinsic truth labels. Changing the active Forest frame may change whether a whole member is Home-facing or Wild-facing at that wider scale; it must never rewrite the member's interior jurisdictions or promote the authority of any leaf within it.
 
-The proposed law that Resident-authored synthesis is a Wild-to-Home crossing refines future admission ceremony; it does not retroactively reclassify current human utterances or claim that transformative synthesis is installed.
+The proposed law that Resident-authored synthesis is a Wild-to-Home crossing refines future Stream ceremony; it does not retroactively reclassify current human utterances or make the installed Journal a Wild-packet import path.
 
 ### 4.7 Crossings — what changes standing
 
@@ -357,7 +357,7 @@ entry airlock
   -> Write or Leave
 ```
 
-`Leave` creates no Home material. Exact operational/trail custody may remain outside continuity. `Write` requires Resident-authored synthesis through Scrub; the Faun cannot silently summarize an expedition into Home. Forest traversal, semantic vectors, the Faun, Write/Leave ceremony, and this synthesis crossing are not implemented.
+`Leave` creates no Home material. Exact operational/trail custody may remain outside continuity. `Write` requires Resident-authored synthesis through Scrub; the Faun cannot silently summarize an expedition into Home. The installed Journal supplies deliberate Home planting only. The Home--Stream--Wild crossing, Bear/Faun threshold, traversable Wild expedition, and Wild-return synthesis ceremony are not implemented.
 
 ## 7. Garden, Road, Glass, and Iron Gate
 
@@ -502,7 +502,7 @@ The exact manifest schema and Room SDK are not adopted by this document. The slo
 | Center, Workshop, Hub, Garden, House, Threshold, front door, Forest/Road boundaries | Implemented |
 | Five-band immutable Glass casts, Scrub, Spine crossing | Implemented |
 | Ceiling/Patch Bay room/location capability mounting | Implemented |
-| Home exact human/resident utterance and typed Wild Workshop-source admission | Implemented |
+| Home exact human/resident utterance, deliberate Resident Journal planting, and typed Wild Workshop-source admission | Implemented |
 | Vault room and Forest-to-Vault pointer direction | Adopted, not implemented |
 | Recoverable Result Exhale | Implemented; semantic Forest Exhale remains staged and uninstalled |
 | Marble as the broader durable constitutional lens | Adopted conceptual grammar |

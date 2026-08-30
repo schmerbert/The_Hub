@@ -29,7 +29,7 @@ No material enters resident attention, becomes resident speech, changes World re
 
 ## Circulation shape
 
-Most paths below are implemented. The existing World physical and operational core now crosses the verified A1/A2 event-journal/projector segment. Future House, Garden, Backpack, Journal, and mutable fixtures must reuse it; the loose-wire register below remains the status authority for other gaps.
+Most paths below are implemented. The existing World physical and operational core crosses the verified A1/A2 event-journal/projector segment. Journal is a Forest planting crossing rather than a World material object in its first slice; future Backpack and mutable fixtures must reuse the World pipe when they change material state. The loose-wire register below remains the status authority for other gaps.
 
 ```text
 Human HTTP input
@@ -121,6 +121,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | Omitted machine evidence leaves a trail sign | Attention fitting + Result Rack pointer validation + Roots exposure gate | Omission manifest, immutable pointer/hash, and non-respirable exposure artifact bound to Glass/Scrub/Spine | Bounded provider-visible pointer, never the result itself |
 | A human turn invites Forest continuity | Forest Home + local derived semantic generation + ambient feather selector + Roots selection witness | First-turn quiet, or a bounded vector neighborhood yielding zero to three non-echoing exact glints with unread bearings | Silence remains review custody; a nonempty packet may cross to Resident attention but grants no Forest intake, path, truth, or action authority |
 | Resident intentionally enters at the Garden treeline | Forest traversal journal + semantic generation + exact Forest Home/chronology | Three frozen bearings; chosen append-only step; exact leaf read/backtrack/return receipts | Effective presence in `place.forest` with a retained Garden anchor; no truth, memory, containment, or World-location authority gained |
+| Resident deliberately writes a Journal entry | `write_journal` validation + exact provider-request/Spine witness + append-only Journal admission | One exact `home/journal` entry and scrubbed host receipt | Walkable Home terrain; no conversation edge, World mutation, truth elevation, or Binder/Wild bypass |
 | Resident visits `place.forest` | World Forest-place projection + Forest traversal journal | Physical Garden passage, inquiry entrance, or red-thread recovery receipt with exact return anchor | `place.forest` projects `forest.resident`; path movement cannot impersonate turning back or alter source authority |
 | Selected or reopened evidence enters attention | Exhale projector + Roots exposure gate + Glass/Scrub | Non-respirable exposure artifact joined to exact source, Glass receipt, Scrub receipt, and Spine request; a Forest feather leaves only a content-free two-turn departure footprint | Provider attention only; the footprint preserves happenedness without replay and neither becomes automatic Forest intake or action authority |
 | Utterance seeks continuity | Forest Intake Ledger + admission Scrub | Body-free offer, decision history, Scrub receipt, Source link | Home entry or held crossing |
@@ -146,7 +147,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 
 A pointer may connect stores. One store must never be treated as a substitute for another. A resident statement does not mutate World; a World projection does not become Forest merely because it was shown; a Corner card does not prove provider or action custody.
 
-Home and Wild have separate completeness watermarks. Home is bijective with eligible terminal conversation utterances. Implemented Wild is bijective with exact source spans from committed, Spine-backed Workshop read/search actions; an empty exact search creates no Wild atom. Catch-up reuses the same custody checks as live intake and refuses conflicts.
+Home and Wild have separate completeness watermarks. Home utterance custody is bijective with eligible terminal conversation utterances; deliberate Journal custody is separately bijective with exact committed `write_journal` acts and does not alter utterance chronology. Implemented Wild is bijective with exact source spans from committed, Spine-backed Workshop read/search actions; an empty exact search creates no Wild atom. Catch-up reuses the same custody checks as live intake and refuses conflicts.
 
 The ambient Semantic Exhale candidate crossing queries all Home through the rebuildable semantic generation rather than treating newest-first recency as the searchable universe. Similarity floors, direct-echo and diversity suppression, and exact-span byte fitting are selector policy only: they grant no Forest standing or truth authority. First-turn and weak-evidence silence terminate in Roots selection custody. A later nonempty zero-to-three-feather packet crosses Glass as exact attention and receives separate Roots presentation custody.
 
@@ -179,10 +180,33 @@ These are tracked architecture gaps, not implied capabilities:
 2. Resident journal admission, the `home/journal` bucket, Backpack custody, and Silver Bullet forging are not implemented.
 3. Automatic reconciliation of a durable `applying` approval after an uncertain external effect is not installed; the state remains visible and non-retryable for future Builder reconciliation.
 4. World verification produces bounded diagnostics but still scans and replays the complete store; adversarially enormous stores do not yet have a CPU/time preflight ceiling.
-5. Autonomous wakes, outside channels, MCP capability doors, and general connector ingress do not yet exist. [`OUTSIDE_ORGANS_DIRECTION_V1.md`](specs/OUTSIDE_ORGANS_DIRECTION_V1.md) adopts The Binder, The Box, and The Pipes as the intended organisms for the portfolio Window, outside observations, and named web passages, but none is connected and no passive read, refresh/payment action, or live knock is installed.
+5. Autonomous wakes, outside channels, MCP capability doors, and general connector ingress do not yet exist. [`BINDER_WINDOW_V1.md`](specs/BINDER_WINDOW_V1.md) installs one operator-captured frozen Binder projection. [`SPOTLIGHT_OBSERVATORY_V1.md`](specs/SPOTLIGHT_OBSERVATORY_V1.md) installs a production room shell, bounded observation validator, and deterministic replay proposition, but no runtime observation crossing: all sockets and custody routes are visibly capped and its entrance is withheld. Configured World migrations and real Binder capture remain pending. Box refresh/payment actions, Robinhood wiring, Pipes live knocks, and general connector ingress remain uninstalled.
+
+### Passive Binder Window
+
+```text
+local Binder GET /api/dashboard
+  -> explicit operator capture command
+  -> exact bounded JSON snapshot under Hub runtime custody
+  -> startup validation and immutable in-memory projection
+  -> ordinary inspect_fixture at fixture.binder_window
+```
+
+Binder owns every portfolio, value, history, freshness, and absence claim. Capture is the only network crossing in this slice and is never Resident-triggered. World owns only the fixture's installed topology ancestry. The Window grants no Binder mutation, Box refresh, Spotlight entry, Forest admission, or financial authority.
+
+### Spotlight shell behind the glass
+
+```text
+recorded replay fixture or future source envelope
+  -> Spotlight-owned bounded observation validation
+  -> immutable observational packet
+  -> capped in production until host custody and read-only source wiring exist
+```
+
+The production package and World shell perform no network request. World installs the balcony and five fixtures but no entrance. The installation witness treats `withheld` as an exact host-proven entrance policy and rejects an early door. The official Robinhood Agentic Trading MCP is not fitted because execution authority cannot satisfy Spotlight's observational-only source contract.
 6. Recursive Forest frames, scale-relative Home/Wild relationships, Mycelium, cross-Forest portals, and projection into an experiential `place.forest` do not yet exist. The installed Forest remains one configured custody substrate with its current exact Home and Wild intake laws.
 7. Current Source, Spine, Forest, World, Result Rack, and wake stores do not have application-level encryption at rest. Authentication, sealed-pointer custody, key lifecycle, direct Vault intake, cryptographic erasure, remote-device admission, and independent security review are not installed.
-8. The first conversation-walking crossing from [`FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md) is installed. Rolling-fold generation, nesting-doll layers, path wear, Faun participation, recursive frames, Write/Leave synthesis, and automatic context rollover remain loose wires.
+8. The first conversation-walking crossing from [`FOREST_PATHS_ROLLING_FOLD_V1.md`](specs/FOREST_PATHS_ROLLING_FOLD_V1.md) is installed. Journal provides deliberate Home planting, but the Home--Stream--Wild bridge, Bear/Faun purpose question, traversable Wild, raw-packet containment, and return synthesis ceremony remain loose wires alongside rolling folds, nesting dolls, broader Faun participation, recursive frames, and automatic context rollover.
 9. Recoverable Result Exhale is installed: verified omitted-result trail signs, bounded deliberate reopening, and non-respirable Roots exposure custody are active. Home-only ambient vector feathers use a local rebuildable semantic generation; first-turn quiet and direct-echo suppression are active, and later nonempty packets cross Glass with exact Roots/Scrub/Spine custody. Higher-canopy dolls, Faun feathers, Wild participation, and downwind review tooling remain uninstalled under [`FOREST_EXHALE_V2.md`](specs/FOREST_EXHALE_V2.md).
 
 Loose wires remain visible until a tested crossing removes them. Documentation must not smooth over them.

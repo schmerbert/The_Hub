@@ -9,7 +9,9 @@ export function buildRoomInstallationWitness({ manifest, manifestBytes, topology
   if (!topology?.roomInstalled) gaps.push('topology.room_missing');
   if (!topology?.parentInstalled) gaps.push('topology.parent_missing');
   if (!topology?.parentEdgeInstalled) gaps.push('topology.parent_edge_missing');
-  if (!topology?.entranceInstalled) gaps.push('topology.entrance_missing');
+  const entrancePolicy = manifest.placement.entrancePolicy || 'installed';
+  if (entrancePolicy === 'installed' && !topology?.entranceInstalled) gaps.push('topology.entrance_missing');
+  if (entrancePolicy === 'withheld' && topology?.entranceInstalled) gaps.push('topology.entrance_unexpected');
 
   const installedFixtures = new Set(fixtures || []);
   const declaredFixtures = [...new Set(manifest.affordanceGroups.map(group => group.fixtureId))].sort();
@@ -48,6 +50,7 @@ export function buildRoomInstallationWitness({ manifest, manifestBytes, topology
     roomId: manifest.identity.id,
     packageVersion: manifest.identity.version,
     manifestHash: sha256(manifestBytes),
+    ...(manifest.placement.entrancePolicy ? { entrancePolicy } : {}),
     topology,
     fixtures: declaredFixtures.map(id => ({ id, installed: installedFixtures.has(id) })),
     affordances: manifest.affordanceGroups.map(group => ({

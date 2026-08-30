@@ -4,8 +4,10 @@ import { installedTopologyHash, installedTopologyManifest } from './topology.js'
 import { extendedTopologyHash, extendedTopologyManifest } from './topology-b1.js';
 import { hearthTopologyHash, hearthTopologyManifest } from './topology-hearth.js';
 import { forestTopologyHash, forestTopologyManifest } from './topology-forest.js';
+import { binderWindowTopologyHash, binderWindowTopologyManifest } from './topology-binder-window.js';
+import { spotlightTopologyHash, spotlightTopologyManifest } from './topology-spotlight.js';
 
-export const WORLD_PROJECTOR_VERSION = 4;
+export const WORLD_PROJECTOR_VERSION = 6;
 export const WORLD_EVENT_GENESIS_HASH = '0'.repeat(64);
 
 function deepFreeze(value) {
@@ -37,6 +39,8 @@ export const WORLD_EVENT_KINDS = deepFreeze({
   'topology.extended/v1': { schemaVersion: 1, stretch: 'B1' },
   'topology.hearth_installed/v1': { schemaVersion: 1, stretch: 'H1' },
   'topology.forest_installed/v1': { schemaVersion: 1, stretch: 'F1' },
+  'topology.binder_window_installed/v1': { schemaVersion: 1, stretch: 'BW1' },
+  'topology.spotlight_installed/v1': { schemaVersion: 1, stretch: 'SP1' },
   'room.installation.revised/v1': { schemaVersion: 1, stretch: 'B1' },
   'location.crossed/v1': { schemaVersion: 1, stretch: 'B1' },
   'passage.operated/v1': { schemaVersion: 1, stretch: 'B1' },
@@ -149,7 +153,7 @@ export function installWorldEventSchema(sqlite) {
   }
 }
 
-export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], passages: [], objectStates: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, rootBoundary: null, operationalBoundary: null, topologyExtension: null, hearthExtension: null, forestExtension: null }; }
+export function emptyWorldState() { return { nodes: [], edges: [], locations: [], fixtureRuntimes: [], timers: [], briefs: [], approvals: [], passages: [], objectStates: [], legacyCustody: { actionReceipts: [], approvalReceipts: [] }, rootBoundary: null, operationalBoundary: null, topologyExtension: null, hearthExtension: null, forestExtension: null, binderWindowExtension: null, spotlightExtension: null }; }
 function copyState(state) {
   return {
     nodes: state.nodes.map(row => ({ ...row })), edges: state.edges.map(row => ({ ...row })), locations: state.locations.map(row => ({ ...row })),
@@ -160,6 +164,8 @@ function copyState(state) {
     topologyExtension: state.topologyExtension ? { ...state.topologyExtension } : null,
     hearthExtension: state.hearthExtension ? { ...state.hearthExtension } : null,
     forestExtension: state.forestExtension ? { ...state.forestExtension } : null,
+    binderWindowExtension: state.binderWindowExtension ? { ...state.binderWindowExtension } : null,
+    spotlightExtension: state.spotlightExtension ? { ...state.spotlightExtension } : null,
     rootBoundary: state.rootBoundary || null,
   };
 }
@@ -295,6 +301,61 @@ function forestExtensionRows(payload, event, priorState) {
     return { edge_id: row.edgeId, passage_id: row.passageId, passage_kind: row.passageKind, from_node_id: row.fromNodeId, to_node_id: row.toNodeId, governed_object_id: null, ...pointer(event) };
   });
   return { nodes, edges, passages };
+}
+
+function binderWindowExtensionRows(payload, event, priorState) {
+  exactKeys(payload, ['manifestSha256', 'nodes', 'edges'], 'Binder Window topology payload');
+  if (!Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) throw new Error('Binder Window topology payload rows are invalid.');
+  const manifest = { nodes: payload.nodes, edges: payload.edges };
+  if (payload.manifestSha256 !== sha256(canonicalize(manifest)) || payload.manifestSha256 !== binderWindowTopologyHash() || canonicalize(manifest) !== canonicalize(binderWindowTopologyManifest())) throw new Error('Binder Window topology does not match the code-owned manifest.');
+  if (!priorState.forestExtension || priorState.binderWindowExtension) throw new Error('Binder Window topology requires the Forest generation and may be installed only once.');
+  const installedIds = new Set(priorState.nodes.map(row => row.id));
+  const nodes = payload.nodes.map(node => {
+    exactKeys(node, ['id', 'nodeType', 'residentText', 'state', 'lifecycle', 'revision'], 'Binder Window node');
+    if (node.id !== 'fixture.binder_window' || node.nodeType !== 'fixture' || node.lifecycle !== 'standing' || node.revision !== 1 || installedIds.has(node.id)) throw new Error('Binder Window node is invalid.');
+    canonicalObject(node.state, 'Binder Window node state'); installedIds.add(node.id);
+    return { id: node.id, node_type: node.nodeType, resident_text: node.residentText, state_json: canonicalize(node.state), lifecycle: node.lifecycle, revision: 1, created_at: event.occurred_at, ...pointer(event) };
+  });
+  const edgeIds = new Set(priorState.edges.map(row => row.id));
+  const edges = payload.edges.map(edge => {
+    exactKeys(edge, ['id', 'edgeType', 'fromNodeId', 'toNodeId', 'doorIdentity', 'label'], 'Binder Window edge');
+    if (edge.id !== 'edge.contains.center_binder_window' || edge.edgeType !== 'contains' || edge.fromNodeId !== 'room.center' || edge.toNodeId !== 'fixture.binder_window' || edge.doorIdentity !== null || edgeIds.has(edge.id) || !installedIds.has(edge.fromNodeId) || !installedIds.has(edge.toNodeId)) throw new Error('Binder Window containment is invalid.');
+    return { id: edge.id, edge_type: edge.edgeType, from_node_id: edge.fromNodeId, to_node_id: edge.toNodeId, door_identity: null, label: edge.label, created_at: event.occurred_at, ...pointer(event) };
+  });
+  return { nodes, edges };
+}
+
+function spotlightExtensionRows(payload, event, priorState) {
+  exactKeys(payload, ['manifestSha256', 'nodes', 'edges'], 'Spotlight topology payload');
+  if (!Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) throw new Error('Spotlight topology payload rows are invalid.');
+  const manifest = { nodes: payload.nodes, edges: payload.edges };
+  if (payload.manifestSha256 !== sha256(canonicalize(manifest)) || payload.manifestSha256 !== spotlightTopologyHash() || canonicalize(manifest) !== canonicalize(spotlightTopologyManifest())) throw new Error('Spotlight topology does not match the code-owned manifest.');
+  if (!priorState.binderWindowExtension || priorState.spotlightExtension) throw new Error('Spotlight topology requires the Binder Window generation and may be installed only once.');
+
+  const expectedNodeIds = new Set(['room.spotlight', 'fixture.spotlight_landscape', 'fixture.spotlight_telescope', 'fixture.spotlight_archive', 'fixture.spotlight_table', 'fixture.spotlight_bell']);
+  const installedIds = new Set(priorState.nodes.map(row => row.id));
+  const nodes = payload.nodes.map(node => {
+    exactKeys(node, ['id', 'nodeType', 'residentText', 'state', 'lifecycle', 'revision'], 'Spotlight node');
+    if (!expectedNodeIds.has(node.id) || node.lifecycle !== 'standing' || node.revision !== 1 || installedIds.has(node.id)) throw new Error('Spotlight node identity, lifecycle, or revision is invalid.');
+    if (node.id === 'room.spotlight' && node.nodeType !== 'room') throw new Error('Spotlight room node is invalid.');
+    if (node.id !== 'room.spotlight' && node.nodeType !== 'fixture') throw new Error('Spotlight fixture node is invalid.');
+    canonicalObject(node.state, 'Spotlight node state'); installedIds.add(node.id);
+    return { id: node.id, node_type: node.nodeType, resident_text: node.residentText, state_json: canonicalize(node.state), lifecycle: 'standing', revision: 1, created_at: event.occurred_at, ...pointer(event) };
+  });
+  if (new Set(nodes.map(row => row.id)).size !== expectedNodeIds.size || nodes.length !== expectedNodeIds.size) throw new Error('Spotlight topology must install exactly one room and five fixtures.');
+
+  const expectedEdgeIds = new Set(['edge.contains.hub_spotlight', 'edge.contains.spotlight_landscape', 'edge.contains.spotlight_telescope', 'edge.contains.spotlight_archive', 'edge.contains.spotlight_table', 'edge.contains.spotlight_bell']);
+  const edgeIds = new Set(priorState.edges.map(row => row.id));
+  const edges = payload.edges.map(edge => {
+    exactKeys(edge, ['id', 'edgeType', 'fromNodeId', 'toNodeId', 'doorIdentity', 'label'], 'Spotlight edge');
+    if (!expectedEdgeIds.has(edge.id) || edge.edgeType !== 'contains' || edge.doorIdentity !== null || edgeIds.has(edge.id) || !installedIds.has(edge.fromNodeId) || !installedIds.has(edge.toNodeId)) throw new Error('Spotlight containment edge is invalid.');
+    if (edge.id === 'edge.contains.hub_spotlight' && (edge.fromNodeId !== 'place.hub' || edge.toNodeId !== 'room.spotlight')) throw new Error('Spotlight Hub containment is invalid.');
+    if (edge.id !== 'edge.contains.hub_spotlight' && (edge.fromNodeId !== 'room.spotlight' || !edge.toNodeId.startsWith('fixture.spotlight_'))) throw new Error('Spotlight fixture containment is invalid.');
+    edgeIds.add(edge.id);
+    return { id: edge.id, edge_type: 'contains', from_node_id: edge.fromNodeId, to_node_id: edge.toNodeId, door_identity: null, label: edge.label, created_at: event.occurred_at, ...pointer(event) };
+  });
+  if (new Set(edges.map(row => row.id)).size !== expectedEdgeIds.size || edges.length !== expectedEdgeIds.size) throw new Error('Spotlight topology must install exactly six containment edges.');
+  return { nodes: nodes.sort((a, b) => a.id.localeCompare(b.id)), edges: edges.sort((a, b) => a.id.localeCompare(b.id)) };
 }
 
 function legacyRows(payload, event) {
@@ -462,6 +523,20 @@ export function reduceWorldEvent(priorState, event) {
     const extension = forestExtensionRows(payload, event, state);
     state.nodes.push(...extension.nodes); state.edges.push(...extension.edges); state.passages.push(...extension.passages);
     state.forestExtension = { sequence: event.sequence, eventHash: event.event_hash };
+  } else if (event.event_kind === 'topology.binder_window_installed/v1') {
+    exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'Binder Window topology causation');
+    if (causation.boundary !== 'binder_window_v1' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Binder Window topology boundary causation is invalid.');
+    if (event.aggregate_kind !== 'topology_extension' || event.aggregate_id !== 'binder_window' || event.aggregate_revision !== 1 || event.session_id !== null || event.wake_id !== null || event.command_id !== null || !['world_bootstrap', 'world_migration'].includes(event.actor)) throw new Error('Binder Window topology aggregate envelope is invalid.');
+    const extension = binderWindowExtensionRows(payload, event, state);
+    state.nodes.push(...extension.nodes); state.edges.push(...extension.edges);
+    state.binderWindowExtension = { sequence: event.sequence, eventHash: event.event_hash };
+  } else if (event.event_kind === 'topology.spotlight_installed/v1') {
+    exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'Spotlight topology causation');
+    if (causation.boundary !== 'spotlight_observatory_v1' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Spotlight topology boundary causation is invalid.');
+    if (event.aggregate_kind !== 'topology_extension' || event.aggregate_id !== 'spotlight' || event.aggregate_revision !== 1 || event.session_id !== null || event.wake_id !== null || event.command_id !== null || !['world_bootstrap', 'world_migration'].includes(event.actor)) throw new Error('Spotlight topology aggregate envelope is invalid.');
+    const extension = spotlightExtensionRows(payload, event, state);
+    state.nodes.push(...extension.nodes); state.edges.push(...extension.edges);
+    state.spotlightExtension = { sequence: event.sequence, eventHash: event.event_hash };
   } else if (event.event_kind === 'operational_snapshot.imported/v1') {
     exactKeys(causation, ['boundary', 'physicalHeadHash', 'physicalHeadSequence'], 'operational snapshot causation');
     if (causation.boundary !== 'pre_a2_operational_projection' || causation.physicalHeadSequence !== event.sequence - 1 || causation.physicalHeadHash !== event.previous_event_hash) throw new Error('Operational snapshot boundary causation is invalid.');
@@ -757,12 +832,16 @@ export function readWorldProjection(sqlite) {
   const projection = readWorldA2Projection(sqlite);
   const topologyExtension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.extended/v1' ORDER BY sequence LIMIT 1").get();
   const forestExtension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.forest_installed/v1' ORDER BY sequence LIMIT 1").get();
+  const binderWindowExtension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.binder_window_installed/v1' ORDER BY sequence LIMIT 1").get();
+  const spotlightExtension = sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.spotlight_installed/v1' ORDER BY sequence LIMIT 1").get();
   return {
     ...projection,
     passages: sqlite.prepare(`SELECT ${PASSAGE_COLUMNS.join(',')} FROM world_passages ORDER BY edge_id`).all(),
     objectStates: sqlite.prepare(`SELECT ${OBJECT_STATE_COLUMNS.join(',')} FROM world_object_states ORDER BY object_id`).all(),
     topologyExtension: topologyExtension ? { sequence: topologyExtension.sequence, eventHash: topologyExtension.event_hash } : null,
     forestExtension: forestExtension ? { sequence: forestExtension.sequence, eventHash: forestExtension.event_hash } : null,
+    binderWindowExtension: binderWindowExtension ? { sequence: binderWindowExtension.sequence, eventHash: binderWindowExtension.event_hash } : null,
+    spotlightExtension: spotlightExtension ? { sequence: spotlightExtension.sequence, eventHash: spotlightExtension.event_hash } : null,
   };
 }
 
@@ -904,7 +983,7 @@ function verifyCustody(sqlite, events, state, mismatches, limit) {
   }
 }
 
-export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', requireHearth = true, requireForest = false } = {}) {
+export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', requireHearth = true, requireForest = false, requireBinderWindow = false, requireSpotlight = false } = {}) {
   if (scope === 'b1' && requireForest && tableExists(sqlite, 'world_event_journal')) {
     let forest = null;
     try { forest = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.forest_installed/v1' LIMIT 1").get(); } catch {}
@@ -922,6 +1001,22 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
         ...b1, verified: false, status: 'upgrade_required', upgradeRequired: true, projectorVersion: WORLD_PROJECTOR_VERSION,
         mismatches: [{ code: 'hearth_upgrade_required', message: 'The exact B1 World requires the explicit backup-confirmed House Hearth migration.' }],
       };
+    }
+  }
+  if (scope === 'b1' && requireBinderWindow && tableExists(sqlite, 'world_event_journal')) {
+    let binderWindow = null;
+    try { binderWindow = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.binder_window_installed/v1' LIMIT 1").get(); } catch {}
+    if (!binderWindow) {
+      const forest = verifyWorldSqlite(sqlite, { mismatchLimit, scope, requireHearth: true, requireForest: true, requireBinderWindow: false });
+      if (forest.verified) return { ...forest, verified: false, status: 'upgrade_required', upgradeRequired: true, projectorVersion: WORLD_PROJECTOR_VERSION, mismatches: [{ code: 'binder_window_upgrade_required', message: 'The exact Forest World requires the explicit backup-confirmed Binder Window migration.' }] };
+    }
+  }
+  if (scope === 'b1' && requireSpotlight && tableExists(sqlite, 'world_event_journal')) {
+    let spotlight = null;
+    try { spotlight = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.spotlight_installed/v1' LIMIT 1").get(); } catch {}
+    if (!spotlight) {
+      const binderWindow = verifyWorldSqlite(sqlite, { mismatchLimit, scope, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: false });
+      if (binderWindow.verified) return { ...binderWindow, verified: false, status: 'upgrade_required', upgradeRequired: true, projectorVersion: WORLD_PROJECTOR_VERSION, mismatches: [{ code: 'spotlight_upgrade_required', message: 'The exact Binder Window World requires the explicit backup-confirmed Spotlight Observatory migration.' }] };
     }
   }
   if (scope === 'b1' && tableExists(sqlite, 'world_event_journal')) {
@@ -1000,6 +1095,8 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
     else if (scope === 'a2' && registration.stretch === 'B1') addMismatch(mismatches, mismatchLimit, { code: 'b1_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (!requireHearth && registration.stretch === 'H1') addMismatch(mismatches, mismatchLimit, { code: 'hearth_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (!requireForest && registration.stretch === 'F1') addMismatch(mismatches, mismatchLimit, { code: 'forest_event_present', sequence: event.sequence, eventKind: event.event_kind });
+    else if (!requireBinderWindow && registration.stretch === 'BW1') addMismatch(mismatches, mismatchLimit, { code: 'binder_window_event_present', sequence: event.sequence, eventKind: event.event_kind });
+    else if (!requireSpotlight && registration.stretch === 'SP1') addMismatch(mismatches, mismatchLimit, { code: 'spotlight_event_present', sequence: event.sequence, eventKind: event.event_kind });
     else if (registration.schemaVersion !== event.event_schema_version) addMismatch(mismatches, mismatchLimit, { code: 'event_schema_version_unknown', sequence: event.sequence, eventKind: event.event_kind, version: event.event_schema_version });
     const aggregateKey = `${event.aggregate_kind}:${event.aggregate_id}`;
     const expectedRevision = (aggregateRevisions.get(aggregateKey) || 0) + 1;
@@ -1037,6 +1134,14 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
     if (extensionEvents.length !== 1) addMismatch(mismatches, mismatchLimit, { code: extensionEvents.length ? 'b1_extension_duplicate' : 'b1_extension_missing', count: extensionEvents.length });
     compareRows(actual.passages, state.passages, PASSAGE_COLUMNS, 'world_passages', mismatches, mismatchLimit);
     compareRows(actual.objectStates, state.objectStates, OBJECT_STATE_COLUMNS, 'world_object_states', mismatches, mismatchLimit);
+    if (requireBinderWindow) {
+      const binderWindowEvents = events.filter(event => event.event_kind === 'topology.binder_window_installed/v1');
+      if (binderWindowEvents.length !== 1) addMismatch(mismatches, mismatchLimit, { code: binderWindowEvents.length ? 'binder_window_extension_duplicate' : 'binder_window_extension_missing', count: binderWindowEvents.length });
+    }
+    if (requireSpotlight) {
+      const spotlightEvents = events.filter(event => event.event_kind === 'topology.spotlight_installed/v1');
+      if (spotlightEvents.length !== 1) addMismatch(mismatches, mismatchLimit, { code: spotlightEvents.length ? 'spotlight_extension_duplicate' : 'spotlight_extension_missing', count: spotlightEvents.length });
+    }
   }
   const head = events.at(-1) || null;
   return {
@@ -1117,7 +1222,9 @@ export function assertWorldVerified(sqlite, options = {}) {
   if (!verification.verified) {
     const upgrade = verification.status === 'upgrade_required';
     const hearth = verification.mismatches?.some(item => item.code === 'hearth_upgrade_required');
-    throw Object.assign(new Error(upgrade ? (hearth ? 'House Hearth World migration is required.' : 'World B1 topology migration is required.') : 'World event journal and physical projection have drifted.'), { code: upgrade ? (hearth ? 'world_hearth_upgrade_required' : 'world_b1_upgrade_required') : 'world_projection_drift', verification });
+    const binderWindow = verification.mismatches?.some(item => item.code === 'binder_window_upgrade_required');
+    const spotlight = verification.mismatches?.some(item => item.code === 'spotlight_upgrade_required');
+    throw Object.assign(new Error(upgrade ? (spotlight ? 'Spotlight Observatory World migration is required.' : binderWindow ? 'Binder Window World migration is required.' : hearth ? 'House Hearth World migration is required.' : 'World B1 topology migration is required.') : 'World event journal and physical projection have drifted.'), { code: upgrade ? (spotlight ? 'world_spotlight_upgrade_required' : binderWindow ? 'world_binder_window_upgrade_required' : hearth ? 'world_hearth_upgrade_required' : 'world_b1_upgrade_required') : 'world_projection_drift', verification });
   }
   return verification;
 }

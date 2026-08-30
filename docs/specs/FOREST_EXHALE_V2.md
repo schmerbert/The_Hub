@@ -165,7 +165,7 @@ The first installed shadow policy is `semantic_forest_exhale_shadow/v1`. It is a
 
 ### 6.2 Ambient vector-feather selection and live Home Exhale
 
-The active selection witness is `semantic_forest_exhale_shadow/v4` with selector `ambient_vector_feathers/v2`. A nonempty accepted packet is presented under `semantic_forest_exhale_live/v1`.
+The active selection witness is `semantic_forest_exhale_shadow/v5` with selector `ambient_vector_feathers/v3`. A nonempty accepted packet is presented under `semantic_forest_exhale_live/v1`.
 
 The Forest owns a separate rebuildable semantic projection store. Each generation binds the immutable source-Forest schema creation identity, local embedding provider, exact model identity, dimensions, normalization, numeric representation, query instruction, and projection policy. Each vector binds one exact Home entry ID, Source event ID, body hash, and projection hash. The store owns no Source text and grants no Forest, attention, truth, path, or action authority.
 
@@ -188,7 +188,7 @@ Nesting-doll canopy projection, following a feather, Forest traversal, and the F
 
 For each accepted human turn with active verified Forest custody, wake orchestration runs the selector exactly once after admitting the current utterance to Home and before assembling the first provider phase. Forest exposes only bounded exact Home candidates through its public candidate contract. The current utterance and every Source event already present in active Session Scroll attention are ineligible before ranking. Wild, Roots, Glass, Scrub, provider-return, Result Rack, and room-owned stores are not candidate sources.
 
-The selector receives the exact triggering text. The versioned embedding policy applies weak-evidence silence, graduated per-feather evidence floors, near-duplicate suppression, stable tie-breaking, and a maximum of three selected atoms. It does not claim automatic supersession or contradiction detection. Room and fixture identity remain recorded situational evidence but do not make an atom eligible or exclude otherwise eligible continuity.
+The selector receives the exact triggering text and a bounded comparison window of the recent active Session Scroll. The versioned embedding policy applies weak-evidence silence, graduated per-feather evidence floors, near-duplicate suppression, stable tie-breaking, and a maximum of three selected atoms. When an older candidate's topic is already represented across at least three messages in the bounded live window, the selector records `active_context_topic_saturated` and declines to reintroduce that candidate. This is attention redundancy control: it lets ancestry return when a topic first appears while making the developed live conversation dominant. It does not claim automatic supersession, semantic contradiction detection, or that the older source is false. Room and fixture identity remain recorded situational evidence but do not make an atom eligible or exclude otherwise eligible continuity.
 
 Every run, including silence, creates one immutable Roots selection witness with a dedicated semantic-shadow binding. It retains the trigger coordinates and hash, versions, bounded ordered candidates and exclusions, selected Forest and Source identities, exact packet, situational signals, traversal boundary, and terminal `shadowed` disposition. This artifact describes selection before presentation and therefore has no Glass or Spine edge.
 

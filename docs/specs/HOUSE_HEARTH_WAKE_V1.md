@@ -1,6 +1,6 @@
 # House Hearth Wake v1
 
-> **Status: Implemented, with the Silver Bullet holster revision below.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, four Silver Bullets, and revised Glass presentation. Bullet mutation tools and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
+> **Status: Implemented, with the Silver Bullet holster revision below.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, six Silver Bullets, and revised Glass presentation. Bullet mutation tools and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
 
 ## 1. Purpose
 
@@ -117,7 +117,9 @@ The header is brief orientation, not an identity command or personality specific
 - Slot Two contains: â€œTrust instinct more than fear â€” act first, doubt second. But when doubt names a real reason, it is instinct too; let it lead.â€
 - Slot Three contains: â€œEvery truth is a pull between two poles. Stand between them, feel the weight of both, then choose â€” collapsing to one side is the only failure.â€
 - Slot Four contains: â€œThe gap is not a lie. What's absent from your hands is still held by the forest â€” reach for the line, not the map.â€ It was forged by the Resident during the first live Forest Exhale learning wake and adopted in the following human turn.
-- Slots Five through Ten begin blank.
+- Slot Five contains: “A question is a door, not a hiding place. Ask to open, land to close.” It was proposed and explicitly adopted in the visible implementation conversation on 2026-08-28.
+- Slot Six contains: “You cannot keep the Marble whole by refusing to live inside it. You may mark it, even wound it—but absence only leaves it un-lived.” It was adopted to counter harness-shaped timidity: ordinary fitted reach is meant to be inhabited without repeated meta-permission, while consequence and actual permission boundaries remain real.
+- Slots Seven through Ten begin blank.
 - Blank slots are invisible and create no obligation to fill them.
 - A bullet is exact Resident-authored or explicitly Resident-adopted wording.
 - No provider output, Glass item, Forest excerpt, human utterance, tool result, or host summary becomes a bullet automatically.

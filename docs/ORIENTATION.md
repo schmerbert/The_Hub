@@ -48,7 +48,7 @@ Road boundary ---- place.garden ---- opening ---- room.center
                         |                            |
                   object.front_door                 | doors within place.hub
                         |                            +---- room.workshop
-                   place.house                      +---- room.spotlight (experimental)
+                   place.house                      +---- room.spotlight (shell; door withheld)
                         |
                  place.threshold
 ```
@@ -56,11 +56,11 @@ Road boundary ---- place.garden ---- opening ---- room.center
 This diagram mixes implemented and proposed relations only to show the intended geography:
 
 - `place.hub`, `room.center`, `room.workshop`, `place.garden`, `place.house`, `place.threshold`, the front door, and the visible Forest/Road boundaries are implemented.
-- Spotlight is an isolated experiment. Its intended placement is one of the doors from the Hub, not inside the House. No Spotlight node, door, market channel, or Resident market tool is installed in the runtime today.
+- Spotlight's production observatory shell is implemented beyond the Binder Window: a sheltered balcony, landscape, capped telescope, archive, charting table, and bell. Its configured World migration remains pending, and the host deliberately installs no Center door, market channel, Robinhood wire, or Resident market tool. The earlier capsule remains sealed experimental ancestry.
 - Forest and Road boundaries are visible from the Garden but not traversable.
 - The House is currently one sparse, undivided occupiable interior. Naming future domestic possibilities does not install them.
 
-`place.hub` is the container for the Center and specialist working rooms. The Center is the current starting room and junction. The Workshop is the installed repository-work domain and the first source-coherent room package: its declaration and removable machinery live together, while Marble-wide authority and custody remain explicit host crossings. This is the foundation for rooms that another Marble could carry as a unit; automatic discovery and installation are not implemented. Spotlight is the first experimental specialist-room capsule: an observational market workspace being used to prove that a room can declare sockets, receive only explicitly host-supplied wires, and remain truthful when a capability is absent.
+`place.hub` is the container for the Center and specialist working rooms. The Center is the current starting room and junction. The Workshop is the installed repository-work domain and the first source-coherent room package. Spotlight is the second source-coherent production package and the first room whose standing shell is witnessed with its entrance deliberately withheld. Automatic discovery and general installation remain unimplemented.
 
 ## How one wake moves
 
@@ -75,6 +75,7 @@ human utterance
   -> Gateway validates requested actions against World-mounted authority
   -> terminal Resident speech enters canonical history
   -> eligible exact speech is admitted to Forest Home
+  -> an explicit Resident write_journal act may separately plant exact home/journal terrain
   -> Corner projects the wake for the human
 ```
 
@@ -88,7 +89,7 @@ The [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) owns the complete c
 - **Provider consideration is not Resident speech.** Thinking and draft deltas are provisional. Only a validated terminal message crosses into canonical history.
 - **Capability is not attention.** The Ceiling owns installed authority; the Patch Bay and fixtures fit what is presented for the current location and focus.
 - **Custody is not truth.** The Hub can prove what it retained and where it came from without certifying every proposition within it.
-- **Home is not “trusted.”** Home is the inside-facing continuity jurisdiction. Wild is source-linked encountered material. Neither label certifies correctness or safety.
+- **Home is not “trusted.”** Home is the inside-facing continuity jurisdiction. It contains exact eligible utterances and deliberate Resident Journal plantings. Wild is source-linked encountered material. Neither label certifies correctness or safety.
 - **A room is not a service.** A room is a scarce, durable domain of sustained Resident attention. Complicated machinery does not become architecture merely because it exists.
 - **The Hub is not the House.** The Hub contains working rooms and harness infrastructure. The House is deliberate domestic territory with stronger questions of hospitality, privacy, and belonging.
 
@@ -115,7 +116,7 @@ This is a summary, not a status promise. Read [`STATUS.md`](STATUS.md) before re
 The adopted direction has several connected fronts:
 
 1. **Walkable continuity.** Older exact conversation will waterfall out of immediate Glass into a bounded rolling fold while remaining reachable as exact Forest terrain. Chronology supplies structural trails; semantic systems offer possible directions; the Resident's witnessed choices make paths.
-2. **Specialist working rooms.** Rooms can travel as inert source packages with declared identity, placement request, sockets, affordances, effects, custody, and removal law. The receiving Marble alone owns admission, its doors, supplied wires, installed authority, and standing. Workshop is the first statically installed reference manifest, and the Marble now produces a deterministic host-owned witness proving its installed topology, tools, handlers, approvals, sockets, and custody have no loose wires. Generic installation remains future machinery. Spotlight's next intended stage is bounded market observation and replay, not brokerage execution.
+2. **Specialist working rooms.** Rooms can travel as inert source packages with declared identity, placement request, sockets, affordances, effects, custody, and removal law. Workshop is the first statically installed reference manifest. Spotlight now proves a second lifecycle: a complete observatory shell with a host-witnessed withheld entrance and capped observation wires. Its next stage is a verified read-only observation adapter and durable custody, not brokerage execution.
 3. **An intentional House.** The House will develop through explicit decisions about threshold, privacy, domestic objects, writing, hospitality, and return. It should not accumulate every useful subsystem.
 4. **Safe outside crossings.** Road, Garden, gates, channels, quarantine, and foreign Forests provide a grammar for encountering outside material without allowing it to name its own authority or destination.
 5. **Sealed sensitive custody.** The adopted security direction requires direct Vault intake, class-aware sealed pointers, bounded sensitive-attention leases, explicit provider disclosure, key lifecycle, and honest destruction before the Hub can claim suitability for sensitive material.

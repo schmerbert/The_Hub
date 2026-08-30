@@ -52,6 +52,8 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | `clinical_bootstrap` | inside Hearth return; bounds continuity and present-World claims | clinical continuity | `src/session/lifespan.js` |
 | Session Scroll messages | living edge; exact visible conversation/action plus reasoning pointer | source-exact | `src/ledger/source.js` |
 | tool schemas and returns | when mounted/called; action grammar and consequences | World action/return | fixture/tool owners |
+| Binder Window inspection return | only when the Resident deliberately inspects `fixture.binder_window`; bounded frozen Binder claims, freshness, completeness, and absences | attributable personal portfolio projection | `src/places/hub/binder-window/adapter.js`, `src/world/gateway/fixture-inspectors.js` |
+| Spotlight shell | only as Builder inspection/topology until a later door revision; balcony, landscape, capped telescope, archive, table, bell, and withheld entrance | verified World and room-installation projection | `src/places/hub/spotlight/`, `src/rooms/spotlight-witness.js` |
 
 ## Kindness rules
 

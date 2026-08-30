@@ -13,7 +13,7 @@ A session is the resident's operational lifespan. For v1:
 - Every server start opens a fresh session.
 - Every ordinary human/resident exchange after orientation is a turn inside that session.
 - A server restart ends the prior session and opens another, even when the prior process did not close cleanly.
-- Restart never deletes or rewrites the Source Ledger, Spine, Forest, or prior session records.
+- Restart never deletes or rewrites the Source Ledger, sealed prior-session Spine ledgers, Forest, or prior session records. Each new session opens an independent active Spine hash chain, so active Spine initialization and ordinary current-session inspection do not load every prior provider crossing; explicit aggregate verification still reads retained ancestry.
 - A later manual reset will use the same close/open boundary, but its UI and endpoint are deferred.
 - Context-limit closure is deferred. The active session must not silently use rolling truncation once this slice is active.
 

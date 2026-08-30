@@ -7,6 +7,8 @@ import { INSTALLED_WORLD_EDGES, INSTALLED_WORLD_NODES, topologyEventPayload } fr
 import { topologyExtensionEventPayload } from './topology-b1.js';
 import { hearthTopologyEventPayload } from './topology-hearth.js';
 import { forestTopologyEventPayload } from './topology-forest.js';
+import { binderWindowTopologyEventPayload } from './topology-binder-window.js';
+import { spotlightTopologyEventPayload } from './topology-spotlight.js';
 import {
   ACTION_RECEIPT_COLUMNS, APPROVAL_COLUMNS, APPROVAL_RECEIPT_COLUMNS, BRIEF_COLUMNS, EDGE_COLUMNS, FIXTURE_RUNTIME_COLUMNS,
   LOCATION_COLUMNS, NODE_COLUMNS, OBJECT_STATE_COLUMNS, PASSAGE_COLUMNS, TIMER_COLUMNS, assertWorldVerified, createWorldEvent, custodyRowHash, emptyWorldState,
@@ -76,7 +78,7 @@ function fixtureName(id) { return String(id).replace(/^fixture\./, '').replace(/
 
 export class WorldGraphStore {
   constructor(path, { now = () => Date.now(), eventFailureInjector = null, topologyVersion = 'hearth' } = {}) {
-    if (!['b1', 'hearth', 'forest'].includes(topologyVersion)) throw new Error('World topology version is invalid.');
+    if (!['b1', 'hearth', 'forest', 'binder_window', 'spotlight'].includes(topologyVersion)) throw new Error('World topology version is invalid.');
     mkdirSync(dirname(path), { recursive: true });
     this.path = path;
     this.nowMs = now;
@@ -102,8 +104,10 @@ export class WorldGraphStore {
         this.bootstrapLegacyBoundary();
         this._migrateA2Boundary({ requireBoundary: true });
         this.#migrateB1Boundary({ admittedLegacy: true });
-        if (['hearth', 'forest'].includes(this.topologyVersion)) this.#bootstrapHearthExtension('world_migration');
-        if (this.topologyVersion === 'forest') this.#bootstrapForestExtension('world_migration');
+        if (['hearth', 'forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapHearthExtension('world_migration');
+        if (['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapForestExtension('world_migration');
+        if (['binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapBinderWindowExtension('world_migration');
+        if (this.topologyVersion === 'spotlight') this.#bootstrapSpotlightExtension('world_migration');
       } else this.bootstrapFreshTopology();
     } catch (error) {
       this.sqlite.close();
@@ -219,12 +223,12 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       if (verify) this.transactionNeedsVerification = true;
       return fn();
     }
-    if (verify) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: this.topologyVersion === 'forest' });
+    if (verify) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight' });
     this.sqlite.exec('BEGIN IMMEDIATE'); this.transactionDepth += 1;
     this.transactionNeedsVerification = verify;
     try {
       const result = fn();
-      if (this.transactionNeedsVerification) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: this.topologyVersion === 'forest' });
+      if (this.transactionNeedsVerification) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight' });
       this.sqlite.exec('COMMIT');
       return result;
     } catch (error) {
@@ -255,8 +259,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const row = this.sqlite.prepare('SELECT MAX(aggregate_revision) AS revision FROM world_event_journal WHERE aggregate_kind=? AND aggregate_id=?').get(aggregateKind, aggregateId);
     return Math.max(row?.revision || 0, projectionRevision || 0);
   }
-  verification(options = {}) { return verifyWorldSqlite(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: this.topologyVersion === 'forest', ...options }); }
-  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: this.topologyVersion === 'forest' }); }
+  verification(options = {}) { return verifyWorldSqlite(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', ...options }); }
+  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight' }); }
   _withTopologyProjectionWrites(fn) {
     for (const trigger of ['world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) this.sqlite.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
     try { return fn(); }
@@ -353,8 +357,10 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       actor: 'world_bootstrap', causation: { boundary: 'fresh_database' }, payload: topologyEventPayload(), skipVerification: true, replayPrior: emptyWorldState(),
     });
     this.#bootstrapB1Extension('world_bootstrap');
-    if (['hearth', 'forest'].includes(this.topologyVersion)) this.#bootstrapHearthExtension('world_bootstrap');
-    if (this.topologyVersion === 'forest') this.#bootstrapForestExtension('world_bootstrap');
+    if (['hearth', 'forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapHearthExtension('world_bootstrap');
+    if (['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapForestExtension('world_bootstrap');
+    if (['binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapBinderWindowExtension('world_bootstrap');
+    if (this.topologyVersion === 'spotlight') this.#bootstrapSpotlightExtension('world_bootstrap');
   }
   #bootstrapB1Extension(actor = 'world_migration') {
     const head = this.eventHead();
@@ -377,6 +383,22 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     return this._appendPhysicalEvent({
       eventKind: 'topology.forest_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'forest', aggregateRevision: 1,
       actor, causation: { boundary: 'forest_place_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: forestTopologyEventPayload(), skipVerification: true,
+      replayPrior: replayWorldEvents(this.sqlite),
+    });
+  }
+  #bootstrapBinderWindowExtension(actor = 'world_migration') {
+    const head = this.eventHead();
+    return this._appendPhysicalEvent({
+      eventKind: 'topology.binder_window_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'binder_window', aggregateRevision: 1,
+      actor, causation: { boundary: 'binder_window_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: binderWindowTopologyEventPayload(), skipVerification: true,
+      replayPrior: replayWorldEvents(this.sqlite),
+    });
+  }
+  #bootstrapSpotlightExtension(actor = 'world_migration') {
+    const head = this.eventHead();
+    return this._appendPhysicalEvent({
+      eventKind: 'topology.spotlight_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'spotlight', aggregateRevision: 1,
+      actor, causation: { boundary: 'spotlight_observatory_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: spotlightTopologyEventPayload(), skipVerification: true,
       replayPrior: replayWorldEvents(this.sqlite),
     });
   }
@@ -612,6 +634,60 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true });
       if (!verification.verified) throw Object.assign(new Error('Forest-place migration did not produce a verified projection.'), { code: 'world_forest_migration_verification_failed', verification });
       this.sqlite.exec('COMMIT;'); this.topologyVersion = 'forest';
+      return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
+    } catch (error) { try { this.sqlite.exec('ROLLBACK;'); } catch {} throw error; }
+  }
+  inspectBinderWindowUpgrade() {
+    const current = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true });
+    if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
+    const binderWindow = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.binder_window_installed/v1' ORDER BY sequence LIMIT 1").get();
+    if (binderWindow) return { status: 'corrupt_or_incomplete_binder_window', upgradeRequired: false, binderWindow, verification: current };
+    const forest = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: false });
+    if (!forest.verified) return { status: 'corrupt_forest', upgradeRequired: false, verification: forest };
+    return { status: 'upgrade_required', upgradeRequired: true, verification: forest, backupExpectation: 'Create and verify a byte-for-byte backup of the World database before applying the Binder Window migration.' };
+  }
+  migrateBinderWindow({ backupConfirmed = false } = {}) {
+    if (backupConfirmed !== true) throw Object.assign(new Error('Binder Window migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_binder_window_backup_required' });
+    const inspection = this.inspectBinderWindowUpgrade();
+    if (!inspection.upgradeRequired) {
+      if (inspection.status === 'current') return inspection;
+      throw Object.assign(new Error('Binder Window migration refused because the Forest journal is corrupt or a partial Binder Window extension exists.'), { code: 'world_binder_window_migration_refused', inspection });
+    }
+    this.sqlite.exec('BEGIN IMMEDIATE;');
+    try {
+      const prior = replayWorldEvents(this.sqlite); const head = this.eventHead();
+      const event = createWorldEvent({ head, eventKind: 'topology.binder_window_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'binder_window', aggregateRevision: 1, actor: 'world_migration', causation: { boundary: 'binder_window_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: binderWindowTopologyEventPayload(), occurredAt: new Date(this.nowMs()).toISOString() });
+      const next = reduceWorldEvent(prior, event); insertWorldEvent(this.sqlite, event); this.eventFailureInjector?.({ phase: 'after_event_append', event }); this._materializeProjection(next, prior); this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
+      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true });
+      if (!verification.verified) throw Object.assign(new Error('Binder Window migration did not produce a verified projection.'), { code: 'world_binder_window_migration_verification_failed', verification });
+      this.sqlite.exec('COMMIT;'); this.topologyVersion = 'binder_window';
+      return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
+    } catch (error) { try { this.sqlite.exec('ROLLBACK;'); } catch {} throw error; }
+  }
+  inspectSpotlightUpgrade() {
+    const current = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true });
+    if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
+    const spotlight = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.spotlight_installed/v1' ORDER BY sequence LIMIT 1").get();
+    if (spotlight) return { status: 'corrupt_or_incomplete_spotlight', upgradeRequired: false, spotlight, verification: current };
+    const binderWindow = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: false });
+    if (!binderWindow.verified) return { status: 'corrupt_binder_window', upgradeRequired: false, verification: binderWindow };
+    return { status: 'upgrade_required', upgradeRequired: true, verification: binderWindow, backupExpectation: 'Create and verify a byte-for-byte backup of the World database before applying the Spotlight Observatory migration.' };
+  }
+  migrateSpotlight({ backupConfirmed = false } = {}) {
+    if (backupConfirmed !== true) throw Object.assign(new Error('Spotlight Observatory migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_spotlight_backup_required' });
+    const inspection = this.inspectSpotlightUpgrade();
+    if (!inspection.upgradeRequired) {
+      if (inspection.status === 'current') return inspection;
+      throw Object.assign(new Error('Spotlight Observatory migration refused because the Binder Window journal is corrupt or a partial Spotlight extension exists.'), { code: 'world_spotlight_migration_refused', inspection });
+    }
+    this.sqlite.exec('BEGIN IMMEDIATE;');
+    try {
+      const prior = replayWorldEvents(this.sqlite); const head = this.eventHead();
+      const event = createWorldEvent({ head, eventKind: 'topology.spotlight_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'spotlight', aggregateRevision: 1, actor: 'world_migration', causation: { boundary: 'spotlight_observatory_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: spotlightTopologyEventPayload(), occurredAt: new Date(this.nowMs()).toISOString() });
+      const next = reduceWorldEvent(prior, event); insertWorldEvent(this.sqlite, event); this.eventFailureInjector?.({ phase: 'after_event_append', event }); this._materializeProjection(next, prior); this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
+      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true });
+      if (!verification.verified) throw Object.assign(new Error('Spotlight Observatory migration did not produce a verified projection.'), { code: 'world_spotlight_migration_verification_failed', verification });
+      this.sqlite.exec('COMMIT;'); this.topologyVersion = 'spotlight';
       return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
     } catch (error) { try { this.sqlite.exec('ROLLBACK;'); } catch {} throw error; }
   }

@@ -14,10 +14,11 @@ import { ForestTraversalStore } from '../forest/traversal-store.js';
 import { ForestTraversalService } from '../forest/traversal.js';
 import { verifyForest } from '../forest/verify.js';
 import { projectForestHealth } from '../forest/health.js';
-import { SpineStore } from '../spine/store.js';
+import { SpineStore, readSpineLedgerFrames, spineLedgerExists } from '../spine/store.js';
 import { WorldGraphStore } from '../world/graph.js';
 import { projectWorldBuilderInspection } from '../world/inspection.js';
 import { WorkshopAdapter, DockerCliSandboxBackend, SandboxBay, SandboxRecipeRunner } from '../places/hub/workshop/index.js';
+import { loadBinderWindowSnapshot } from '../places/hub/binder-window/index.js';
 import { WorldActionGateway } from '../world/gateway.js';
 import { residentToolProfile, schemasForSession } from '../world/tools.js';
 import { projectWakeSlips } from '../corner/slips.js';
@@ -64,17 +65,17 @@ function sseFrame(event) {
   return `id: ${event.sequence}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-export function createHub({ env = process.env, dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, activateForest, forest: forestOverride, spine: spineOverride, world: worldOverride, provider: providerOverride, recipeRunner: recipeRunnerOverride, ambientFeatherService: ambientFeatherServiceOverride, forestTraversalService: forestTraversalServiceOverride } = {}) {
-  const config = resolveHubConfig(env, { dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, activateForest });
+export function createHub({ env = process.env, dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, binderWindowSnapshotPath, activateForest, forest: forestOverride, spine: spineOverride, world: worldOverride, provider: providerOverride, recipeRunner: recipeRunnerOverride, ambientFeatherService: ambientFeatherServiceOverride, forestTraversalService: forestTraversalServiceOverride } = {}) {
+  const config = resolveHubConfig(env, { dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, binderWindowSnapshotPath, activateForest });
   if (config.forestActive && config.mode === 'fake') throw { code: 'forest_activation_refused', message: 'Forest activation requires a live DeepSeek provider.' };
   if (config.forestActive && (!existsSync(config.dbPath) || !existsSync(config.forestPath))) throw { code: 'forest_activation_refused', message: 'Forest activation requires an existing operational database and validated Forest database.' };
-  const db = new HubDatabase(config.dbPath);
+  const db = new HubDatabase(config.dbPath, { busyTimeoutMs: config.sqliteBusyTimeoutMs });
   const provider = createProvider(config, providerOverride);
   let forest = null; let forestVerification = null; let spine = null; let world = null; let results = null; let semanticIndex = null; let forestTraversalStore = null; let ambientFeatherService = ambientFeatherServiceOverride || null; let forestTraversalService = forestTraversalServiceOverride || null;
   try {
     if (config.forestActive && !forestOverride) {
       try {
-        forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+        forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: spineLedgerExists(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
       } catch (error) {
         throw { code: 'forest_activation_refused', message: error?.message || 'Forest verification failed.' };
       }
@@ -85,7 +86,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
       forest = forestOverride || null;
       if (config.forestActive && forestOverride) {
         try {
-          forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: existsSync(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
+          forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: spineLedgerExists(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
         } catch (error) {
           throw { code: 'forest_activation_refused', message: error?.message || 'Forest verification failed.' };
         }
@@ -95,9 +96,9 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
       forestTraversalStore = new ForestTraversalStore(config.forestTraversalPath);
       forestTraversalService = new ForestTraversalService({ store: forestTraversalStore, forest, ambientFeatherService });
     }
-    spine = spineOverride || new SpineStore(config.spinePath);
-    world = worldOverride || new WorldGraphStore(config.worldPath, { topologyVersion: 'forest' });
-    const worldVerified = world.verification({ mismatchLimit: 50 }).verified;
+    spine = spineOverride || new SpineStore(config.spinePath, { sessionId: config.spineSessionScoped ? db.session.id : null });
+    world = worldOverride || new WorldGraphStore(config.worldPath, { topologyVersion: 'spotlight' });
+    const worldVerified = world.verification({ mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true }).verified;
     if (worldVerified) establishInstalledRoomReceipts(world);
     results = new ResultRackStore(config.resultPath, { projectionMaxBytes: config.resultProjectionMaxBytes, projectionMaxLines: config.resultProjectionMaxLines });
     if (worldVerified) {
@@ -111,6 +112,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
   }
   let workshop = null; let sandboxBay = null; let recipeRunner = recipeRunnerOverride || null; let gateway = null;
   try {
+    const binderWindow = loadBinderWindowSnapshot(config.binderWindowSnapshotPath);
     workshop = new WorkshopAdapter(config.workshopRoot, { maxFiles: config.workshopMaxFiles, maxBytes: config.workshopMaxBytes, maxLines: config.workshopMaxLines, maxResults: config.workshopMaxResults });
     if (config.mode === 'live' && !recipeRunner) {
       sandboxBay = new SandboxBay({
@@ -121,8 +123,8 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
       });
       recipeRunner = new SandboxRecipeRunner(config.workshopRoot, { sandboxBay, timeoutMs: config.recipeTimeoutMs });
     }
-    gateway = new WorldActionGateway({ world, workshop, forest, resultRack: results, recipeRunner, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs });
-    if (world.verification({ mismatchLimit: 50 }).verified) gateway.reconcileStartup(db.session.id);
+    gateway = new WorldActionGateway({ world, workshop, forest, resultRack: results, recipeRunner, binderWindow, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs });
+    if (world.verification({ mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true }).verified) gateway.reconcileStartup(db.session.id);
   } catch (error) {
     forestTraversalStore?.close(); semanticIndex?.close(); forest?.close(); spine?.close(); world?.close(); results?.close(); db.close();
     throw error;
@@ -225,7 +227,10 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
       if (request.method === 'GET' && /^\/api\/wakes\/[^/]+$/.test(url.pathname)) {
         const wakeRecord = db.getWake(url.pathname.split('/').at(-1));
         if (!wakeRecord) return typedError(response, 404, 'wake_not_found', 'Wake not found.');
-        const wiring = spine ? spine.frames().filter(frame => frame.wake_id === wakeRecord.id || wakeRecord.phases.some(phase => phase.spineRecordId === frame.request_record_id || phase.spineRecordId === frame.record_id)) : [];
+        const spineFrames = spine
+          ? (wakeRecord.sessionId === db.session.id ? spine.frames() : readSpineLedgerFrames(config.spinePath))
+          : [];
+        const wiring = spineFrames.filter(frame => frame.wake_id === wakeRecord.id || wakeRecord.phases.some(phase => phase.spineRecordId === frame.request_record_id || phase.spineRecordId === frame.record_id));
         return json(response, 200, { ...wakeRecord, wiring: { spineFrames: wiring, hearthMachineReceipt: wakeRecord.hearth?.returnJson || null, returnScrubReceipts: wakeRecord.phases.map(phase => phase.returnScrubReceipt).filter(Boolean) }, residentMode: config.mode });
       }
       if (request.method === 'GET' && /^\/api\/wakes\/[^/]+\/slips$/.test(url.pathname)) {

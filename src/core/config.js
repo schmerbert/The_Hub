@@ -48,6 +48,7 @@ export function readConfig(env = process.env) {
     spinePath: env.HUB_SPINE_PATH || join(runtimeRoot, 'spine', 'resident-seat-1.jsonl'),
     worldPath: env.HUB_WORLD_PATH || join(runtimeRoot, 'world.sqlite'),
     resultPath: env.HUB_RESULT_PATH || join(runtimeRoot, 'results.sqlite'),
+    binderWindowSnapshotPath: env.HUB_BINDER_WINDOW_SNAPSHOT_PATH || join(runtimeRoot, 'binder-window.json'),
     workshopRoot: env.HUB_WORKSHOP_ROOT || process.cwd(),
     forestActive: env.HUB_FOREST_ACTIVE === 'true',
     port: integer(env, 'HUB_PORT', 3000, { min: 0, max: 65535 }),
@@ -69,6 +70,7 @@ export function readConfig(env = process.env) {
     attentionRefuseBytes,
     retainedToolPairs,
     providerMaxReturnBytes,
+    sqliteBusyTimeoutMs: integer(env, 'HUB_SQLITE_BUSY_TIMEOUT_MS', 5000, { min: 1, max: 60000 }),
     sandboxBackend,
     sandboxImage: env.HUB_SANDBOX_IMAGE || 'node:22-alpine',
     sandboxJobsRoot: env.HUB_SANDBOX_JOBS_ROOT || join(tmpdir(), 'hub-sandbox-bay'),
@@ -86,8 +88,10 @@ export function resolveHubConfig(env = process.env, overrides = {}) {
     semanticIndexPath: overrides.semanticIndexPath || base.semanticIndexPath,
     forestTraversalPath: overrides.forestTraversalPath || (dbWasSelected && !env.HUB_FOREST_TRAVERSAL_PATH ? join(dirname(dbPath), 'forest-paths.sqlite') : base.forestTraversalPath),
     spinePath: overrides.spinePath || (dbWasSelected && !env.HUB_SPINE_PATH ? join(dirname(dbPath), 'spine.jsonl') : base.spinePath),
+    spineSessionScoped: !overrides.spinePath && !env.HUB_SPINE_PATH,
     worldPath: overrides.worldPath || (dbWasSelected && !env.HUB_WORLD_PATH ? join(dirname(dbPath), 'world.sqlite') : base.worldPath),
     resultPath: overrides.resultPath || (dbWasSelected && !env.HUB_RESULT_PATH ? join(dirname(dbPath), 'results.sqlite') : base.resultPath),
+    binderWindowSnapshotPath: overrides.binderWindowSnapshotPath || (dbWasSelected && !env.HUB_BINDER_WINDOW_SNAPSHOT_PATH ? join(dirname(dbPath), 'binder-window.json') : base.binderWindowSnapshotPath),
     forestActive: overrides.activateForest === undefined ? base.forestActive : Boolean(overrides.activateForest),
   };
   return immutable(resolved);

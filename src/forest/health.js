@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { verifyForest } from './verify.js';
+import { spineLedgerExists } from '../spine/store.js';
 
 const INACTIVE = Object.freeze({
   forestActive: false,
@@ -54,7 +55,7 @@ export function projectForestHealth({ forest, source, paths, verifiedSnapshot = 
     const verification = verifyForest({
       forestPath: paths.forestPath,
       operationalPath: paths.dbPath,
-      spinePath: existsSync(paths.spinePath) ? paths.spinePath : undefined,
+      spinePath: spineLedgerExists(paths.spinePath) ? paths.spinePath : undefined,
       worldPath: existsSync(paths.worldPath) ? paths.worldPath : undefined,
     });
     return {

@@ -128,6 +128,18 @@ An active warm tether must support exact return to the originating cast or junct
 
 Only after exact retrieval and traversal are trustworthy, implement the bounded rolling fold and semantic candidate directions. Whole causal units waterfall under declared thresholds; Source and Forest custody remain unchanged. Semantic similarity proposes possible directions but does not assert meaning, memory, truth, or identity.
 
+### 11. Resident Journal — implemented first slice
+
+Install `write_journal` as a deliberate Resident-authored planting into `home/journal`. Exact entries are append-only, semantically eligible, and walkable, but are not conversation turns and gain no elevated truth standing. Binder, Wild packets, retrieved results, and host summaries have no bypass into Journal.
+
+Owner: [`FOREST_JOURNAL_V1.md`](specs/FOREST_JOURNAL_V1.md)
+
+### 12. Home--Stream--Wild crossing — adopted next design
+
+Design the log or bridge over the Stream, the Bear/Faun purpose question before Wild entry, bounded Wild traversal, and the homeward synthesis airlock. Raw Wild packets must never cross into Home; only an explicit Resident synthesis or utterance may leave Wild, while `Leave` creates no new Home material.
+
+This is deliberately uninstalled. Journal does not stand in for the Stream or perform return synthesis automatically.
+
 ## Cross-cutting acceptance
 
 Every slice must preserve:
@@ -142,7 +154,7 @@ Every slice must preserve:
 
 ## Deliberately unordered fronts
 
-Specialist room packaging, the intentional House beyond the Hearth, and sealed Vault custody remain adopted or experimental fronts described by Orientation and Status. The outside pressure case now adopts The Binder as the intended passive portfolio Window, The Box as the observation supplier/public watering hole, and The Pipes as named deliberate Road fittings. Their first favored slice is a passive Binder-owned projection; active Box inspection and live Pipes knocks remain later action crossings. This direction is not inserted into the continuity dependency chain and installs no runtime capability.
+Specialist room packaging, the intentional House beyond the Hearth, and sealed Vault custody remain adopted fronts described by Orientation and Status. The passive Binder projection and production Spotlight observatory shell are implemented in code behind one glass boundary; configured World migrations and real Binder capture remain operator work. Spotlight's next gate is a verified read-only observation source plus durable custody. Only after that complete standing may a separate migration offer its Center door. Active Box inspection, Robinhood execution surfaces, and live Pipes knocks remain later or excluded crossings.
 
 ## Updating this roadmap
 

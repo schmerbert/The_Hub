@@ -26,8 +26,11 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Resident–Builder correspondence | [`BUILDER_CHANNEL_V1.md`](BUILDER_CHANNEL_V1.md) |
 | Provider streaming | [`WAKE_STREAM_V1.md`](WAKE_STREAM_V1.md) |
 | Forest/Spine intake | [`SPINE_FOREST_INGESTION.md`](SPINE_FOREST_INGESTION.md) |
+| Resident Journal planting | [`FOREST_JOURNAL_V1.md`](FOREST_JOURNAL_V1.md) |
 | Security direction | [`SECURITY_PRIVACY_CUSTODY_V1.md`](SECURITY_PRIVACY_CUSTODY_V1.md) |
 | Outside data, portfolio Window, and web passage direction | [`OUTSIDE_ORGANS_DIRECTION_V1.md`](OUTSIDE_ORGANS_DIRECTION_V1.md) |
+| Passive Binder Window | [`BINDER_WINDOW_V1.md`](BINDER_WINDOW_V1.md) |
+| Spotlight observatory production shell | [`SPOTLIGHT_OBSERVATORY_V1.md`](SPOTLIGHT_OBSERVATORY_V1.md) |
 
 ## Adopted but not installed
 

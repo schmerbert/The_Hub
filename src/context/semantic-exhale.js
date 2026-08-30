@@ -350,9 +350,9 @@ export function renderAmbientFeatherPacket(packet) {
   ].join('\n');
 }
 
-export async function runAmbientFeatherShadow({ service, utterance, trigger, activeSourceEventIds = [], excludeEntryIds = [], forestWalk = null, roomSignals = {}, firstTurn = false } = {}) {
+export async function runAmbientFeatherShadow({ service, utterance, trigger, activeSourceEventIds = [], activeContextTexts = [], excludeEntryIds = [], forestWalk = null, roomSignals = {}, firstTurn = false } = {}) {
   if (!service) return { bypassed: true, reason: 'ambient_feather_service_unavailable' };
-  const selected = await service.select({ utterance, activeSourceEventIds, excludeEntryIds, firstTurn });
+  const selected = await service.select({ utterance, activeSourceEventIds, activeContextTexts, excludeEntryIds, firstTurn });
   const atoms = (selected.feathers || []).map(atom => forestWalk?.active ? {
     ...atom,
     bearing: {
@@ -373,8 +373,8 @@ export async function runAmbientFeatherShadow({ service, utterance, trigger, act
     contentHash: trigger?.contentHash || sha256(utterance), threadId: trigger?.threadId || null,
     turnOrdinal: trigger?.turnOrdinal || null, sourceTimestamp: trigger?.sourceTimestamp || null,
   };
-  const policyVersion = 'semantic_forest_exhale_shadow/v4';
-  const selectorVersion = 'ambient_vector_feathers/v2';
+  const policyVersion = 'semantic_forest_exhale_shadow/v5';
+  const selectorVersion = 'ambient_vector_feathers/v3';
   const shadowPacket = structuredClone(packet);
   shadowPacket.custody.providerVisible = false;
   const decision = {

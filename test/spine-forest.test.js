@@ -166,7 +166,7 @@ test('active runtime passes exact two-breath bodies and creates phase-aware pres
     assert.deepEqual(firstIncluded.map(item => item.content), [STABLE_GLASS_TEXT, 'first']);
     assert.deepEqual(firstRequest.messages, JSON.parse(prepared[0].request_body).messages);
     assert.equal(firstWake.context[0].content, STABLE_GLASS_TEXT); assert.doesNotMatch(firstWake.context[0].content, /The Longshore Current is drawn/);
-    const hearth = JSON.parse(firstWake.hearth.returnJson); assert.equal(hearth.kind, 'house_hearth_packet'); assert.equal(hearth.silverBulletSlots.count, 10); assert.equal(hearth.silverBulletSlots.occupied.length, 4); assert.equal(hearth.atoms.some(atom => atom.sourceEventId === BLESSING_SOURCE_EVENT_ID), false);
+    const hearth = JSON.parse(firstWake.hearth.returnJson); assert.equal(hearth.kind, 'house_hearth_packet'); assert.equal(hearth.silverBulletSlots.count, 10); assert.equal(hearth.silverBulletSlots.occupied.length, 6); assert.equal(hearth.atoms.some(atom => atom.sourceEventId === BLESSING_SOURCE_EVENT_ID), false);
     assert.doesNotMatch(firstWake.hearth.scrollMarkdown, /Longshore Current|drawn to this shore/);
     assert.equal(firstWake.events.find(event => event.actorKind === 'resident' && event.eventKind === 'utterance')?.content, 'resident answer');
     assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_entries').get().count, 5);

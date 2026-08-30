@@ -5,6 +5,8 @@ const MAX_PREVIEW_BYTES = 360;
 const AMBIENT_SCORE_FLOORS = Object.freeze([0.70, 0.72, 0.76]);
 const ANCHORED_SCORE_FLOORS = Object.freeze([0.58, 0.68, 0.74]);
 const DIRECT_ECHO_OVERLAP = 0.82;
+const ACTIVE_CONTEXT_WINDOW = 8;
+const ACTIVE_TOPIC_DEPTH = 3;
 const ANCHOR_STOPWORDS = new Set(['about','after','again','also','another','because','before','being','could','forest','from','have','into','just','like','more','other','really','should','something','that','their','there','these','thing','think','this','through','what','when','where','which','with','would','your']);
 
 function identity(entry) {
@@ -75,6 +77,23 @@ function rareQueryAnchors(entries, utterance) {
   return new Set(query.filter(token => entries.reduce((count, entry) => count + (tokenSet(entry.body).has(token) ? 1 : 0), 0) <= 6));
 }
 
+function conceptTokens(text) {
+  return new Set([...tokenSet(text)].filter(token => token.length >= 4 && !ANCHOR_STOPWORDS.has(token)));
+}
+
+function sharesTopic(candidateTokens, text) {
+  const liveTokens = conceptTokens(text);
+  let shared = 0;
+  for (const token of candidateTokens) if (liveTokens.has(token)) shared += 1;
+  return shared >= 2 || [...candidateTokens].some(token => token.length >= 6 && liveTokens.has(token));
+}
+
+function activeTopicDepth(body, activeContextTexts) {
+  const candidateTokens = conceptTokens(body);
+  if (!candidateTokens.size) return 0;
+  return activeContextTexts.slice(-ACTIVE_CONTEXT_WINDOW).reduce((depth, text) => depth + (sharesTopic(candidateTokens, text) ? 1 : 0), 0);
+}
+
 export class AmbientFeatherService {
   constructor({ forest, index, embeddingProvider }) {
     this.forest = forest;
@@ -127,7 +146,7 @@ export class AmbientFeatherService {
     return { queryVector: [...queryVector], candidates };
   }
 
-  async select({ utterance, activeSourceEventIds = [], excludeEntryIds = [], firstTurn = false }) {
+  async select({ utterance, activeSourceEventIds = [], activeContextTexts = [], excludeEntryIds = [], firstTurn = false }) {
     if (firstTurn) return { feathers: [], candidates: [], exclusions: [], silenceReason: 'first_turn_quiet', generationId: this.generationId };
     if (!this.ready) return { feathers: [], candidates: [], silenceReason: this.error ? 'embedding_unavailable' : 'embedding_warming', generationId: this.generationId };
     await this.sync();
@@ -153,6 +172,11 @@ export class AmbientFeatherService {
       const glint = buildAmbientFeatherPreview(entry.body);
       if (lexicalOverlap(utterance, entry.body) >= DIRECT_ECHO_OVERLAP || lexicalOverlap(utterance, glint.exactText) >= DIRECT_ECHO_OVERLAP) {
         exclusions.push({ entryId: entry.entryId, reason: 'direct_utterance_echo' });
+        continue;
+      }
+      const topicDepth = activeTopicDepth(entry.body, activeContextTexts);
+      if (topicDepth >= ACTIVE_TOPIC_DEPTH) {
+        exclusions.push({ entryId: entry.entryId, reason: 'active_context_topic_saturated', evidence: { matchingRecentMessages: topicDepth, inspectedRecentMessages: Math.min(activeContextTexts.length, ACTIVE_CONTEXT_WINDOW) } });
         continue;
       }
       if (selected.some(prior => lexicalOverlap(prior.body, entry.body) >= 0.72)) continue;

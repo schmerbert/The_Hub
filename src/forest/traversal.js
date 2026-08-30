@@ -1,14 +1,17 @@
 import { scrubHostReturn } from '../scrub/host-return.js';
 import { buildAmbientFeatherPreview } from './ambient-feathers.js';
 import { castPolarSemanticFork } from './junction-caster.js';
+import { JOURNAL_MAX_BYTES, JOURNAL_MAX_CHARS } from './store.js';
+import { canonicalize, sha256 } from '../core/hash.js';
 
 export const FOREST_WALK_TOOLS = Object.freeze([
   { type: 'function', function: { name: 'enter_forest', description: 'Deliberately visit the Resident Forest to explore a question together. From the physical Forest place, this begins at its ordinary treeline.', parameters: { type: 'object', properties: { seeking: { type: 'string', maxLength: 1000 } }, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'turn_around', description: 'Turn from the present into the Forest along a red-thread continuity pointer, or turn back from the Forest into the retained present place.', parameters: { type: 'object', properties: { entry_id: { type: 'string', description: 'Exact Forest entry ID when a feather or prior Forest result supplied one.' }, pointer: { type: 'string', maxLength: 1000, description: 'A remembered phrase when no exact Forest entry ID is available.' } }, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'walk_toward', description: 'Walk toward one exact bearing offered at the current Forest clearing.', parameters: { type: 'object', properties: { offer_id: { type: 'string' } }, required: ['offer_id'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'read_forest_leaf', description: 'Read the exact utterance reached at the current Forest clearing.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'read_forest_leaf', description: 'Read the exact Home utterance or Journal entry reached at the current Forest clearing.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'backtrack_forest', description: 'Retrace one witnessed Forest step to the prior clearing.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
   { type: 'function', function: { name: 'leave_forest', description: 'Leave a physical Forest visit from any clearing and return to the ordinary treeline. This does not retrace the exploratory trail.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  { type: 'function', function: { name: 'write_journal', description: 'Plant an exact Resident-authored entry in the Forest Home journal. This is available from any room and during a Forest walk; it does not alter conversation chronology.', parameters: { type: 'object', properties: { entry: { type: 'string', minLength: 1, maxLength: JOURNAL_MAX_CHARS } }, required: ['entry'], additionalProperties: false } } },
 ]);
 export const FOREST_WALK_TOOL_NAMES = new Set(FOREST_WALK_TOOLS.map(tool => tool.function.name));
 
@@ -35,8 +38,9 @@ export class ForestTraversalService {
   }
   tools(sessionId, worldRoomId) {
     const active = this.projection(sessionId).active;
-    if (active) return FOREST_WALK_TOOLS.filter(tool => !['enter_forest'].includes(tool.function.name) && (this.projection(sessionId).entranceRegister === 'physical' || tool.function.name !== 'leave_forest'));
-    return FOREST_WALK_TOOLS.filter(tool => worldRoomId === 'place.forest' ? tool.function.name === 'enter_forest' : ['enter_forest', 'turn_around'].includes(tool.function.name));
+    const journal = FOREST_WALK_TOOLS.find(tool => tool.function.name === 'write_journal');
+    if (active) return [...FOREST_WALK_TOOLS.filter(tool => !['enter_forest', 'write_journal'].includes(tool.function.name) && (this.projection(sessionId).entranceRegister === 'physical' || tool.function.name !== 'leave_forest')), journal];
+    return [...FOREST_WALK_TOOLS.filter(tool => worldRoomId === 'place.forest' ? tool.function.name === 'enter_forest' : ['enter_forest', 'turn_around'].includes(tool.function.name)), journal];
   }
   thresholdMessage(sessionId, worldRoomId) {
     if (this.projection(sessionId).active) return null;
@@ -99,14 +103,26 @@ export class ForestTraversalService {
     };
   }
 
-  async execute({ sessionId, wakeId, roomId, departureFocusId = null, tetherSourceEventId, queryFallback, intent, requestRecordId, spineRecordId }) {
+  async execute({ sessionId, wakeId, roomId, departureFocusId = null, tetherSourceEventId, queryFallback, intent, requestRecordId, spineRecordId, sourceEvent = null }) {
     const name = intent?.function?.name || 'unknown'; const toolCallId = intent?.id || `${wakeId}:${name}`;
     let args = {};
     try {
       if (!FOREST_WALK_TOOL_NAMES.has(name)) invalid('forest_walk_tool_unknown', 'That Forest action is not installed.');
       args = parseArgs(intent);
       let eventId; let result;
-      if (name === 'enter_forest' || (name === 'turn_around' && !this.projection(sessionId).active)) {
+      if (name === 'write_journal') {
+        if (Object.keys(args).length !== 1 || typeof args.entry !== 'string' || !args.entry.trim() || args.entry.length > JOURNAL_MAX_CHARS || Buffer.byteLength(args.entry, 'utf8') > JOURNAL_MAX_BYTES) invalid('forest_journal_invalid_argument', `entry must be nonempty and no more than ${JOURNAL_MAX_CHARS} characters (${JOURNAL_MAX_BYTES} UTF-8 bytes).`);
+        if (!sourceEvent || !sourceEvent.id || sourceEvent.sessionId !== sessionId || sourceEvent.wakeId !== wakeId) invalid('forest_journal_provenance_invalid', 'Journal requires the exact current Resident tool-call Source event.');
+        const provisionalActionReceiptId = `journal_${sha256(canonicalize({ sourceEventId: sourceEvent.id, toolCallId, bodyHash: sha256(args.entry) }))}`;
+        const sourceLocator = { threadId: sourceEvent.threadId, sessionId: sourceEvent.sessionId, wakeId: sourceEvent.wakeId, actorKind: sourceEvent.actorKind, toolCallId, toolName:name };
+        const offerId = `intake_${sha256(canonicalize({ sourceKind:'source_event', sourceId:sourceEvent.id, sourceLocator }))}`;
+        const entryId = `journal_${sha256(canonicalize({ sourceEventId: sourceEvent.id, toolCallId, bodyHash: sha256(args.entry) }))}`;
+        result = { ok: true, kind: 'forest_journal_entry', exact: true, entry: args.entry, bodyHash: sha256(args.entry), bucket: 'journal', jurisdiction: 'home', entryId, sourceEventId:sourceEvent.id, actionReceiptId:provisionalActionReceiptId, offerId };
+        const scrub = scrubHostReturn({ toolName:name,toolCallId,arguments:args,result,roomId,actionReceiptId:provisionalActionReceiptId,requestRecordId,spineRecordId });
+        this.forest.writeJournal({ sourceEvent, toolCallId, argumentsJson:intent.function.arguments, body:args.entry, requestRecordId, spineRecordId, hostReturnReceiptId:scrub.receipt.receiptId, actionReceiptId:provisionalActionReceiptId });
+        eventId = provisionalActionReceiptId;
+        return { name,result,scrub,actionReceipt:{ receiptId:eventId },resultRack:null,wild:[] };
+      } else if (name === 'enter_forest' || (name === 'turn_around' && !this.projection(sessionId).active)) {
         if (name === 'turn_around' && roomId === 'place.forest') invalid('forest_walk_wrong_register', 'At the physical treeline, enter the Forest directly rather than turning away from it.');
         if (args.seeking !== undefined && (typeof args.seeking !== 'string' || !args.seeking.trim() || args.seeking.length > 1000)) invalid('forest_walk_invalid_argument', 'seeking must be a nonempty bounded string when supplied.');
         if (args.pointer !== undefined && (typeof args.pointer !== 'string' || !args.pointer.trim() || args.pointer.length > 1000)) invalid('forest_walk_invalid_argument', 'pointer must be a nonempty bounded string when supplied.');

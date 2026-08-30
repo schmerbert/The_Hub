@@ -26,9 +26,10 @@ function approvalEffectEvidence(approval) {
   return { preimage: preview, postcondition };
 }
 export class WorldActionGateway {
-  constructor({ world, workshop, forest = null, resultRack = null, recipeRunner = null, approvalMode = 'confirm', recipeTimeoutMs = 120000 }) {
+  constructor({ world, workshop, forest = null, resultRack = null, recipeRunner = null, binderWindow = null, approvalMode = 'confirm', recipeTimeoutMs = 120000 }) {
     this.world = world;
     this.workshop = workshop;
+    this.binderWindow = binderWindow;
     this.forest = forest;
     this.resultRack = resultRack;
     this.approvalMode = approvalMode === 'auto' ? 'auto' : 'confirm';
@@ -43,7 +44,7 @@ export class WorldActionGateway {
     if (!available.includes(name)) fail('world_wrong_station', `Tool ${name} is not mounted for the current room.`);
   }
   fixtureContents(sessionId, fixtureId) {
-    return inspectFixtureContents({ world: this.world, workshop: this.workshop, git: this.git, sessionId, fixtureId });
+    return inspectFixtureContents({ world: this.world, workshop: this.workshop, git: this.git, binderWindow: this.binderWindow, sessionId, fixtureId });
   }
   pendingConfirm(sessionId, wakeId, kind, payload, preview, toolName, commandId = null) {
     const toolClass = TOOL_APPROVAL_CLASS[toolName] || 'confirm';

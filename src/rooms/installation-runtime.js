@@ -2,6 +2,7 @@ import {
   appendRoomInstallationReceipt, assertValidRoomInstallationReceipt, installRoomInstallationLedger, listRoomInstallationReceipts,
 } from './installation-ledger.js';
 import { workshopInstallationWitness } from './workshop-witness.js';
+import { spotlightInstallationWitness } from './spotlight-witness.js';
 
 export const WORKSHOP_INSTALLATION_MIGRATION_COMMAND = 'npm run room:migrate-workshop -- --apply --backup-confirmed';
 
@@ -10,7 +11,10 @@ export function establishInstalledRoomReceipts(world) {
   installRoomInstallationLedger(sqlite);
   const witness = workshopInstallationWitness();
   const inspection = inspectWorkshopInstallationUpgrade(world, { witness });
-  if (inspection.status === 'current') return inspection.receipt;
+  if (inspection.status === 'current') {
+    establishSpotlightInstallationReceipt(world);
+    return inspection.receipt;
+  }
   if (inspection.status === 'upgrade_required') {
     throw Object.assign(new Error(`Workshop installation upgrade required from ${inspection.priorReceipt.packageVersion} to ${witness.packageVersion}. Run ${WORKSHOP_INSTALLATION_MIGRATION_COMMAND} after creating a recoverable backup.`), {
       code: 'room_installation_upgrade_required',
@@ -33,11 +37,41 @@ export function establishInstalledRoomReceipts(world) {
   if (inspection.status !== 'missing_original_receipt') throw Object.assign(new Error(`Workshop installation receipt state is ${inspection.status}.`), { code: 'room_installation_receipt_invalid', inspection });
   const topology = sqlite.prepare("SELECT sequence,event_hash,occurred_at FROM world_event_journal WHERE event_kind IN ('topology.installed/v1','legacy_snapshot.imported/v1') ORDER BY sequence LIMIT 1").get();
   if (!topology) throw new Error('Workshop installation ancestry has no exact World root event.');
-  return appendRoomInstallationReceipt(sqlite, {
+  const receipt = appendRoomInstallationReceipt(sqlite, {
     witness,
     ancestry: 'inherited_pre_boundary',
     admission: { status: 'not_recorded', reason: 'installation_predates_receipt_boundary' },
     bindings: { witnessHash: witness.witnessHash, standing: true },
+    worldEventSequence: topology.sequence,
+    worldEventHash: topology.event_hash,
+    installedAt: topology.occurred_at,
+  });
+  establishSpotlightInstallationReceipt(world);
+  return receipt;
+}
+
+export function establishSpotlightInstallationReceipt(world) {
+  const sqlite = worldStore(world);
+  installRoomInstallationLedger(sqlite);
+  const topology = sqlite.prepare("SELECT sequence,event_hash,occurred_at FROM world_event_journal WHERE event_kind='topology.spotlight_installed/v1' ORDER BY sequence LIMIT 1").get();
+  if (!topology) return null;
+  const witness = spotlightInstallationWitness();
+  if (!witness.verified) throw Object.assign(new Error(`Spotlight installation witness has loose wires: ${witness.gaps.join(', ')}`), { code: 'spotlight_installation_witness_drift', witness });
+  const receipts = listRoomInstallationReceipts(sqlite).filter(receipt => receipt.roomId === witness.roomId);
+  for (const receipt of receipts) assertValidRoomInstallationReceipt(receipt);
+  const exact = receipts.find(receipt => receipt.packageVersion === witness.packageVersion && receipt.manifestHash === witness.manifestHash);
+  if (exact) {
+    if (exact.witnessHash !== witness.witnessHash || exact.worldEvent?.sequence !== topology.sequence || exact.worldEvent?.hash !== topology.event_hash) {
+      throw Object.assign(new Error('Spotlight installation receipt does not match the current witness or exact topology event.'), { code: 'spotlight_installation_receipt_drift', receipt: exact, witness });
+    }
+    return exact;
+  }
+  if (receipts.length) throw Object.assign(new Error('Spotlight installation has an incompatible prior receipt and no adopted revision path.'), { code: 'spotlight_installation_upgrade_required', receipts, witness });
+  return appendRoomInstallationReceipt(sqlite, {
+    witness,
+    ancestry: 'forward_installation',
+    admission: { status: 'admitted', authority: 'user', reason: 'spotlight_observatory_v1_adoption' },
+    bindings: { witnessHash: witness.witnessHash, standing: true, entrancePolicy: 'withheld' },
     worldEventSequence: topology.sequence,
     worldEventHash: topology.event_hash,
     installedAt: topology.occurred_at,

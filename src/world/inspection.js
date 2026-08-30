@@ -2,6 +2,7 @@ import { ceilingCatalog } from './ceiling.js';
 import { presentationCatalog } from '../context/resident-presentation.js';
 import { schemasForSession } from './tools.js';
 import { workshopInstallationWitness } from '../rooms/workshop-witness.js';
+import { spotlightInstallationWitness } from '../rooms/spotlight-witness.js';
 import { installedRoomReceipts } from '../rooms/installation-runtime.js';
 
 const COLLECTION_LIMIT = 100;
@@ -111,7 +112,7 @@ export function projectWorldBuilderInspection(world, sessionId) {
     verification,
     ceiling: ceilingCatalog(),
     residentPresentation: presentationCatalog(),
-    installations: [workshopInstallationWitness()],
+    installations: [workshopInstallationWitness(), spotlightInstallationWitness()],
     installationReceipts: installedRoomReceipts(world),
     approvals,
     collectionBounds: {

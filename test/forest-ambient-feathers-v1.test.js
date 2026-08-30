@@ -92,7 +92,7 @@ test('an unready embedding index produces witnessed shadow silence without waiti
     const shadow = await runAmbientFeatherShadow({ service, utterance: 'faun', trigger: {}, activeSourceEventIds: [] });
     assert.equal(shadow.packet.silence, true);
     assert.equal(shadow.packet.silenceReason, 'embedding_warming');
-    assert.equal(shadow.decision.selectorVersion, 'ambient_vector_feathers/v2');
+    assert.equal(shadow.decision.selectorVersion, 'ambient_vector_feathers/v3');
     assert.equal(shadow.decision.selectedAtoms.length, 0);
     release(); await service.warming;
   } finally { fx.close(); }
@@ -187,5 +187,48 @@ test('the quiet prior refuses weak ordinary similarity while preserving a rare n
     assert.deepEqual(quiet.feathers, []);
     const anchored = await service.select({ utterance: 'What about the faun?' });
     assert.equal(anchored.feathers.length, 1);
+  } finally { fx.close(); }
+});
+
+test('developed live context suppresses an older topical seed without suppressing its first return', async () => {
+  const fx = fixture();
+  try {
+    const service = new AmbientFeatherService({ forest: fx.forest, index: fx.index, embeddingProvider: new FakeEmbeddings() });
+    await service.warming;
+    const market = fx.forest.listSemanticProjectionAtoms().find(entry => entry.body.includes('Market prices'));
+    service.index.search = () => [{ entryId: market.entryId, sourceEventId: market.sourceEventId, bodyHash: market.bodyHash, score: 0.91 }];
+
+    const early = await service.select({ utterance: 'Let us look through Spotlight at the stock market.', activeContextTexts: ['We have just entered Spotlight.'] });
+    assert.equal(early.feathers.length, 1);
+
+    const mature = await service.select({
+      utterance: 'What happened to this stock today?',
+      activeContextTexts: [
+        'The market landscape is visible through the telescope.',
+        'A stock can move sharply while the portfolio remains read only.',
+        'We are observing market prices rather than controlling them.',
+      ],
+    });
+    assert.deepEqual(mature.feathers, []);
+    assert.deepEqual(mature.exclusions[0], {
+      entryId: market.entryId,
+      reason: 'active_context_topic_saturated',
+      evidence: { matchingRecentMessages: 3, inspectedRecentMessages: 3 },
+    });
+  } finally { fx.close(); }
+});
+
+test('unrelated live depth does not suppress a relevant feather', async () => {
+  const fx = fixture();
+  try {
+    const service = new AmbientFeatherService({ forest: fx.forest, index: fx.index, embeddingProvider: new FakeEmbeddings() });
+    await service.warming;
+    const market = fx.forest.listSemanticProjectionAtoms().find(entry => entry.body.includes('Market prices'));
+    service.index.search = () => [{ entryId: market.entryId, sourceEventId: market.sourceEventId, bodyHash: market.bodyHash, score: 0.91 }];
+    const result = await service.select({
+      utterance: 'What is happening in the stock market?',
+      activeContextTexts: ['The garden gate is open.', 'The kiln is cooling.', 'A faun crossed the treeline.'],
+    });
+    assert.equal(result.feathers.length, 1);
   } finally { fx.close(); }
 });

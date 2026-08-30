@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": "room-installation.v1",
+  "identity": { "id": "room.spotlight", "kind": "room", "version": "1.0.0" },
+  "status": { "classification": "standing", "autoInstall": false },
+  "package": { "entrypoint": "index.js", "declarationExport": "SPOTLIGHT" },
+  "placement": {
+    "requestedParent": "place.hub",
+    "hostOwnsDoor": true,
+    "entrancePolicy": "withheld"
+  },
+  "sockets": [
+    { "id": "socket.observation_source", "capability": "source.spotlight_observations", "suppliedBy": "host", "optional": true },
+    { "id": "socket.observation_custody", "capability": "custody.spotlight_observations", "suppliedBy": "host", "optional": true },
+    { "id": "socket.packet_custody", "capability": "custody.spotlight_packets", "suppliedBy": "host", "optional": true },
+    { "id": "socket.replay_clock", "capability": "clock.spotlight_replay", "suppliedBy": "host", "optional": true }
+  ],
+  "affordanceGroups": [
+    { "id": "affordance.spotlight_landscape", "fixtureId": "fixture.spotlight_landscape", "effect": "observe", "approvalPolicy": "host_owned", "requires": [], "tools": [] },
+    { "id": "affordance.spotlight_telescope", "fixtureId": "fixture.spotlight_telescope", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.observation_source", "socket.observation_custody"], "tools": [] },
+    { "id": "affordance.spotlight_archive", "fixtureId": "fixture.spotlight_archive", "effect": "observe", "approvalPolicy": "host_owned", "requires": [], "tools": [] },
+    { "id": "affordance.spotlight_table", "fixtureId": "fixture.spotlight_table", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.packet_custody"], "tools": [] },
+    { "id": "affordance.spotlight_bell", "fixtureId": "fixture.spotlight_bell", "effect": "observe", "approvalPolicy": "host_owned", "requires": [], "tools": [] }
+  ],
+  "custody": [
+    { "id": "custody.spotlight_observations", "installedBy": "host", "appliesTo": ["observe"], "optional": true },
+    { "id": "custody.spotlight_packets", "installedBy": "host", "appliesTo": ["observe"], "optional": true }
+  ],
+  "authority": { "selfInstall": false, "selfAuthorize": false, "ambientAuthority": false },
+  "removal": { "hostDecision": true, "preserveCustody": true }
+}

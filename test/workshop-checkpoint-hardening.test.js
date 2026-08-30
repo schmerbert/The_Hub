@@ -218,7 +218,7 @@ test('graceful Hub close cancels an active recipe and persists kiln cancellation
   const runner = hub.gateway.recipes;
   await hub.close();
 
-  const reopened = new WorldGraphStore(env.HUB_WORLD_PATH, { topologyVersion:'forest' });
+  const reopened = new WorldGraphStore(env.HUB_WORLD_PATH, { topologyVersion:'spotlight' });
   try {
     const kiln = reopened.getFixtureRuntime(KILN_FIXTURE_ID);
     assert.equal(kiln.status, 'cancelled');

@@ -13,6 +13,8 @@ test('Corner carries an expandable navigable Marble Inspector backed by installa
   assert.match(app, /renderMarbleInspector/);
   assert.match(app, /renderWitnessDetail/);
   assert.match(app, /currentMarbleSelection/);
+  assert.match(app, /currentMarbleRoomId/);
+  assert.match(app, /marble-room-nav/);
   assert.match(app, /manifestHash/);
   assert.match(app, /witnessHash/);
   assert.match(app, /Ceiling.*mount.*schema.*handler.*approval/);

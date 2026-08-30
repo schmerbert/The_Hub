@@ -22,7 +22,7 @@ WakeService -> durable wake_stream_events -> bounded process bus -> SSE / Corner
 
 Provider-bound Scrub is a projection, not a memory operation. It may remove only declared exact spans or declared complete messages, preserving the roles, order, and content that remain. Whole-message fitting currently removes only older completed assistant-tool/result exchanges; it retains the current and configured recent exchanges, records exact omitted source positions and hashes, and adds a deterministic disclosure while the Source Ledger retains the original history. Spine records the exact validated JSON sent to the provider.
 
-Forest admission uses a separate `utterance_identity/v1` policy. It proves that an admitted utterance is unchanged; it is not provider-history fitting.
+Forest utterance admission uses a separate `utterance_identity/v1` policy. It proves that an admitted utterance is unchanged; it is not provider-history fitting. Journal admission is a separate exact Resident-act crossing: an explicit `write_journal` tool call plants `home/journal`, retaining request/Spine ancestry without creating a conversation turn or `responds_to` edge.
 
 ## Owned modules
 
@@ -37,16 +37,18 @@ Forest admission uses a separate `utterance_identity/v1` policy. It proves that 
 | Provider Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Subtractive provider projection and exact provider-return selection |
 | Tool-history fitting | `src/context/tool-pairs.js` | Declared old completed tool-exchange omission and source-reference projection |
 | Spine | `src/spine/store.js` | Exact provider request and bounded raw-return custody, including one admitted-body SSE frame appended at termination |
-| Forest | `src/forest/` | Home/Wild admission, custody, backfill, and verification; no exhale selector yet |
+| Forest | `src/forest/` | Home utterance and Journal planting, Wild admission, custody, traversal, rebuildable semantic projection, backfill, and verification |
 | Forest health projection | `src/forest/health.js` | Domain-owned active/inactive, integrity, catch-up, Wild, and Intake health projection for transport surfaces |
 | World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, and append-only approval completion custody |
 | Place and room packages | `src/places/` | Inert topology declarations plus behavior owned entirely by one place or room; universal replay, authority, and crossings remain in World |
 | Room installation contract | `src/rooms/installation-contract.js` | Pure validation of inert `room-installation.v1` requests; grants no discovery, activation, wiring, or authority |
-| Room installation witness | `src/rooms/installation-witness.js`, `src/rooms/workshop-witness.js` | Host-owned deterministic comparison of manifest claims with installed topology, fixtures, tools, schemas, handlers, approvals, sockets, and custody |
+| Room installation witness | `src/rooms/installation-witness.js`, `src/rooms/workshop-witness.js`, `src/rooms/spotlight-witness.js` | Host-owned deterministic comparison of manifest claims with installed topology, entrance policy, fixtures, tools, schemas, handlers, approvals, sockets, and custody |
 | Room installation ledger | `src/rooms/installation-ledger.js`, `src/rooms/installation-runtime.js` | Append-only receipt boundary and composition-root adapter joining verified host wiring and exact manifest hashes to the causal World event without transport reaching through World storage |
 | World builder inspection | `src/world/inspection.js` | Bounded verified or drift-safe diagnostic projection; owns direct diagnostic access to World storage |
 | Ceiling / Patch Bay | `src/world/ceiling.js`, `src/world/tools.js` | Complete World authority plus deterministic engaged-fixture schema fitting for provider attention |
 | Workshop room package | `src/places/hub/workshop/index.js` | Canonical `room.workshop` declaration and machinery: repository adapter, path law, Git, recipes, Sandbox Bay, and promotion |
+| Binder Window | `src/places/hub/binder-window/`, `src/world/topology-binder-window.js` | Frozen Binder dashboard validation/projection plus the passive Center fixture's forward World topology extension; capture is explicit and inspection never networks |
+| Spotlight observatory | `src/places/hub/spotlight/`, `src/world/topology-spotlight.js` | Source-coherent balcony shell, capped telescope and fixtures, bounded observation admission, deterministic replay packets, and forward unreachable World extension |
 | Workshop discovery traversal | `src/places/hub/workshop/discovery-traversal.js` | Streaming eligible-file walk, declared practical exclusions, examined/skipped counts, and honest truncation boundaries |
 | World Gateway | `src/world/gateway.js`, `src/world/gateway/` | Compatibility facade over the complete handler registry, approval crossings, Result Rack integration, and async result capture |
 | Workshop compatibility doors | `src/world/{workshop,git,recipes,sandbox,sandbox-recipes,promotion}.js`, `src/workshop/path-law.js` | Thin registered re-exports for historical callers; no new behavior belongs here |

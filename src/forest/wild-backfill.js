@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, sha256 } from '../core/hash.js';
-import { readSpineFrames } from '../spine/store.js';
+import { readSpineLedgerFrames, spineLedgerExists } from '../spine/store.js';
 import { ForestStore } from './store.js';
 import { verifyForest, wildSourceKindForTool } from './verify.js';
 
@@ -16,11 +16,11 @@ function exactSources(action) {
 }
 
 export function eligibleWildActions({ operationalPath, worldPath, spinePath } = {}) {
-  if (!operationalPath || !worldPath || !spinePath || !existsSync(operationalPath) || !existsSync(worldPath) || !existsSync(spinePath)) throw new Error('Wild planning requires existing Source, World, and Spine custody.');
+  if (!operationalPath || !worldPath || !spinePath || !existsSync(operationalPath) || !existsSync(worldPath) || !spineLedgerExists(spinePath)) throw new Error('Wild planning requires existing Source, World, and Spine custody.');
   const op = new DatabaseSync(operationalPath, { readOnly: true });
   const world = new DatabaseSync(worldPath, { readOnly: true });
   try {
-    const frames = readSpineFrames(spinePath);
+    const frames = readSpineLedgerFrames(spinePath);
     const prepared = new Map(frames.filter(frame => frame.frame_type === 'request_prepared').map(frame => [frame.record_id, frame]));
     const dispatched = new Set(frames.filter(frame => frame.frame_type === 'dispatch_attempted').map(frame => frame.request_record_id));
     const successful = new Set(frames.filter(frame => frame.frame_type === 'provider_outcome' && frame.outcome?.kind === 'success').map(frame => frame.request_record_id));

@@ -56,7 +56,7 @@ Use three physically distinguishable stores:
 
 - Operational database: existing `.runtime/hub.sqlite`
 - Forest database: `.runtime/forest.sqlite`
-- Spine file: `.runtime/spine/resident-seat-1.jsonl`
+- Spine ledger family: legacy ancestry may remain at `.runtime/spine/resident-seat-1.jsonl`; each default-configured session writes an independent ledger under `.runtime/spine/sessions/`. Explicit `HUB_SPINE_PATH` configuration retains the single-ledger compatibility contract.
 
 Configuration may override these paths for tests. Never store credentials in any of them.
 

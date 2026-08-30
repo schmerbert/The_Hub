@@ -1,6 +1,14 @@
 import { KILN_FIXTURE_ID } from '../graph.js';
 
 const FIXTURE_INSPECTORS = Object.freeze({
+  'fixture.binder_window': ({ binderWindow }) => binderWindow || {
+    kind: 'binder_window_projection',
+    apiVersion: 'binder-window.v1',
+    identity: 'window.binder',
+    availability: 'dormant',
+    reason: 'missing_snapshot',
+    readable: false,
+  },
   'fixture.workshop_clipboard': ({ world, sessionId }) => ({ kind: 'clipboard', brief: world.getBrief(sessionId) }),
   'fixture.workshop_workbench': ({ world, sessionId }) => {
     const pending = world.listApprovals(sessionId, { pendingOnly: true })
@@ -24,8 +32,8 @@ const FIXTURE_INSPECTORS = Object.freeze({
 
 export const FIXTURE_INSPECTOR_IDS = Object.freeze(Object.keys(FIXTURE_INSPECTORS));
 
-export function inspectFixtureContents({ world, workshop, git, sessionId, fixtureId }) {
+export function inspectFixtureContents({ world, workshop, git, binderWindow = null, sessionId, fixtureId }) {
   const inspector = FIXTURE_INSPECTORS[fixtureId];
-  if (inspector) return inspector({ world, workshop, git, sessionId, fixtureId });
+  if (inspector) return inspector({ world, workshop, git, binderWindow, sessionId, fixtureId });
   return { kind: 'fixture', text: world.node(fixtureId)?.resident_text || '' };
 }

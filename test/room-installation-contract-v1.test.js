@@ -47,6 +47,7 @@ test('contract refuses manifests that smuggle installation, authority, paths, or
     value => { value.authority.selfAuthorize = true; },
     value => { value.package.entrypoint = '../escape.js'; },
     value => { value.placement.hostOwnsDoor = false; },
+    value => { value.placement.entrancePolicy = 'manifest_decides'; },
     value => { value.sockets[0].suppliedBy = 'room'; },
     value => { value.affordanceGroups[1].tools.push(value.affordanceGroups[0].tools[0]); },
     value => { value.custody[0].installedBy = 'room'; },
@@ -55,4 +56,10 @@ test('contract refuses manifests that smuggle installation, authority, paths, or
     mutate(hostile);
     assert.equal(validateRoomInstallationManifest(hostile).ok, false);
   }
+});
+
+test('manifest may request a host-witnessed withheld entrance without granting a door', async () => {
+  const value = await manifest();
+  value.placement.entrancePolicy = 'withheld';
+  assert.deepEqual(validateRoomInstallationManifest(value), { ok: true, errors: [] });
 });

@@ -64,3 +64,20 @@ test('optional Forest socket and custody remain honest without becoming loose wi
   assert.equal(witness.custody.find(item => item.id === 'custody.forest_wild').binding.state, 'optional_unwired');
   assert.equal(witness.verified, true);
 });
+
+test('withheld entrance is verified only while no entrance is installed', () => {
+  const inputs = witnessInputs(workshopInstallationWitness());
+  inputs.manifest.placement.entrancePolicy = 'withheld';
+  inputs.topology.entranceInstalled = false;
+  const withheld = buildRoomInstallationWitness(inputs);
+  assert.equal(withheld.verified, true);
+  assert.equal(withheld.entrancePolicy, 'withheld');
+  assert.deepEqual(withheld.gaps, []);
+
+  const unexpectedInputs = witnessInputs(workshopInstallationWitness());
+  unexpectedInputs.manifest.placement.entrancePolicy = 'withheld';
+  unexpectedInputs.topology.entranceInstalled = true;
+  const unexpected = buildRoomInstallationWitness(unexpectedInputs);
+  assert.equal(unexpected.verified, false);
+  assert.deepEqual(unexpected.gaps, ['topology.entrance_unexpected']);
+});

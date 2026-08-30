@@ -20,6 +20,7 @@ export function validateRoomInstallationManifest(manifest) {
   if (!safeExportName(manifest.package?.declarationExport)) errors.push('package.declarationExport must be a safe export name');
   if (!TYPE_FIRST.test(manifest.placement?.requestedParent ?? '') || !manifest.placement.requestedParent.startsWith('place.')) errors.push('placement.requestedParent must be a place.* identifier');
   if (manifest.placement?.hostOwnsDoor !== true) errors.push('placement.hostOwnsDoor must be true');
+  if (manifest.placement?.entrancePolicy !== undefined && !['installed','withheld'].includes(manifest.placement.entrancePolicy)) errors.push('placement.entrancePolicy must be installed or withheld');
 
   const sockets = array(manifest.sockets, 'sockets', errors);
   unique(sockets.map(item => item?.id), 'socket id', errors);

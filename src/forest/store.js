@@ -4,8 +4,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { byteLength, canonicalize, id, sha256 } from '../core/hash.js';
 import { identityScrubV1, metadataForEvent, normalizeAdmissionEvent, verifyAdmissionScrub } from './admission.js';
 
-export const APPEND_ONLY_TABLES = ['forest_metadata', 'scrub_receipts', 'forest_entries', 'forest_edges', 'presentation_links', 'emission_links', 'forest_intake_offers', 'forest_intake_decisions'];
+export const APPEND_ONLY_TABLES = ['forest_metadata', 'scrub_receipts', 'forest_entries', 'forest_edges', 'presentation_links', 'emission_links', 'forest_intake_offers', 'forest_intake_decisions', 'forest_journal_entries', 'forest_journal_custody'];
 export const WILD_TABLES = ['wild_entries'];
+export const JOURNAL_MAX_CHARS = 4000;
+export const JOURNAL_MAX_BYTES = 16 * 1024;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS forest_metadata (
@@ -103,8 +105,57 @@ CREATE TABLE IF NOT EXISTS forest_intake_decisions (
 CREATE INDEX IF NOT EXISTS forest_entries_thread_order ON forest_entries(thread_id, source_timestamp, source_event_id);
 CREATE INDEX IF NOT EXISTS forest_intake_decisions_offer_order ON forest_intake_decisions(offer_id,revision);
 ${APPEND_ONLY_TABLES.map(table => `
+${['forest_journal_entries', 'forest_journal_custody'].includes(table) ? '' : `
 CREATE TRIGGER IF NOT EXISTS ${table}_append_only_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
-CREATE TRIGGER IF NOT EXISTS ${table}_append_only_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`).join('\n')}`;
+CREATE TRIGGER IF NOT EXISTS ${table}_append_only_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`}`).join('\n')}`;
+
+const JOURNAL_SCHEMA = `
+CREATE TABLE IF NOT EXISTS forest_journal_entries (
+  entry_id TEXT PRIMARY KEY CHECK(length(entry_id)>0),
+  source_event_id TEXT NOT NULL CHECK(length(source_event_id)>0),
+  source_event_hash TEXT NOT NULL CHECK(length(source_event_hash)=64),
+  source_timestamp TEXT NOT NULL,
+  thread_id TEXT NOT NULL CHECK(length(thread_id)>0),
+  session_id TEXT NOT NULL CHECK(length(session_id)>0),
+  wake_id TEXT NOT NULL CHECK(length(wake_id)>0),
+  tool_call_id TEXT NOT NULL CHECK(length(tool_call_id)>0),
+  tool_name TEXT NOT NULL CHECK(tool_name='write_journal'),
+  arguments_json TEXT NOT NULL CHECK(length(arguments_json)>0),
+  actor_kind TEXT NOT NULL CHECK(actor_kind='resident'),
+  signature TEXT NOT NULL CHECK(signature='actor:resident'),
+  source_authority TEXT NOT NULL CHECK(source_authority='model_signed'),
+  jurisdiction TEXT NOT NULL CHECK(jurisdiction='home'),
+  bucket TEXT NOT NULL CHECK(bucket='journal'),
+  body TEXT NOT NULL CHECK(length(body)>0),
+  body_hash TEXT NOT NULL CHECK(length(body_hash)=64),
+  body_byte_length INTEGER NOT NULL CHECK(body_byte_length>0),
+  scrub_policy TEXT NOT NULL CHECK(scrub_policy='journal_identity'),
+  scrub_version TEXT NOT NULL CHECK(scrub_version='v1'),
+  action_receipt_id TEXT NOT NULL UNIQUE CHECK(length(action_receipt_id)>0),
+  host_return_receipt_id TEXT NOT NULL CHECK(length(host_return_receipt_id)>0),
+  request_record_id TEXT NOT NULL CHECK(length(request_record_id)>0),
+  spine_record_id TEXT NOT NULL CHECK(length(spine_record_id)>0),
+  metadata_json TEXT NOT NULL CHECK(length(metadata_json)>0),
+  created_at TEXT NOT NULL,
+  UNIQUE(source_event_id,tool_call_id)
+);
+CREATE TABLE IF NOT EXISTS forest_journal_custody (
+  custody_id TEXT PRIMARY KEY CHECK(length(custody_id)>0),
+  entry_id TEXT NOT NULL REFERENCES forest_journal_entries(entry_id),
+  revision INTEGER NOT NULL CHECK(revision>0),
+  action_receipt_id TEXT NOT NULL CHECK(length(action_receipt_id)>0),
+  host_return_receipt_id TEXT NOT NULL CHECK(length(host_return_receipt_id)>0),
+  result_rack_job_id TEXT,
+  result_rack_projection_id TEXT,
+  result_rack_source_hash TEXT,
+  bound_at TEXT NOT NULL,
+  UNIQUE(entry_id,revision)
+);
+CREATE INDEX IF NOT EXISTS forest_journal_entries_order ON forest_journal_entries(session_id,source_timestamp,source_event_id);
+CREATE TRIGGER IF NOT EXISTS forest_journal_entries_append_only_update BEFORE UPDATE ON forest_journal_entries BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS forest_journal_entries_append_only_delete BEFORE DELETE ON forest_journal_entries BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS forest_journal_custody_append_only_update BEFORE UPDATE ON forest_journal_custody BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS forest_journal_custody_append_only_delete BEFORE DELETE ON forest_journal_custody BEGIN SELECT RAISE(ABORT, 'append-only table'); END;`;
 
 const WILD_SCHEMA = `
 CREATE TABLE IF NOT EXISTS wild_metadata (
@@ -177,6 +228,7 @@ export class ForestStore {
       this.sqlite = new DatabaseSync(path);
       this.sqlite.exec('PRAGMA foreign_keys = ON;');
       this.sqlite.exec(SCHEMA);
+      this.sqlite.exec(JOURNAL_SCHEMA);
       this.sqlite.exec(WILD_SCHEMA);
       ensureWildMetadata(this.sqlite);
       this.sqlite.prepare('INSERT INTO forest_metadata(metadata_id, schema_name, schema_version, created_at) VALUES(1,?,?,?)').run('forest', 1, now());
@@ -184,6 +236,10 @@ export class ForestStore {
       if (!existsSync(path)) throw new Error('Forest requireExisting refuses a missing database.');
       this.sqlite = new DatabaseSync(path);
       this.sqlite.exec('PRAGMA foreign_keys = ON;');
+      // Journal is an additive v1 companion schema. Existing Forest ancestry
+      // remains untouched; opening a writable store installs only the new
+      // append-only tables and their witnesses.
+      this.sqlite.exec(JOURNAL_SCHEMA);
       this.sqlite.exec(WILD_SCHEMA);
       ensureWildMetadata(this.sqlite);
       this.verifySchema();
@@ -290,6 +346,59 @@ export class ForestStore {
 
   ingestUtterance(event, options) { return this.ingestEvent(event, options); }
 
+  /**
+   * Admit one exact Resident-authored journal body. Journal custody is kept in
+   * its own additive table because the original utterance table deliberately
+   * has a one-bucket CHECK constraint and its chronology must remain intact.
+   * The tool-call Source event, provider request, Spine request, and host
+   * return receipt are all retained as provenance; no Wild material is read.
+   */
+  writeJournal({ sourceEvent, toolCallId, argumentsJson, body, requestRecordId, spineRecordId, hostReturnReceiptId, toolName = 'write_journal', actionReceiptId = null }) {
+    if (!sourceEvent || sourceEvent.actorKind !== 'resident' || sourceEvent.eventKind !== 'state' || sourceEvent.authority !== 'model_signed') throw Object.assign(new Error('Journal admission requires a model-signed Resident tool-call Source event.'), { code: 'forest_journal_source_invalid' });
+    if (typeof toolCallId !== 'string' || !toolCallId.trim() || typeof argumentsJson !== 'string' || !argumentsJson.trim()) throw Object.assign(new Error('Journal admission requires exact tool-call identity.'), { code: 'forest_journal_provenance_invalid' });
+    if (toolName !== 'write_journal' || typeof body !== 'string' || !body.trim() || body.length > JOURNAL_MAX_CHARS || byteLength(body) > JOURNAL_MAX_BYTES) throw Object.assign(new Error('Journal entry must be nonempty and bounded.'), { code: 'forest_journal_invalid_argument' });
+    if (typeof requestRecordId !== 'string' || !requestRecordId.trim() || typeof spineRecordId !== 'string' || !spineRecordId.trim() || typeof hostReturnReceiptId !== 'string' || !hostReturnReceiptId.trim()) throw Object.assign(new Error('Journal admission requires request, Spine, and host-return custody.'), { code: 'forest_journal_provenance_invalid' });
+    let parsedArguments;
+    try { parsedArguments = JSON.parse(argumentsJson); } catch { throw Object.assign(new Error('Journal tool arguments are not valid JSON.'), { code: 'forest_journal_provenance_invalid' }); }
+    if (!parsedArguments || Array.isArray(parsedArguments) || parsedArguments.entry !== body || Object.keys(parsedArguments).some(key => key !== 'entry')) throw Object.assign(new Error('Journal body does not match the exact write_journal arguments.'), { code: 'forest_journal_provenance_invalid' });
+    const sourceEventHash = sourceEvent.fullHash || sha256(sourceEvent.content);
+    if (sourceEventHash !== sha256(sourceEvent.content) || !sourceEvent.id || !sourceEvent.threadId || !sourceEvent.sessionId || !sourceEvent.wakeId) throw Object.assign(new Error('Journal Source event custody is incomplete.'), { code: 'forest_journal_provenance_invalid' });
+    const bodyHash = sha256(body);
+    const entryId = `journal_${sha256(canonicalize({ sourceEventId: sourceEvent.id, toolCallId, bodyHash }))}`;
+    const receiptId = actionReceiptId || entryId;
+    const metadataJson = canonicalize({ exact: true, sourceEventHash, toolCallId, toolName, bodyHash, bodyByteLength: byteLength(body), requestRecordId, spineRecordId });
+    const sourceLocator = { threadId: sourceEvent.threadId, sessionId: sourceEvent.sessionId, wakeId: sourceEvent.wakeId, actorKind: sourceEvent.actorKind, toolCallId, toolName };
+    const { offerId } = this.ensureIntakeOffer({ sourceKind: 'source_event', sourceId: sourceEvent.id, sourceLocator, sourceHash: sourceEventHash, intendedJurisdiction: 'home', intendedBucket: 'journal', sourceTimestamp: sourceEvent.createdAt, scrubPolicy: 'journal_identity', scrubVersion: 'v1' });
+    const existing = this.sqlite.prepare('SELECT * FROM forest_journal_entries WHERE entry_id=?').get(entryId);
+    if (existing) {
+      if (existing.source_event_id !== sourceEvent.id || existing.source_event_hash !== sourceEventHash || existing.body !== body || existing.body_hash !== bodyHash || existing.arguments_json !== argumentsJson || existing.request_record_id !== requestRecordId || existing.spine_record_id !== spineRecordId || existing.host_return_receipt_id !== hostReturnReceiptId) throw Object.assign(new Error('Journal entry identity conflicts with existing custody.'), { code: 'forest_custody_conflict' });
+      return { entryId, sourceEventId: sourceEvent.id, offerId, actionReceiptId: existing.action_receipt_id, bodyHash, body, existing: true };
+    }
+    const createdAt = now();
+    return this.transaction(() => {
+      this.sqlite.prepare(`INSERT INTO forest_journal_entries
+        (entry_id,source_event_id,source_event_hash,source_timestamp,thread_id,session_id,wake_id,tool_call_id,tool_name,arguments_json,actor_kind,signature,source_authority,jurisdiction,bucket,body,body_hash,body_byte_length,scrub_policy,scrub_version,action_receipt_id,host_return_receipt_id,request_record_id,spine_record_id,metadata_json,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(entryId,sourceEvent.id,sourceEventHash,sourceEvent.createdAt,sourceEvent.threadId,sourceEvent.sessionId,sourceEvent.wakeId,toolCallId,toolName,argumentsJson,'resident','actor:resident','model_signed','home','journal',body,bodyHash,byteLength(body),'journal_identity','v1',receiptId,hostReturnReceiptId,requestRecordId,spineRecordId,metadataJson,createdAt);
+      this.appendIntakeDecision({ offerId, state: 'admitted', destinationEntryId: entryId, decidedAt: createdAt });
+      this.appendJournalCustody({ entryId, actionReceiptId: receiptId, hostReturnReceiptId, resultRack: null, boundAt: createdAt });
+      return { entryId, sourceEventId: sourceEvent.id, offerId, actionReceiptId: receiptId, bodyHash, body, existing: false };
+    });
+  }
+
+  appendJournalCustody({ entryId, actionReceiptId, hostReturnReceiptId, resultRack = null, boundAt = now() }) {
+    const entry = this.sqlite.prepare('SELECT entry_id,action_receipt_id,host_return_receipt_id FROM forest_journal_entries WHERE entry_id=?').get(entryId);
+    if (!entry) throw Object.assign(new Error('Journal custody references an unknown entry.'), { code: 'forest_journal_custody_invalid' });
+    if (entry.action_receipt_id !== actionReceiptId || entry.host_return_receipt_id !== hostReturnReceiptId) throw Object.assign(new Error('Journal custody receipt identity conflicts.'), { code: 'forest_journal_custody_invalid' });
+    const rack = resultRack ? { jobId: resultRack.jobId || null, projectionId: resultRack.projection?.projectionId || null, sourceHash: resultRack.projection?.sourceHash || null } : { jobId: null, projectionId: null, sourceHash: null };
+    if ((rack.jobId && (!rack.projectionId || !rack.sourceHash)) || (!rack.jobId && (rack.projectionId || rack.sourceHash))) throw Object.assign(new Error('Journal Result Rack custody is incomplete.'), { code: 'forest_journal_custody_invalid' });
+    const current = this.sqlite.prepare('SELECT * FROM forest_journal_custody WHERE entry_id=? ORDER BY revision DESC LIMIT 1').get(entryId);
+    if (current && current.action_receipt_id === actionReceiptId && current.host_return_receipt_id === hostReturnReceiptId && (current.result_rack_job_id || null) === rack.jobId && (current.result_rack_projection_id || null) === rack.projectionId && (current.result_rack_source_hash || null) === rack.sourceHash) return { ...current, existing: true };
+    const revision = (current?.revision || 0) + 1;
+    const custodyId = id('journal_custody');
+    this.sqlite.prepare(`INSERT INTO forest_journal_custody(custody_id,entry_id,revision,action_receipt_id,host_return_receipt_id,result_rack_job_id,result_rack_projection_id,result_rack_source_hash,bound_at) VALUES(?,?,?,?,?,?,?,?,?)`).run(custodyId,entryId,revision,actionReceiptId,hostReturnReceiptId,rack.jobId,rack.projectionId,rack.sourceHash,boundAt);
+    return { custodyId, entryId, revision, actionReceiptId, hostReturnReceiptId, resultRack: rack, existing: false };
+  }
+
   linkPresentation({ entryId, requestRecordId, messageOrdinal, providerRole, contentHash }) {
     return this.linkPresentations([{ entryId, requestRecordId, messageOrdinal, providerRole, contentHash }])[0];
   }
@@ -366,8 +475,13 @@ export class ForestStore {
   // not a request-time candidate surface and grants no presentation authority.
   listSemanticProjectionAtoms() {
     return this.sqlite.prepare(`SELECT entry_id AS entryId,source_event_id AS sourceEventId,source_event_hash AS sourceEventHash,
-      source_timestamp AS sourceTimestamp,actor_kind AS actorKind,body,body_hash AS bodyHash
-      FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance' ORDER BY source_timestamp,source_event_id`).all().map(entry => {
+      source_timestamp AS sourceTimestamp,actor_kind AS actorKind,bucket,body,body_hash AS bodyHash
+      FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance'
+      UNION ALL
+      SELECT entry_id AS entryId,source_event_id AS sourceEventId,source_event_hash AS sourceEventHash,
+      source_timestamp AS sourceTimestamp,actor_kind AS actorKind,bucket,body,body_hash AS bodyHash
+      FROM forest_journal_entries WHERE jurisdiction='home' AND bucket='journal'
+      ORDER BY source_timestamp,sourceEventId`).all().map(entry => {
       if (sha256(entry.body) !== entry.bodyHash) throw Object.assign(new Error('Forest semantic projection source integrity failed.'), { code: 'forest_projection_integrity' });
       return entry;
     });
@@ -375,15 +489,19 @@ export class ForestStore {
 
   homeAtom(entryId) {
     const entry = this.sqlite.prepare(`SELECT entry_id AS entryId,source_event_id AS sourceEventId,source_event_hash AS sourceEventHash,
-      source_timestamp AS sourceTimestamp,thread_id AS threadId,wake_id AS wakeId,actor_kind AS actorKind,body,body_hash AS bodyHash
+      source_timestamp AS sourceTimestamp,thread_id AS threadId,wake_id AS wakeId,actor_kind AS actorKind,bucket,body,body_hash AS bodyHash
       FROM forest_entries WHERE entry_id=? AND jurisdiction='home' AND bucket='utterance'`).get(entryId);
-    if (!entry || sha256(entry.body) !== entry.bodyHash) throw Object.assign(new Error('Exact Forest Home terrain is unavailable.'), { code: 'forest_walk_entry_unavailable' });
-    return entry;
+    const journal = entry || this.sqlite.prepare(`SELECT entry_id AS entryId,source_event_id AS sourceEventId,source_event_hash AS sourceEventHash,
+      source_timestamp AS sourceTimestamp,thread_id AS threadId,wake_id AS wakeId,actor_kind AS actorKind,bucket,body,body_hash AS bodyHash
+      FROM forest_journal_entries WHERE entry_id=? AND jurisdiction='home' AND bucket='journal'`).get(entryId);
+    if (!journal || sha256(journal.body) !== journal.bodyHash) throw Object.assign(new Error('Exact Forest Home terrain is unavailable.'), { code: 'forest_walk_entry_unavailable' });
+    return journal;
   }
 
   homeAtomForSourceEvent(sourceEventId) {
     const row = this.sqlite.prepare('SELECT entry_id AS entryId FROM forest_entries WHERE source_event_id=?').get(sourceEventId);
-    return row ? this.homeAtom(row.entryId) : null;
+    const journal = row || this.sqlite.prepare('SELECT entry_id AS entryId FROM forest_journal_entries WHERE source_event_id=?').get(sourceEventId);
+    return journal ? this.homeAtom(journal.entryId) : null;
   }
 
   homeAtomWithChronology(entryId) {
@@ -402,11 +520,16 @@ export class ForestStore {
     const excludedSources = new Set(excludeSourceEventIds.filter(Boolean));
     const excludedEntries = new Set(excludeEntryIds.filter(Boolean));
     const entries = []; const exclusions = [];
-    const totalEligibleCount = this.sqlite.prepare("SELECT COUNT(*) AS count FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance'").get().count;
+    const totalEligibleCount = this.sqlite.prepare("SELECT (SELECT COUNT(*) FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance') + (SELECT COUNT(*) FROM forest_journal_entries WHERE jurisdiction='home' AND bucket='journal') AS count").get().count;
     const rows = this.sqlite.prepare(`SELECT entry_id AS entryId, source_event_id AS sourceEventId, source_event_hash AS sourceEventHash,
       source_timestamp AS sourceTimestamp, thread_id AS threadId, wake_id AS wakeId, actor_kind AS actorKind,
       jurisdiction, bucket, body, body_hash AS bodyHash, spine_status AS spineStatus
       FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance'
+      UNION ALL
+      SELECT entry_id AS entryId, source_event_id AS sourceEventId, source_event_hash AS sourceEventHash,
+      source_timestamp AS sourceTimestamp, thread_id AS threadId, wake_id AS wakeId, actor_kind AS actorKind,
+      jurisdiction, bucket, body, body_hash AS bodyHash, 'live' AS spineStatus
+      FROM forest_journal_entries WHERE jurisdiction='home' AND bucket='journal'
       ORDER BY source_timestamp DESC, source_event_id DESC LIMIT ?`).all(maxEntries);
     const atomRef = row => row ? {
       entryId: row.entryId, sourceEventId: row.sourceEventId, sourceEventHash: row.sourceEventHash,
@@ -425,14 +548,14 @@ export class ForestStore {
         exclusions.push({ entryId: entry.entryId, sourceEventId: entry.sourceEventId, sourceEventHash: entry.sourceEventHash, bodyHash: entry.bodyHash, reason: 'spine_status_invalid' });
         continue;
       }
-      const predecessor = this.sqlite.prepare(`SELECT prior.entry_id AS entryId,prior.source_event_id AS sourceEventId,
+      const predecessor = entry.bucket === 'utterance' ? this.sqlite.prepare(`SELECT prior.entry_id AS entryId,prior.source_event_id AS sourceEventId,
         prior.source_event_hash AS sourceEventHash,prior.body_hash AS bodyHash,prior.source_timestamp AS sourceTimestamp,prior.actor_kind AS actorKind
         FROM forest_edges edge JOIN forest_entries prior ON prior.entry_id=edge.to_entry_id
-        WHERE edge.edge_type='responds_to' AND edge.from_entry_id=?`).get(entry.entryId);
-      const successor = this.sqlite.prepare(`SELECT later.entry_id AS entryId,later.source_event_id AS sourceEventId,
+        WHERE edge.edge_type='responds_to' AND edge.from_entry_id=?`).get(entry.entryId) : null;
+      const successor = entry.bucket === 'utterance' ? this.sqlite.prepare(`SELECT later.entry_id AS entryId,later.source_event_id AS sourceEventId,
         later.source_event_hash AS sourceEventHash,later.body_hash AS bodyHash,later.source_timestamp AS sourceTimestamp,later.actor_kind AS actorKind
         FROM forest_edges edge JOIN forest_entries later ON later.entry_id=edge.from_entry_id
-        WHERE edge.edge_type='responds_to' AND edge.to_entry_id=? ORDER BY later.source_timestamp,later.source_event_id LIMIT 1`).get(entry.entryId);
+        WHERE edge.edge_type='responds_to' AND edge.to_entry_id=? ORDER BY later.source_timestamp,later.source_event_id LIMIT 1`).get(entry.entryId) : null;
       entries.push({ ...entry, chronology: { relation: 'responds_to', predecessor: atomRef(predecessor), successor: atomRef(successor) }, supersession: { supported: false } });
     }
     const boundary = { order: 'newest_first', maxEntries, totalEligibleCount, examinedCount: rows.length, complete: rows.length === totalEligibleCount };
@@ -442,8 +565,8 @@ export class ForestStore {
     if (!Array.isArray(queryTerms) || !queryTerms.length || queryTerms.some(term => typeof term !== 'string' || !term.trim())) throw Object.assign(new Error('Forest Home lexical query is invalid.'), { code: 'forest_candidate_query_invalid' });
     if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 2048 || !Number.isInteger(perTermLimit) || perTermLimit < 1 || perTermLimit > 256) throw Object.assign(new Error('Forest Home lexical candidate bound is invalid.'), { code: 'forest_candidate_bound_invalid' });
     const terms = [...new Set(queryTerms.map(term => term.normalize('NFKC').toLocaleLowerCase('en-US')).filter(Boolean))];
-    const totalEligibleCount = this.sqlite.prepare("SELECT COUNT(*) AS count FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance'").get().count;
-    const frequency = new Map(terms.map(term => [term, this.sqlite.prepare("SELECT COUNT(*) AS count FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance' AND instr(lower(body),?)>0").get(term).count]));
+    const totalEligibleCount = this.sqlite.prepare("SELECT (SELECT COUNT(*) FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance') + (SELECT COUNT(*) FROM forest_journal_entries WHERE jurisdiction='home' AND bucket='journal') AS count").get().count;
+    const frequency = new Map(terms.map(term => [term, this.sqlite.prepare("SELECT (SELECT COUNT(*) FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance' AND instr(lower(body),?)>0) + (SELECT COUNT(*) FROM forest_journal_entries WHERE jurisdiction='home' AND bucket='journal' AND instr(lower(body),?)>0) AS count").get(term, term).count]));
     const orderedTerms = [...terms].sort((left, right) => frequency.get(left) - frequency.get(right) || left.localeCompare(right));
     const byId = new Map();
     for (const term of orderedTerms) {
@@ -451,7 +574,12 @@ export class ForestStore {
         source_timestamp AS sourceTimestamp, thread_id AS threadId, wake_id AS wakeId, actor_kind AS actorKind,
         jurisdiction, bucket, body, body_hash AS bodyHash, spine_status AS spineStatus
         FROM forest_entries WHERE jurisdiction='home' AND bucket='utterance' AND instr(lower(body),?)>0
-        ORDER BY source_timestamp DESC, source_event_id DESC LIMIT ?`).all(term, perTermLimit);
+        UNION ALL
+        SELECT entry_id AS entryId, source_event_id AS sourceEventId, source_event_hash AS sourceEventHash,
+        source_timestamp AS sourceTimestamp, thread_id AS threadId, wake_id AS wakeId, actor_kind AS actorKind,
+        jurisdiction, bucket, body, body_hash AS bodyHash, 'live' AS spineStatus
+        FROM forest_journal_entries WHERE jurisdiction='home' AND bucket='journal' AND instr(lower(body),?)>0
+        ORDER BY source_timestamp DESC, source_event_id DESC LIMIT ?`).all(term, term, perTermLimit);
       for (const row of rows) if (!byId.has(row.entryId) && byId.size < maxEntries) byId.set(row.entryId, row);
     }
     const excludedSources = new Set(excludeSourceEventIds.filter(Boolean));
@@ -517,4 +645,4 @@ export class ForestStore {
   }
   close() { this.sqlite.close(); }
 }
-export function forestSchemaSql() { return SCHEMA; }
+export function forestSchemaSql() { return `${SCHEMA}\n${JOURNAL_SCHEMA}`; }

@@ -25,9 +25,11 @@ function now() { return new Date().toISOString(); }
 function rowToObject(row) { return row ? { ...row } : null; }
 
 export class HubDatabase {
-  constructor(path, { openSession = true } = {}) {
+  constructor(path, { openSession = true, busyTimeoutMs = 5000 } = {}) {
+    if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 1 || busyTimeoutMs > 60000) throw new TypeError('Source SQLite busy timeout must be an integer from 1 to 60000 milliseconds.');
     mkdirSync(dirname(path), { recursive: true });
     this.sqlite = new DatabaseSync(path);
+    this.sqlite.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`);
     const existingSource = Boolean(this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_history'").get());
     this.sqlite.exec('PRAGMA foreign_keys = ON;');
     this.sqlite.exec(`${LEDGER_SCHEMA}\n${ROOTS_SCHEMA}`);
@@ -41,6 +43,7 @@ export class HubDatabase {
     this.roots = new RootsLedger(this.sqlite);
     this.scrollTrace = new ScrollTraceLedger(this.sqlite);
     this.glassTrace = new GlassTraceLedger(this.sqlite);
+    this.busyTimeoutMs = busyTimeoutMs;
     this.threadId = this.ensureThread();
     this.session = openSession ? this.openSession() : null;
     if (!existingSource) { this.establishTraceEpoch(); this.establishGlassTraceEpoch(); this.establishRootsEpoch(); }

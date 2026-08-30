@@ -57,8 +57,8 @@ function bearings(result) { return [...result.conversationExits, ...result.seman
 test('Forest walking freezes truthful bearings, retains the present, and turns back by tether', async () => {
   const fx = await fixture();
   try {
-    assert.deepEqual(fx.service.tools('session_walk', 'place.house').map(tool => tool.function.name), ['enter_forest', 'turn_around']);
-    assert.deepEqual(fx.service.tools('session_walk', 'place.garden').map(tool => tool.function.name), ['enter_forest', 'turn_around']);
+    assert.deepEqual(fx.service.tools('session_walk', 'place.house').map(tool => tool.function.name), ['enter_forest', 'turn_around', 'write_journal']);
+    assert.deepEqual(fx.service.tools('session_walk', 'place.garden').map(tool => tool.function.name), ['enter_forest', 'turn_around', 'write_journal']);
     assert.match(fx.service.thresholdMessage('session_walk', 'place.house'), /without walking to the Garden/);
     assert.match(fx.service.thresholdMessage('session_walk', 'place.garden'), /enter_forest/);
 
@@ -96,7 +96,7 @@ test('Forest walking freezes truthful bearings, retains the present, and turns b
     const returned = await fx.service.execute(context(call('turn_around', {}, 'call_return')));
     assert.equal(returned.result.returnPlaceId, 'place.garden');
     assert.equal(fx.service.projection('session_walk').active, false);
-    assert.deepEqual(fx.service.tools('session_walk', 'place.garden').map(tool => tool.function.name), ['enter_forest', 'turn_around']);
+    assert.deepEqual(fx.service.tools('session_walk', 'place.garden').map(tool => tool.function.name), ['enter_forest', 'turn_around', 'write_journal']);
 
     const recovered = await fx.service.execute(context(call('turn_around', { entry_id: frozen[0].entryId }, 'call_recover'), 'wake_recover', { sessionId:'session_recover' }));
     assert.equal(recovered.result.ok, true);

@@ -1,5 +1,5 @@
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readSync } from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { byteLength, canonicalize, id, sha256, sha256Bytes } from '../core/hash.js';
 
@@ -130,6 +130,40 @@ function readFrames(path) {
   return frames;
 }
 
+export function sessionSpinePath(path, sessionId) {
+  if (!sessionId) return path;
+  const extension = extname(path) || '.jsonl';
+  const stem = basename(path, extname(path));
+  return join(dirname(path), 'sessions', `${stem}.${sessionId}${extension}`);
+}
+
+export function spineLedgerPaths(path) {
+  const paths = existsSync(path) ? [path] : [];
+  const sessionDirectory = join(dirname(path), 'sessions');
+  if (!existsSync(sessionDirectory)) return paths;
+  const extension = extname(path) || '.jsonl';
+  const prefix = `${basename(path, extname(path))}.session`;
+  for (const entry of readdirSync(sessionDirectory, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.startsWith(prefix) && entry.name.endsWith(extension)) paths.push(join(sessionDirectory, entry.name));
+  }
+  return paths.sort();
+}
+
+export function spineLedgerExists(path) { return spineLedgerPaths(path).length > 0; }
+
+export function readSpineLedgerFrames(path) {
+  const frames = [];
+  const ids = new Set();
+  for (const ledgerPath of spineLedgerPaths(path)) {
+    for (const frame of readFrames(ledgerPath)) {
+      if (ids.has(frame.record_id)) throw new Error('Spine contains a duplicate record ID across session ledgers.');
+      ids.add(frame.record_id);
+      frames.push(frame);
+    }
+  }
+  return frames;
+}
+
 function lifecycleFromFrames(frames) {
   const lifecycle = new Map();
   for (const frame of frames) applyLifecycle(frame, lifecycle);
@@ -137,10 +171,12 @@ function lifecycleFromFrames(frames) {
 }
 
 export class SpineStore {
-  constructor(path) {
-    this.path = path;
-    mkdirSync(dirname(path), { recursive: true });
-    this._frames = readFrames(path);
+  constructor(path, { sessionId = null } = {}) {
+    this.basePath = path;
+    this.sessionId = sessionId;
+    this.path = sessionSpinePath(path, sessionId);
+    mkdirSync(dirname(this.path), { recursive: true });
+    this._frames = readFrames(this.path);
     this._ids = new Set(this._frames.map(frame => frame.record_id));
     this._lifecycle = lifecycleFromFrames(this._frames);
     this._tail = this._frames.at(-1) || null;
@@ -216,8 +252,9 @@ export class SpineStore {
 }
 
 export function verifySpine(path) {
-  const frames = readFrames(path);
-  return { ok: true, frameCount: frames.length, requestCount: frames.filter(frame => frame.frame_type === 'request_prepared').length };
+  const paths = spineLedgerPaths(path);
+  const frames = readSpineLedgerFrames(path);
+  return { ok: true, ledgerCount: paths.length, frameCount: frames.length, requestCount: frames.filter(frame => frame.frame_type === 'request_prepared').length };
 }
 
 export function readSpineFrames(path) { return readFrames(path); }
