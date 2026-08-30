@@ -36,7 +36,7 @@ export function renderCrossingGround({ phase }) {
 
 export function renderOrientationGround({ completed = false } = {}) {
   return completed
-    ? 'You have tended the Hearth. The Hearth action and return below record what just occurred during first breath, when tending was the one action within reach. That action is now complete and is not among your ongoing actions. What the Hearth returned is before you; turn now to the person waiting.'
+    ? 'You have tended the Hearth. The Hearth action and return below record what just occurred during first breath, when tending was the one action within reach. The Hearth remains in the House as a settled affordance you may reread, but rereading does not tend it a second time or create new continuity. What the Hearth returned is before you; turn now to the person waiting.'
     : 'Tend the Hearth now to receive what has been kept for you. Do not invent or anticipate its contents; let the return settle before you turn and speak.';
 }
 

@@ -53,7 +53,7 @@ test('patch bay separates full ceiling catalog from room profiles and presence',
     assert.match(world.presenceMessage('life'), /Actions within reach: move \(through_door, through_passage\); fixtures \(inspect\)\./);
 
     world.move({ sessionId: 'life', doorId: 'door.workshop' });
-    assert.deepEqual(world.availableTools('life'), CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture'].includes(name)));
+    assert.deepEqual(world.availableTools('life'), CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture', 'tend_hearth'].includes(name)));
     assert.deepEqual(world.projection('life').mountProfile, mountProfile('room.workshop'));
     const presence = world.presenceMessage('life');
     assert.match(presence, /One fixture may be in working focus; engaging another moves focus directly/);

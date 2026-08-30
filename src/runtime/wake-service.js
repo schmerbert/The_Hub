@@ -18,6 +18,7 @@ import {
 } from '../context/result-exhale.js';
 import { runSemanticForestShadow, runAmbientFeatherShadow, buildSemanticRoomSignals, renderAmbientFeatherPacket, renderDepartedFeatherFootprint } from '../context/semantic-exhale.js';
 import { FOREST_WALK_TOOL_NAMES } from '../forest/traversal.js';
+import { isSimpleEmbodiedAction, providerReasoningControls, selectReasoningPosture } from './reasoning-posture.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -381,7 +382,20 @@ export class WakeService {
     const departedFeathers = firstTurn ? [] : db.roots.recentSemanticExhaleDepartures({ sessionId: created.sessionId, beforeTurnOrdinal: created.turnOrdinal, retainTurns: 2 });
     const callPhase = async (phase, historyRows, options = {}) => {
       if (this.closing) throw providerCancellation();
-      const thinking = options.orientation ? 'disabled' : config.thinking;
+      const currentLocation = world.current(created.sessionId);
+      const currentForestWalk = this.forestTraversalService?.projection(created.sessionId);
+      const posture = selectReasoningPosture({
+        roomId: currentLocation.room_node_id,
+        phase,
+        forestWalkActive: currentForestWalk?.active === true,
+        afterSimpleAction: options.afterSimpleAction === true,
+      });
+      // DeepSeek rejects forced tool_choice while thinking is enabled. Hearth
+      // orientation is a deterministic mechanical crossing, so keep its
+      // forced action and reserve fitted thinking for the causal response.
+      const requestThinking = options.orientation ? 'disabled' : config.thinking;
+      const reasoning = providerReasoningControls({ thinking: requestThinking, posture: posture.posture, effort: posture.effort });
+      const thinking = reasoning.thinking;
       const toolsDisabled = options.toolsDisabled === true;
       const tools = options.orientation ? [HEARTH_TOOL] : toolsDisabled ? [] : [...(options.tools || [])];
       if (!options.orientation && !toolsDisabled && !tools.some(tool => tool?.function?.name === RESULT_REOPEN_TOOL_NAME)) tools.push(REOPEN_RESULT_TOOL);
@@ -517,6 +531,10 @@ export class WakeService {
         fittedSavingsBytes: sourceAttention.totalBytes - assembled.attention.totalBytes,
         contextOmissions: omissionPlan,
         toolProfile: options.toolProfile || null,
+        reasoningPosture: posture.posture,
+        reasoningEffort: reasoning.reasoningEffort,
+        reasoningFittingReason: posture.reason,
+        providerThinking: reasoning.thinking,
       };
       this.lastAttention = attention;
       const attentionReceipt = db.recordAttentionReceipt({ sessionId: created.sessionId, wakeId: created.wakeId, phase, attention });
@@ -524,6 +542,7 @@ export class WakeService {
       const prepared = prepareProviderRequest(provider, {
         presentation, model: config.model,
         thinking,
+        reasoningEffort: reasoning.reasoningEffort,
         phase,
         tools,
         toolChoice: options.orientation ? HEARTH_TOOL_CHOICE : undefined,
@@ -540,10 +559,10 @@ export class WakeService {
       const commonWitness = { sessionId: created.sessionId, wakeId: created.wakeId, phase };
       const messageHashesFor = kinds => refs.filter(ref => kinds.includes(ref.kind)).map(ref => sha256(JSON.stringify(ref.message)));
       const groundWitnesses = {
-        crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
+        crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
         world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
         tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
-        attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: this.forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure']) },
+        attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: this.forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure']) },
         continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
       };
       const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });
@@ -705,6 +724,7 @@ export class WakeService {
       }
     };
     const runResidentRounds = async (phase = 'response', options = {}) => {
+      let afterSimpleAction = options.afterSimpleAction === true;
       for (let round = 0; round <= config.maxToolRounds; round += 1) {
         const finalOpportunity = round === config.maxToolRounds;
         const location = world.current(created.sessionId);
@@ -732,6 +752,7 @@ export class WakeService {
         };
         const response = await callPhase(phase, db.getSessionHistory(created.sessionId), {
           ...options,
+          afterSimpleAction,
           tools: finalOpportunity ? [] : [...worldTools, ...forestTools, REOPEN_RESULT_TOOL],
           toolsDisabled: finalOpportunity,
           toolProfile,
@@ -778,6 +799,13 @@ export class WakeService {
               : isForestTool && this.forestTraversalService
                 ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: created.eventId, queryFallback: triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
               : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
+            // Journal custody binds the exact identity return created at the
+            // planting boundary. Result Rack may subsequently fit a second,
+            // projected return for conversation, so preserve the exact
+            // provenance receipt before replacing the presentation scrub.
+            if (call.function?.name === 'write_journal' && action.result?.entryId && action.scrub) {
+              db.persistHostReturnScrub({ sessionId: created.sessionId, wakeId: created.wakeId, toolName: 'write_journal', hostReturnScrub: action.scrub });
+            }
             if (isForestTool && action && !action.resultRack) {
               const custody = gateway.captureResultSafely({
                 sessionId: created.sessionId,
@@ -831,6 +859,7 @@ export class WakeService {
           }
           this.publishCards(created, phase, call, action, hostEventId);
         }
+        afterSimpleAction = calls.length > 0 && calls.every(call => isSimpleEmbodiedAction(call.function?.name));
       }
       throw { code: 'world_tool_round_limit', message: 'The bounded resident tool loop ended before a final response.' };
     };

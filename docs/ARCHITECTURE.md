@@ -34,12 +34,14 @@ Forest utterance admission uses a separate `utterance_identity/v1` policy. It pr
 | Roots | `src/ledger/roots.js` | Append-only non-respiratory evidence registry, typed wake-packet and content-addressed reasoning custody, causal edges, and verification |
 | Session | `src/session/lifespan.js` | Process-lived session identity, complete active history, and Session Zero ancestry |
 | Hearth | `src/hearth/handshake.js`, `src/hearth/scroll.js` | Native first-call action validation, exact recency extracts, and resident Scroll |
+| Reasoning posture | `src/context/`, `src/runtime/`, provider adapter | Deterministic place/action fitting and exact provider effort witness; no capability or authority change |
 | Provider Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Subtractive provider projection and exact provider-return selection |
 | Tool-history fitting | `src/context/tool-pairs.js` | Declared old completed tool-exchange omission and source-reference projection |
 | Spine | `src/spine/store.js` | Exact provider request and bounded raw-return custody, including one admitted-body SSE frame appended at termination |
 | Forest | `src/forest/` | Home utterance and Journal planting, Wild admission, custody, traversal, rebuildable semantic projection, backfill, and verification |
 | Forest health projection | `src/forest/health.js` | Domain-owned active/inactive, integrity, catch-up, Wild, and Intake health projection for transport surfaces |
-| World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, and append-only approval completion custody |
+| World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, append-only approval completion custody, and verified actor-local presence |
+| World spatial horizon | `src/world/spatial-horizon.js` | Bounded read-only rendering of verified Hub containment and installed route structure; never owns topology or movement authority |
 | Place and room packages | `src/places/` | Inert topology declarations plus behavior owned entirely by one place or room; universal replay, authority, and crossings remain in World |
 | Room installation contract | `src/rooms/installation-contract.js` | Pure validation of inert `room-installation.v1` requests; grants no discovery, activation, wiring, or authority |
 | Room installation witness | `src/rooms/installation-witness.js`, `src/rooms/workshop-witness.js`, `src/rooms/spotlight-witness.js` | Host-owned deterministic comparison of manifest claims with installed topology, entrance policy, fixtures, tools, schemas, handlers, approvals, sockets, and custody |

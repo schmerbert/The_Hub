@@ -13,7 +13,7 @@ export const HOUSE = placeModule({
     ['edge.contains.house_front_door', 'contains', 'place.house', 'object.front_door', null, 'Front door'],
   ],
   objectStates: [{ objectId: 'object.front_door', state: { locked: false, open: false }, revision: 1 }],
-  mountedTools: ['move_through_passage', 'operate_passage', 'inspect_fixture'],
+  mountedTools: ['move_through_passage', 'operate_passage', 'inspect_fixture', 'tend_hearth'],
 });
 
 export const HEARTH = placeModule({

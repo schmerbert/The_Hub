@@ -25,7 +25,7 @@ test('fresh current World installs only the passive Binder Window extension', ()
     assert.equal(fx.world.sqlite.prepare("SELECT COUNT(*) AS count FROM world_nodes WHERE id='room.spotlight'").get().count, 0);
     assert.equal(fx.world.sqlite.prepare("SELECT COUNT(*) AS count FROM world_edges WHERE from_node_id='room.spotlight' OR to_node_id='room.spotlight'").get().count, 0);
     assert.equal(fx.world.sqlite.prepare("SELECT COUNT(*) AS count FROM world_edges WHERE edge_type IN ('door','passage') AND (from_node_id='fixture.binder_window' OR to_node_id='fixture.binder_window')").get().count, 0);
-    assert.deepEqual(fx.world.availableTools('missing-session'), ['move_through_passage', 'operate_passage', 'inspect_fixture']);
+    assert.deepEqual(fx.world.availableTools('missing-session'), ['move_through_passage', 'operate_passage', 'inspect_fixture', 'tend_hearth']);
     assert.equal(fx.world.verification().verified, true);
     const replay = replayWorldEvents(fx.world.sqlite);
     assert.ok(replay.binderWindowExtension);

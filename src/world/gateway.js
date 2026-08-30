@@ -26,10 +26,11 @@ function approvalEffectEvidence(approval) {
   return { preimage: preview, postcondition };
 }
 export class WorldActionGateway {
-  constructor({ world, workshop, forest = null, resultRack = null, recipeRunner = null, binderWindow = null, approvalMode = 'confirm', recipeTimeoutMs = 120000 }) {
+  constructor({ world, workshop, forest = null, resultRack = null, recipeRunner = null, binderWindow = null, approvalMode = 'confirm', recipeTimeoutMs = 120000, readHearth = null }) {
     this.world = world;
     this.workshop = workshop;
     this.binderWindow = binderWindow;
+    this.readHearth = readHearth;
     this.forest = forest;
     this.resultRack = resultRack;
     this.approvalMode = approvalMode === 'auto' ? 'auto' : 'confirm';
@@ -85,6 +86,7 @@ export class WorldActionGateway {
       cancelKilnRun: () => this.cancelKilnRunCommand({ sessionId, wakeId, commandId: parsed.call.id, commitOutcome }),
       noteKiln: (state, action) => this.noteKiln(state, { sessionId, wakeId, commandId: parsed.call.id, action }),
       onRecipeComplete: (finalResult, runId) => this.handleRecipeComplete(finalResult, { runId, sessionId, wakeId }),
+      readHearth: targetSessionId => this.readHearth?.(targetSessionId),
     };
     let dispatched; let crossing;
     this.world.transaction(() => {
@@ -108,7 +110,12 @@ export class WorldActionGateway {
     const actionReceipt = this.world.actionReceipt({ sessionId, wakeId, roomNodeId: this.world.current(sessionId).room_node_id, toolName: parsed.name, arguments: parsed.args, result, outcome: 'committed', requestRecordId, spineRecordId, ...link });
     const custody = this.captureResultSafely({ sessionId, wakeId, toolName: parsed.name, result, sourceActionReceiptId: actionReceipt.receiptId, requestRecordId, spineRecordId });
     const resultRack = custody.resultRack;
-    const scrub = scrubHostReturn({ toolName: parsed.name, toolCallId: parsed.call.id, arguments: parsed.args, result, ...(resultRack ? { content: resultRack.projection.content, renderPolicy: 'result_rack_projection_v1', projection: resultRack.projection } : {}), roomId: this.world.current(sessionId).room_node_id, actionReceiptId: actionReceipt.receiptId, requestRecordId, spineRecordId });
+    const hearthReread = parsed.name === 'tend_hearth' && result?.kind === 'house_hearth_reread';
+    const scrub = scrubHostReturn({ toolName: parsed.name, toolCallId: parsed.call.id, arguments: parsed.args, result,
+      ...(hearthReread
+        ? { content: result.markdown, renderPolicy: 'house_hearth_packet_markdown_v1' }
+        : resultRack ? { content: resultRack.projection.content, renderPolicy: 'result_rack_projection_v1', projection: resultRack.projection } : {}),
+      roomId: this.world.current(sessionId).room_node_id, actionReceiptId: actionReceipt.receiptId, requestRecordId, spineRecordId });
     const approvalId = result?.approvalId || result?.approval?.approvalId || null;
     let approvalReceipt = null;
     if (approvalId) {

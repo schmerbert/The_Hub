@@ -44,7 +44,7 @@ export class DeepSeekResidentProvider {
     this.mode = 'live';
   }
 
-  prepareRequest({ presentation, model, thinking = this.config.thinking, tools, toolChoice }) {
+  prepareRequest({ presentation, model, thinking = this.config.thinking, reasoningEffort = null, tools, toolChoice }) {
     if (!this.config.apiKey) throw { code: 'provider_unavailable', message: 'Live DeepSeek resident wakes require DEEPSEEK_API_KEY.' };
     assertScrubbedPresentation(presentation);
     const requestBody = {
@@ -54,6 +54,10 @@ export class DeepSeekResidentProvider {
       stream_options: { include_usage: true },
       thinking: { type: thinking === 'enabled' ? 'enabled' : 'disabled' },
     };
+    if (thinking === 'enabled') {
+      if (!['low', 'high'].includes(reasoningEffort)) throw { code: 'provider_reasoning_effort_invalid', message: 'Enabled DeepSeek thinking requires low or high reasoning effort.' };
+      requestBody.reasoning_effort = reasoningEffort;
+    }
     if (tools) requestBody.tools = tools;
     if (toolChoice) requestBody.tool_choice = toolChoice;
     return { requestBody, requestBodyString: JSON.stringify(requestBody) };

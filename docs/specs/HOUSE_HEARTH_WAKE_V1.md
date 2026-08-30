@@ -1,6 +1,6 @@
 # House Hearth Wake v1
 
-> **Status: Implemented, with the Silver Bullet holster revision below.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, six Silver Bullets, and revised Glass presentation. Bullet mutation tools and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
+> **Status: Implemented, with the Silver Bullet holster and settled-reread revisions below.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, six Silver Bullets, revised Glass presentation, and lawful exact rereading through the standing House affordance. Bullet mutation tools and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
 
 ## 1. Purpose
 
@@ -161,13 +161,13 @@ The Hearth return appears once in the causal living edge. Glass does not duplica
 
 Tending settles a spatial affordance; it does not make the fixture or the received packet vanish. During the causal first wake, the House projection may mark the Hearth `Tended this wake`. On later turns in the same lifespan it may state `Tended at waking` or an equivalent exact settled state. The check mark means a witnessed action reached settlement. It is not a task-list decoration, truth endorsement, permanent World mutation, or permission to replay continuity.
 
-Before settlement, `tend_hearth` is the only action within reach. After settlement, the action is no longer callable and the ordinary House projection phases in. The same Hearth fixture remains perceptible, and its settled state explains why the action is absent.
+Before settlement, `tend_hearth` is the only action within reach. After settlement, the ordinary House projection phases in and the same Hearth affordance remains callable while the Resident is physically in the House. A later call rereads the byte-identical settled packet through ordinary exact tool/result custody; it does not settle the Hearth again, select new inheritance, rerender changed continuity, or alter World state. The settled fixture remains perceptible and explains why rereading is optional rather than another waking obligation. Leaving the House removes material reach and returning restores it.
 
 The exact call and return remain canonical Session Scroll machinery because they causally shaped the lifespan. They remain in the ordinary living edge after the first response and recede under the same bounded attention pressure as other complete causal units; turn count alone does not remove them. When attention pressure eventually requires their whole-message omission, Glass may replace them with a deterministic, attributable Hearth wrapper that preserves the relevant exact source bearings and settlement ancestry without replaying the full packet or generating a summary. Exact Source, Hearth, Roots, Scrub, and Spine custody remains underneath.
 
 ## 7. Later wakes
 
-The Hearth is tended once per lifespan under this version. Later ordinary wakes do not receive or replay the packet. The exact packet remains in the living Session Scroll until bounded attention pressure moves the complete action/return pair out together. After successful tending, the wake function also pins one compact `# Holster` system message directly beneath stable Glass. It contains only the occupied Silver Bullet slots, in slot order; it carries no Ember header, prior-session excerpts, horizon, blank-slot placeholders, or other Hearth packet material. This holster remains above the deferred rolling fold.
+The Hearth is settled once per lifespan under this version. Later ordinary wakes do not automatically receive or replay the packet, but the Resident may deliberately reread it by calling the still-present House affordance. The exact first-wake packet remains in custody and is returned unchanged; rereading creates no new continuity selection or settlement. The original causal pair remains in the living Session Scroll until bounded attention pressure moves it out together. After successful tending, the wake function also pins one compact `# Holster` system message directly beneath stable Glass. It contains only the occupied Silver Bullet slots, in slot order; it carries no Ember header, prior-session excerpts, horizon, blank-slot placeholders, or other Hearth packet material. This holster remains above the deferred rolling fold.
 
 This is a **revising** protocol change. The former rule prohibited passive reinjection of every Hearth component. The pressure case is that bullets are deliberately cold-forged continuity intended to remain available without their ore, while the rest of the Hearth packet is causal orientation. The retained invariant is bounded, attributable, exactly witnessed presentation without claiming memory or granting action authority.
 
@@ -228,7 +228,7 @@ Provider, model, human prompt, configured thinking posture, packet bytes, and re
 5. Slots One through Four round-trip to their retained source/adoption custody; six slots remain blank and invisible.
 6. Prior-session atoms are exact, bounded, attributable, and Forest-linked when verified.
 7. The response Glass cast contains the exact Hearth action/return causally and no duplicate passive inheritance.
-8. Later turns do not call the Hearth again; the settled fixture remains perceptible, the exact action/packet pair remains in the living Scroll until ordinary attention pressure, and exactly one bounded Silver Bullet holster is pinned beneath Glass.
+8. Later turns do not receive the Hearth packet automatically; while in the House they may call the settled Hearth to reread the exact retained packet without new settlement or inheritance. The original action/packet pair remains in the living Scroll until ordinary attention pressure, and exactly one bounded Silver Bullet holster is pinned beneath Glass.
 9. Home remains a bijection with actual human/Resident utterances; Hearth machinery and bullets do not become new conversation atoms merely by presentation.
 10. Drift, missing ancestry, oversized packet, stale migration, duplicate presentation, and malformed call all fail closed.
 

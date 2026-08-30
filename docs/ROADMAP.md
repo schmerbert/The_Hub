@@ -16,6 +16,17 @@ recoverable exhales
 
 ## Sequence
 
+### Next responsiveness pass — progressive startup and incremental verification
+
+Open the Corner immediately with truthful readiness state, then admit conversation after only the Source, current World/Hearth, and required ancestry gates are ready. Embedding warmup, semantic synchronization, broad Forest health, Workshop backend preparation, and builder diagnostics should proceed behind explicit feature-local readiness rather than silently blocking the shell.
+
+Replace repeated full immutable-prefix scans with verified ancestry checkpoints and incremental suffix verification. A background full audit remains required; deferred work must never make an unverified Forest action, feather, or room capability available. Record startup-stage timings before optimizing further so improvements are measured rather than inferred.
+
+After startup, the preferred UX passes are verified multi-step travel, visible action progress, and measurement-led tool/payload trimming.
+
+Owners: desktop host/readiness projection, Forest and World verification, semantic projection lifecycle, wake admission
+Invariant: faster availability cannot weaken drift refusal, fabricate readiness, or let deferred subsystems act before their own gates pass
+
 ### 1. Silver Bullet holster — implemented
 
 After the Hearth is tended, the wake function pins only the occupied ten-slot Silver Bullet holster directly beneath stable Glass and above the fold. The complete Hearth packet remains causal rather than permanently pinned.

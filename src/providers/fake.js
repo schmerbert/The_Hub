@@ -50,9 +50,13 @@ function fakeStream({ responseId, model, message, finishReason, usage, systemFin
 export class FakeResidentProvider {
   constructor(config = {}) { this.mode = 'fake'; this.calls = []; this.orientationVariant = config.orientationVariant || config.fakeOrientationVariant || 'valid'; this.callNumber = 0; }
 
-  prepareRequest({ presentation, model, thinking = 'disabled', tools, toolChoice }) {
+  prepareRequest({ presentation, model, thinking = 'disabled', reasoningEffort = null, tools, toolChoice }) {
     assertScrubbedPresentation(presentation);
     const requestBody = { model, messages: presentation.messages, stream: true, stream_options: { include_usage: true }, thinking: { type: thinking === 'enabled' ? 'enabled' : 'disabled' } };
+    if (thinking === 'enabled') {
+      if (!['low', 'high'].includes(reasoningEffort)) throw new Error('Enabled fake thinking requires an installed reasoning effort.');
+      requestBody.reasoning_effort = reasoningEffort;
+    }
     if (tools) requestBody.tools = tools;
     if (toolChoice) requestBody.tool_choice = toolChoice;
     return { requestBody, requestBodyString: JSON.stringify(requestBody) };

@@ -167,7 +167,7 @@ test('DeepSeek streams exact raw custody once and its terminal result equals ind
   await new Promise(resolve => upstream.listen(0, resolve));
   const provider = new DeepSeekResidentProvider({ apiKey: 'test-key', baseUrl: `http://127.0.0.1:${upstream.address().port}`, thinking: 'enabled' });
   const presentation = scrubProviderHistory([{ role: 'user', content: 'hello' }]);
-  const prepared = provider.prepareRequest({ presentation, model: 'deepseek-stream', thinking: 'enabled' });
+  const prepared = provider.prepareRequest({ presentation, model: 'deepseek-stream', thinking: 'enabled', reasoningEffort: 'high' });
   const deltas = []; const outcomes = []; const rawReturns = [];
   try {
     const result = await provider.complete({

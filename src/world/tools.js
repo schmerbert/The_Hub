@@ -11,6 +11,9 @@ export const FIXTURE_TOOLS = [
   { type: 'function', function: { name: 'engage_fixture', description: 'Bring one Workshop fixture into working focus. Engaging another fixture moves focus directly without an intervening disengage; its fitted actions are available on the next continuation.', parameters: { type: 'object', properties: { fixture_id: { type: 'string' } }, required: ['fixture_id'], additionalProperties: false } } },
   { type: 'function', function: { name: 'disengage_fixture', description: 'Step away from the currently focused Workshop fixture without leaving the room.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
 ];
+export const HEARTH_TOOLS = [
+  { type: 'function', function: { name: 'tend_hearth', description: 'Reread the exact Hearth packet already settled for this lifespan. In the House this is a read of the standing Hearth affordance; it does not tend the Hearth a second time or create new continuity.', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+];
 
 export const WORKSHOP_TOOLS = [
   { type: 'function', function: { name: 'workshop_list', description: 'List exact names and types in a repository directory.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: [], additionalProperties: false } } },
@@ -63,7 +66,7 @@ export const TOOL_APPROVAL_CLASS = Object.freeze({
   workshop_brief_upsert: 'auto', workshop_brief_get: 'auto', workshop_pending_diff: 'auto', workshop_approval_status: 'auto', workshop_approval_list: 'auto', workshop_tool_catalog: 'auto',
 });
 
-const BY_NAME = new Map([MOVE_TOOL, ...B1_TOOLS, ...FIXTURE_TOOLS, ...WORKSHOP_TOOLS].map(tool => [tool.function.name, tool]));
+const BY_NAME = new Map([MOVE_TOOL, ...B1_TOOLS, ...FIXTURE_TOOLS, ...HEARTH_TOOLS, ...WORKSHOP_TOOLS].map(tool => [tool.function.name, tool]));
 export const TOOL_NAMES = new Set(BY_NAME.keys());
 export const WORKSHOP_TOOL_NAMES = WORKSHOP_TOOLS.map(tool => tool.function.name);
 

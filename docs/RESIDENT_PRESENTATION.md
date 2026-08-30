@@ -38,7 +38,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | `crossing_ground` | every call; minimal present footing | experiential | `src/context/resident-presentation.js` |
 | `orientation_ground` | Hearth action/return; situated waking plus the bounded retrieval affordance and its epistemic limits | experiential | `src/context/resident-presentation.js` |
 | `hearth_trail_sign` | after ordinary attention moves the exact completed Hearth pair from the living edge; retains packet hash and bounded exact source bearings | continuity | `src/context/tool-pairs.js` |
-| `world_current_ground` | room-aware calls; verified presence | clinical World projection | `src/world/graph.js#presenceMessage` |
+| `world_current_ground` | room-aware calls; verified presence plus bounded containment/route horizon | clinical World projection | `src/world/graph.js#presenceMessage`, `src/world/spatial-horizon.js` |
 | `forest_threshold_ground` | Garden treeline before entry; distinguishes the intentional attention crossing from the non-occupiable World boundary | experiential Forest threshold | `src/forest/traversal.js#thresholdMessage` |
 | `forest_current_ground` | active Forest walk; names the exact clearing, unchanged World presence, and warm return tether | clinical Forest projection | `src/forest/traversal.js#presenceMessage` |
 | `tool_current_ground` | fitted actions and bounded remaining action rounds; what is within reach and when the reserved speech-only landing has begun | experiential disclosure | `src/context/resident-presentation.js`, `src/runtime/wake-service.js` |
@@ -59,13 +59,14 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 
 - Speak from inside the World when a fact has a World-shaped consequence.
 - Keep enforcement outside Resident attention. Forced choice, validation, retries, provider identity, transport, hashes, and byte thresholds remain receipts unless the Resident benefits from knowing them.
-- The Hearth packet may be clinical because continuity is serious; its action and causal framing remain immersive. Before the forced action, the Resident is told that tending retrieves bounded, attributable continuity kept for the lifespan, without endorsing its contents or proving memory. Settlement remains spatially perceptible through the fixture, and the exact action/packet pair recedes through ordinary attention rather than disappearing immediately.
+- The Hearth packet may be clinical because continuity is serious; its action and causal framing remain immersive. Before the forced action, the Resident is told that tending retrieves bounded, attributable continuity kept for the lifespan, without endorsing its contents or proving memory. Settlement remains spatially perceptible through the fixture, and the exact action/packet pair recedes through ordinary attention rather than disappearing immediately. While the Resident remains in or returns to the House, the settled affordance may reread that exact packet without pretending to tend a second time.
 - Do not ask a new activation to roleplay arrival, explain the host, or diagnose an action the host forced it to take.
 - Say what is absent or uncertain without implying personal fault.
 - Folded or omitted session history remains established as something that occurred in canonical custody, without certifying every proposition inside it. It is outside present attention rather than erased or disproven; do not require the Resident to reconstruct or disown it.
 - Exact prior words are attributable records, never asserted as present memory.
 - A fixture and its function are one experiential thing even when implemented as a provider tool.
 - Provider reasoning is machinery, not continuity. Store it once in Roots; materialize it only for the active tool chain that causally requires it, never as historical personality or memory.
+- Reasoning posture is attributable request-time host policy rather than prose characterization. `light` and `attentive` select exact provider effort without describing the Resident as impaired, superior, hurried, or exhaustive.
 
 ## Glass v4 boundary
 

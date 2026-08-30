@@ -51,7 +51,7 @@ test('v1 first turn stores one user, performs two phases, and later turns stay o
     assert.equal(laterMessages.some(message => message.role === 'tool' && message.content.startsWith('# Wake inheritance')), false);
     assert.equal(laterMessages.some(message => message.tool_calls?.some(call => call.function?.name === 'tend_hearth')), true);
     assert.equal(laterMessages.some(message => message.role === 'tool' && message.content === first.hearth.scrollMarkdown), true);
-    assert.equal(laterRequest.tools.some(tool => tool.function?.name === 'tend_hearth'), false);
+    assert.equal(laterRequest.tools.some(tool => tool.function?.name === 'tend_hearth'), true);
     assert.equal(f.hub.provider.calls.length, 3);
     assert.equal(later.events.filter(event => event.actorKind === 'user').length, 1);
     assert.equal(f.hub.db.getActiveSession().wakeStatus, 'complete');

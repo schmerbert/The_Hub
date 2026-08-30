@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, id, sha256 } from '../core/hash.js';
 import { mountProfile, mountedToolNames, profilePresenceLine } from './ceiling.js';
+import { spatialHorizon } from './spatial-horizon.js';
 import { INSTALLED_WORLD_EDGES, INSTALLED_WORLD_NODES, topologyEventPayload } from './topology.js';
 import { topologyExtensionEventPayload } from './topology-b1.js';
 import { hearthTopologyEventPayload } from './topology-hearth.js';
@@ -901,7 +902,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       const state = runtime ? { ...base, ...runtime } : objectState ? { ...base, ...objectState } : base;
       const affordance = item.id === 'fixture.hearth'
         ? hearthSettlement
-          ? { name: 'tend_hearth', state: hearthSettlement.state, symbol: hearthSettlement.symbol, label: hearthSettlement.label, available: false, wakeId: hearthSettlement.wakeId }
+          ? { name: 'tend_hearth', state: hearthSettlement.state, symbol: hearthSettlement.symbol, label: hearthSettlement.label, available: true, wakeId: hearthSettlement.wakeId }
           : { name: 'tend_hearth', state: 'available', symbol: '○', label: 'Tend the Hearth', available: true }
         : null;
       return {
@@ -920,6 +921,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const supersededBoundaryTargets = new Set(passages.map(route => route.to === 'place.forest' ? 'boundary.forest' : null).filter(Boolean));
     const boundaries = this.boundaries(room.id).filter(edge => !supersededBoundaryTargets.has(edge.to_node_id))
       .map(edge => ({ edgeId: edge.id, label: edge.label, to: edge.to_node_id, text: this.node(edge.to_node_id)?.resident_text || '' }));
+    const horizonNodes = this.sqlite.prepare("SELECT id,node_type AS nodeType FROM world_nodes WHERE lifecycle='standing' ORDER BY id").all();
+    const horizonEdges = this.sqlite.prepare("SELECT edge_type AS edgeType,from_node_id AS fromNodeId,to_node_id AS toNodeId FROM world_edges ORDER BY id").all();
     return {
       revision: location.revision,
       roomId: room.id,
@@ -934,6 +937,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       pendingApprovals,
       heartbeat,
       mountProfile: mountProfile(room.id),
+      spatialHorizon: spatialHorizon({ currentRoomId: room.id, nodes: horizonNodes, edges: horizonEdges }),
     };
   }
   availableTools(sessionId) {
@@ -975,7 +979,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       ? ` Hearth affordance: ${hearth.state.affordance.symbol} ${hearth.state.affordance.label}.`
       : '';
     const roomText = projection.roomId === 'room.workshop' ? WORKSHOP_PRESENCE_TEXT : projection.text;
-    return `Current World ground for this phase. Current location: ${projection.roomId}. ${roomText} Nearby fixtures and objects: ${fixtures}. Focusable fixtures: ${engageable}. Working focus: ${engaged}. Direct room exits: ${exits}. Stateful passages: ${passages}. Boundaries: ${boundaries}.${workshopHonesty}${patched}${pending}${beat}${hearthAffordance}`;
+    const horizon = projection.spatialHorizon ? ` Spatial horizon: ${projection.spatialHorizon}` : '';
+    return `Current World ground for this phase. Current location: ${projection.roomId}. ${roomText} Nearby fixtures and objects: ${fixtures}. Focusable fixtures: ${engageable}. Working focus: ${engaged}. Direct room exits: ${exits}. Stateful passages: ${passages}. Boundaries: ${boundaries}.${horizon}${workshopHonesty}${patched}${pending}${beat}${hearthAffordance}`;
   }
   move({ sessionId, wakeId, commandId = null, doorId, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     if (typeof doorId !== 'string' || !doorId) throw Object.assign(new Error('A door identity is required.'), { code: 'world_invalid_argument' });

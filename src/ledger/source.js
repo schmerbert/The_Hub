@@ -590,6 +590,18 @@ export class HubDatabase {
     } catch { return null; }
   }
 
+  getSessionHearthPacket(sessionId = this.session.id) {
+    const row = this.sqlite.prepare(`SELECT id AS hearthReceiptId, wake_id AS wakeId, return_json AS returnJson,
+      return_hash AS returnHash, scroll_markdown AS scrollMarkdown, scroll_hash AS scrollHash
+      FROM hearth_receipts WHERE session_id=? ORDER BY created_at,id LIMIT 1`).get(sessionId);
+    if (!row || typeof row.scrollMarkdown !== 'string' || !row.scrollMarkdown) return null;
+    try {
+      const returnValue = JSON.parse(row.returnJson);
+      if (!returnValue || typeof returnValue !== 'object' || sha256(canonicalize(returnValue)) !== row.returnHash || sha256(row.scrollMarkdown) !== row.scrollHash) return null;
+      return { hearthReceiptId: row.hearthReceiptId, wakeId: row.wakeId, returnValue, returnHash: row.returnHash, scrollMarkdown: row.scrollMarkdown, scrollHash: row.scrollHash };
+    } catch { return null; }
+  }
+
   completeProviderRequest(requestId, result, outcome = null, returnScrub = null) {
     if (returnScrub) assertScrubbedProviderReturn(returnScrub);
     const receiptId = returnScrub?.receipt?.receiptId || null;

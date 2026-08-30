@@ -3,10 +3,10 @@ import { assertScrubbedPresentation } from '../scrub/provider-presentation.js';
 // The messages argument here is a compatibility bridge for existing injected test
 // providers. The server never constructs or passes an arbitrary provider history;
 // this adapter derives the bridge only from a validated ScrubbedPresentation.
-export function prepareProviderRequest(provider, { presentation, model, thinking = 'disabled', phase = 'ordinary', tools, toolChoice }) {
+export function prepareProviderRequest(provider, { presentation, model, thinking = 'disabled', reasoningEffort = null, phase = 'ordinary', tools, toolChoice }) {
   assertScrubbedPresentation(presentation);
   if (provider.prepareRequest) {
-    return provider.prepareRequest({ presentation, messages: presentation.messages, model, thinking, phase, tools, toolChoice });
+    return provider.prepareRequest({ presentation, messages: presentation.messages, model, thinking, reasoningEffort, phase, tools, toolChoice });
   }
   const requestBody = {
       model,
@@ -14,6 +14,10 @@ export function prepareProviderRequest(provider, { presentation, model, thinking
       stream: false,
       thinking: { type: thinking === 'enabled' ? 'enabled' : 'disabled' },
     };
+  if (thinking === 'enabled') {
+    if (!['low', 'high'].includes(reasoningEffort)) throw new Error('Enabled provider thinking requires an installed reasoning effort.');
+    requestBody.reasoning_effort = reasoningEffort;
+  }
   if (tools) requestBody.tools = tools;
   if (toolChoice) requestBody.tool_choice = toolChoice;
   return { requestBody };

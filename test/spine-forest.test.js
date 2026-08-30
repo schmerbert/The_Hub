@@ -53,6 +53,38 @@ function seedEmptyLiveStores(dir) {
   applyBackfillAtomically({ operationalPath: dbPath, forestPath, confirmCreate: true });
   return { dbPath, forestPath, spinePath: join(dir, 'spine.jsonl') };
 }
+
+test('active startup installs an empty additive Journal companion before Forest verification', async () => {
+  const dir = await temp('hub-journal-startup-');
+  const paths = seedEmptyLiveStores(dir);
+  const legacy = new DatabaseSync(paths.forestPath);
+  legacy.exec(`
+    DROP TRIGGER forest_journal_custody_append_only_delete;
+    DROP TRIGGER forest_journal_custody_append_only_update;
+    DROP TRIGGER forest_journal_entries_append_only_delete;
+    DROP TRIGGER forest_journal_entries_append_only_update;
+    DROP TABLE forest_journal_custody;
+    DROP TABLE forest_journal_entries;
+  `);
+  legacy.close();
+
+  const hub = createHub({
+    env: {
+      HUB_RESIDENT_MODE: 'live',
+      DEEPSEEK_MODEL: 'test-model',
+      HUB_SEMANTIC_INDEX_PATH: join(dir, 'semantic.sqlite'),
+      HUB_FOREST_TRAVERSAL_PATH: join(dir, 'traversal.sqlite'),
+      HUB_RESULT_PATH: join(dir, 'results.sqlite'),
+    },
+    ...paths,
+    worldPath: join(dir, 'world.sqlite'),
+    activateForest: true,
+  });
+  try {
+    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_journal_entries').get().count, 0);
+    assert.equal(hub.forest.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_journal_custody').get().count, 0);
+  } finally { await hub.close(); await rm(dir, { recursive: true, force: true }); }
+});
 function ritualContext(db, { content = 'ritual test', mutate, utterances = [] } = {}) {
   return ({ threadId, wakeId, startedAt }) => {
     const context = buildContext({

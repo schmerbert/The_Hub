@@ -36,6 +36,8 @@ Each committed entry binds at least:
 - source timestamp; and
 - append-only intake/admission custody.
 
+The exact identity host-return receipt bound by Journal custody remains durable even when Result Rack subsequently creates a second bounded projection receipt for Session Scroll presentation. The projected receipt may fit conversation attention; it cannot replace or erase the exact planting receipt.
+
 Retrying the same witnessed tool call is idempotent. Reusing that identity with different text or ancestry is a custody conflict.
 
 ## Forest standing

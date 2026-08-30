@@ -82,14 +82,14 @@ test('Hearth remains a spatial fixture whose affordance settles for the lifespan
     assert.equal(settled.state.affordance.state, 'completed');
     assert.equal(settled.state.affordance.symbol, '✓');
     assert.equal(settled.state.affordance.label, 'Tended this wake');
-    assert.equal(settled.state.affordance.available, false);
+    assert.equal(settled.state.affordance.available, true);
     assert.equal(settled.state.affordance.wakeId, first.body.id);
     const later = await post(f.base, '/api/wakes', 'Continue from the room.');
     const aged = f.hub.world.projection(sessionId).fixtures.find(item => item.id === 'fixture.hearth');
     assert.equal(later.response.status, 200);
     assert.equal(aged.state.affordance.symbol, '✓');
     assert.equal(aged.state.affordance.label, 'Recently tended');
-    assert.equal(aged.state.affordance.available, false);
+    assert.equal(aged.state.affordance.available, true);
   } finally { await f.close(); }
 });
 
@@ -266,6 +266,10 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
     assert.equal(firstResult.body.events.find(event => event.actorKind === 'resident' && event.eventKind === 'utterance').content, rawProviderContent);
     assert.equal((await post(second.base, '/api/wakes', 'enabled thinking')).response.status, 200);
     assert.deepEqual(requestBodies.map(body => body.thinking), [{ type: 'disabled' }, { type: 'disabled' }, { type: 'disabled' }, { type: 'enabled' }]);
+    assert.equal(Object.hasOwn(requestBodies[0], 'reasoning_effort'), false);
+    assert.equal(Object.hasOwn(requestBodies[1], 'reasoning_effort'), false);
+    assert.equal(Object.hasOwn(requestBodies[2], 'reasoning_effort'), false);
+    assert.equal(requestBodies[3].reasoning_effort, 'high');
     const enabledResponse = requestBodies[3];
     const assistantWithTools = enabledResponse.messages.filter(message => message.role === 'assistant' && Array.isArray(message.tool_calls));
     assert.ok(assistantWithTools.length >= 1);

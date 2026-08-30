@@ -6,6 +6,23 @@ function fail(code, message) { throw Object.assign(new Error(message), { code })
 function outcome(result) { return { result, source: null, changedRoom: false }; }
 
 export const RUNTIME_HANDLERS = Object.freeze({
+  tend_hearth: ({ readHearth, sessionId }) => {
+    if (typeof readHearth !== 'function') fail('hearth_reread_unavailable', 'The settled Hearth packet is not available to reread.');
+    const packet = readHearth(sessionId);
+    if (!packet || typeof packet.scrollMarkdown !== 'string' || !packet.scrollMarkdown) fail('hearth_reread_unavailable', 'The settled Hearth packet is not available to reread.');
+    return outcome({
+      kind: 'house_hearth_reread',
+      status: 'reopened',
+      markdown: packet.scrollMarkdown,
+      hearthPacket: structuredClone(packet.returnValue),
+      hearthReceiptId: packet.hearthReceiptId || null,
+      settledWakeId: packet.wakeId || null,
+      returnHash: packet.returnHash || null,
+      scrollHash: packet.scrollHash || null,
+      settlementUnchanged: true,
+      inheritanceSelection: 'unchanged',
+    });
+  },
   workshop_recipe_list: () => outcome({ kind: 'workshop_recipe_list', recipes: listRecipes() }),
   workshop_run_recipe: async ({ recipes, args, noteKiln, onRecipeComplete, commitOutcome, registerKilnRun, activateKilnRun, compensateRecipeStart }) => {
     const runId = id('kiln_run'); registerKilnRun(runId, args.recipe);

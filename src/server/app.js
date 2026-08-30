@@ -75,11 +75,16 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
   try {
     if (config.forestActive && !forestOverride) {
       try {
+        // Opening the writable Forest first installs startup-safe additive
+        // companion schemas (such as Journal) before strict verification.
+        // No historical entries are fabricated by this step.
+        forest = new ForestStore(config.forestPath, { mode: 'requireExisting' });
         forestVerification = verifyForest({ forestPath: config.forestPath, operationalPath: config.dbPath, spinePath: spineLedgerExists(config.spinePath) ? config.spinePath : undefined, worldPath: existsSync(config.worldPath) ? config.worldPath : undefined });
       } catch (error) {
+        forest?.close();
+        forest = null;
         throw { code: 'forest_activation_refused', message: error?.message || 'Forest verification failed.' };
       }
-      forest = new ForestStore(config.forestPath, { mode: 'requireExisting' });
       semanticIndex = new SemanticIndexStore(config.semanticIndexPath);
       ambientFeatherService = new AmbientFeatherService({ forest, index: semanticIndex, embeddingProvider: new LocalEmbeddingProvider({ model: config.embeddingModel, cacheDir: config.embeddingCachePath }) });
     } else {
@@ -123,7 +128,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
       });
       recipeRunner = new SandboxRecipeRunner(config.workshopRoot, { sandboxBay, timeoutMs: config.recipeTimeoutMs });
     }
-    gateway = new WorldActionGateway({ world, workshop, forest, resultRack: results, recipeRunner, binderWindow, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs });
+    gateway = new WorldActionGateway({ world, workshop, forest, resultRack: results, recipeRunner, binderWindow, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs, readHearth: sessionId => db.getSessionHearthPacket(sessionId) });
     if (world.verification({ mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true }).verified) gateway.reconcileStartup(db.session.id);
   } catch (error) {
     forestTraversalStore?.close(); semanticIndex?.close(); forest?.close(); spine?.close(); world?.close(); results?.close(); db.close();

@@ -41,3 +41,26 @@ test('Journal refuses transformed, oversized, and non-Resident planting', () => 
     assert.equal(forest.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_journal_entries').get().count, 0);
   } finally { forest.close(); rmSync(root, { recursive:true, force:true }); }
 });
+
+test('existing Forest installs the empty Journal companion before strict verification', () => {
+  const root = mkdtempSync(join(tmpdir(), 'hub-journal-upgrade-'));
+  const path = join(root, 'forest.sqlite');
+  const original = new ForestStore(path, { mode:'createNew' });
+  try {
+    original.sqlite.exec(`
+      DROP TRIGGER forest_journal_custody_append_only_delete;
+      DROP TRIGGER forest_journal_custody_append_only_update;
+      DROP TRIGGER forest_journal_entries_append_only_delete;
+      DROP TRIGGER forest_journal_entries_append_only_update;
+      DROP TABLE forest_journal_custody;
+      DROP TABLE forest_journal_entries;
+    `);
+  } finally { original.close(); }
+
+  const reopened = new ForestStore(path, { mode:'requireExisting' });
+  try {
+    assert.equal(reopened.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_journal_entries').get().count, 0);
+    assert.equal(reopened.sqlite.prepare('SELECT COUNT(*) AS count FROM forest_journal_custody').get().count, 0);
+    reopened.verifySchema();
+  } finally { reopened.close(); rmSync(root, { recursive:true, force:true }); }
+});
