@@ -13,7 +13,6 @@ import { AmbientFeatherService } from '../forest/ambient-feathers.js';
 import { ForestTraversalStore } from '../forest/traversal-store.js';
 import { ForestTraversalService } from '../forest/traversal.js';
 import { verifyForest } from '../forest/verify.js';
-import { verifyForestAsync } from '../forest/verify-async.js';
 import { projectForestHealth } from '../forest/health.js';
 import { SpineStore, readSpineLedgerFrames, spineLedgerExists } from '../spine/store.js';
 import { WorldGraphStore } from '../world/graph.js';
@@ -27,6 +26,7 @@ import { ResultRackStore } from '../result-rack/store.js';
 import { WakeService } from '../runtime/wake-service.js';
 import { HubEventBus } from '../runtime/hub-event-bus.js';
 import { ReadinessProjection } from '../runtime/readiness.js';
+import { createProgressiveForestLifecycle } from '../runtime/progressive-forest-lifecycle.js';
 import { establishInstalledRoomReceipts } from '../rooms/installation-runtime.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -102,6 +102,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
   let forest = null; let forestVerification = null; let spine = null; let world = null; let results = null; let semanticIndex = null; let forestTraversalStore = null;
   let ambientFeatherService = progressiveMode ? null : (ambientFeatherServiceOverride || null);
   let forestTraversalService = progressiveMode ? null : (forestTraversalServiceOverride || null);
+  let forestLifecycle = null;
   let worldVerified = false;
   let progressiveForestOpenFailure = false;
   try {
@@ -174,6 +175,30 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
   const eventBus = new HubEventBus(db);
   const wakeService = new WakeService({ config, db, provider, forest: progressiveMode ? null : forest, spine, world, gateway, eventBus, ambientFeatherService, forestTraversalService });
   const wake = (content, options) => wakeService.wake(content, options);
+  if (progressiveMode) {
+    forestLifecycle = createProgressiveForestLifecycle({
+      enabled: progressiveMode,
+      config,
+      db,
+      readiness,
+      wakeService,
+      gateway,
+      forest,
+      forestOpenFailure: progressiveForestOpenFailure,
+      forestVerificationOptions: {
+        forestPath: config.forestPath,
+        operationalPath: config.dbPath,
+        spinePath: spineLedgerExists(config.spinePath) ? config.spinePath : undefined,
+        worldPath: existsSync(config.worldPath) ? config.worldPath : undefined,
+      },
+      forestVerifier: forestVerifierOverride,
+      ambientFeatherServiceOverride,
+      forestTraversalServiceOverride,
+    });
+    // Progressive lifecycle now owns the opened Forest and all deferred
+    // Forest-dependent resources.
+    forest = null;
+  }
   if (config.forestActive && !progressiveMode) readiness.settle('forest', 'ready', { code: 'forest_verified' });
   if (worldVerified) readiness.settle('conversation', 'ready', { code: 'conversation_ready' });
   else readiness.settle('conversation', 'failed', { code: 'conversation_verification_failed' });
@@ -187,14 +212,17 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
       if (closing) return typedError(response, 503, 'hub_closing', 'The Hub is shutting down and is not accepting new requests.');
       if (request.method === 'GET' && url.pathname === '/api/health') {
         const readinessProjection = readiness.projection();
-        const forestReady = readinessProjection.forest.state === 'ready' && Boolean(forest);
+        const activeForest = progressiveMode ? forestLifecycle.forest : forest;
+        const activeForestVerification = progressiveMode ? forestLifecycle.forestVerification : forestVerification;
+        const activeForestTraversal = progressiveMode ? forestLifecycle.forestTraversal : forestTraversalService;
+        const forestReady = readinessProjection.forest.state === 'ready' && Boolean(activeForest);
         const custody = forestReady
-          ? projectForestHealth({ forest, source: db, paths: config, verifiedSnapshot: forestVerification, fullVerification: url.searchParams.get('verify') === 'full' })
+          ? projectForestHealth({ forest: activeForest, source: db, paths: config, verifiedSnapshot: activeForestVerification, fullVerification: url.searchParams.get('verify') === 'full' })
           : boundedForestReadinessHealth(config.forestActive, readinessProjection.forest);
         const projection = world.projection(db.session.id);
-        const forestTools = forestReady ? forestTraversalService?.tools(db.session.id, projection.roomId) || [] : [];
+        const forestTools = forestReady ? activeForestTraversal?.tools(db.session.id, projection.roomId) || [] : [];
         const forestToolNames = forestTools.map(tool => tool.function.name);
-        const forestWalk = forestReady ? forestTraversalService?.projection(db.session.id) || { active: false } : { active: false };
+        const forestWalk = forestReady ? activeForestTraversal?.projection(db.session.id) || { active: false } : { active: false };
         const worldProfile = residentToolProfile(world, db.session.id);
         const fittedProfile = forestWalk.active
           ? { roomId: projection.roomId, activeGroup: 'forest_walk', names: forestToolNames, completeCount: forestToolNames.length, omittedCount: 0 }
@@ -206,7 +234,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
           ok: readinessProjection.shell.state === 'ready' && readinessProjection.conversation.state === 'ready' && (!config.forestActive || (readinessProjection.forest.state === 'ready' && custody.forestIntegrity === 'ok' && custody.forestCaughtUp)), schemaReady: readinessProjection.conversation.state === 'ready',
           readiness: readinessProjection,
           residentMode: config.mode, provider: config.mode === 'fake' ? 'fake' : 'deepseek',
-          model: config.model, liveCredentialsAvailable: Boolean(config.apiKey), currentRoom: { ...projection, forestThreshold: forestTraversalService?.thresholdMessage(db.session.id, projection.roomId) || null }, engagedFixtureId: projection.engagedFixtureId, engagedStationId: projection.engagedFixtureId, heartbeat: projection.heartbeat || null, mountedTools, residentToolProfile: fittedProfile, forestWalk, attention: wakeService.lastAttention, recipeRuntime: config.mode === 'live' ? 'docker_sandbox' : 'direct_host_test_only', recipeState: gateway.recipes.status(), pendingApprovals: world.listApprovals(db.session.id, { pendingOnly: true }).length, ...custody, wakeInProgress: wakeService.wakeInProgress, activeWakeId: wakeService.activeWakeId,
+          model: config.model, liveCredentialsAvailable: Boolean(config.apiKey), currentRoom: { ...projection, forestThreshold: activeForestTraversal?.thresholdMessage(db.session.id, projection.roomId) || null }, engagedFixtureId: projection.engagedFixtureId, engagedStationId: projection.engagedFixtureId, heartbeat: projection.heartbeat || null, mountedTools, residentToolProfile: fittedProfile, forestWalk, attention: wakeService.lastAttention, recipeRuntime: config.mode === 'live' ? 'docker_sandbox' : 'direct_host_test_only', recipeState: gateway.recipes.status(), pendingApprovals: world.listApprovals(db.session.id, { pendingOnly: true }).length, ...custody, wakeInProgress: wakeService.wakeInProgress, activeWakeId: wakeService.activeWakeId,
         });
       }
       if (request.method === 'GET' && url.pathname === '/api/thread') {
@@ -314,123 +342,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     readiness.settle('shell', 'ready', { code: 'shell_bound' });
     readiness.settleTiming('loopbackBinding');
   });
-  let forestVerificationAbortController = null;
-  let forestVerificationPromise = null;
-  let forestActivationPromise = null;
-  let startupGeneration = 1;
-  let forestSourceSnapshot = null;
-  let forestDataVersionSnapshot = null;
-  const forestVerificationOptions = {
-    forestPath: config.forestPath,
-    operationalPath: config.dbPath,
-    spinePath: spineLedgerExists(config.spinePath) ? config.spinePath : undefined,
-    worldPath: existsSync(config.worldPath) ? config.worldPath : undefined,
-  };
-  const closeProgressiveForest = () => {
-    gateway.forest = null;
-    wakeService.forest = null;
-    wakeService.ambientFeatherService = null;
-    wakeService.forestTraversalService = null;
-    try { forestTraversalStore?.close(); } catch {}
-    try { semanticIndex?.close(); } catch {}
-    try { forest?.close(); } catch {}
-    forestTraversalStore = null;
-    semanticIndex = null;
-    forest = null;
-    forestVerification = null;
-    ambientFeatherService = null;
-    forestTraversalService = null;
-  };
-  const activateProgressiveForest = async (verification, generation) => {
-    if (closing || generation !== startupGeneration || !forest || readiness.is('forest', 'ready')) return;
-    // A wake that began while Forest was pending must complete without Forest
-    // before the process-local capability transition can take place.
-    const wakeWasActive = Boolean(wakeService.activeWakePromise);
-    if (wakeService.activeWakePromise) {
-      try { await wakeService.activeWakePromise; } catch {}
-    }
-    if (closing || generation !== startupGeneration || !forest || readiness.is('forest', 'ready')) return;
-    const currentSourceSnapshot = JSON.stringify(db.listEligibleUtteranceEvents().map(event => [event.id, event.content, event.createdAt, event.actorKind, event.threadId, event.wakeId || null]));
-    const currentForestDataVersion = typeof forest.dataVersion === 'function' ? forest.dataVersion() : null;
-    if (wakeWasActive || currentSourceSnapshot !== forestSourceSnapshot || currentForestDataVersion !== forestDataVersionSnapshot) {
-      // The worker proof belongs to an earlier Source view. A pending wake is
-      // deliberately not retroactively admitted to Forest in v1, so this
-      // generation remains unavailable instead of blessing stale custody.
-      closeProgressiveForest();
-      readiness.settle('forest', 'failed', { code: 'forest_verification_stale' });
-      return;
-    }
-    if (!verification?.ok) {
-      closeProgressiveForest();
-      readiness.settle('forest', 'failed', { code: 'forest_verification_failed' });
-      return;
-    }
-    const candidate = forest;
-    let nextIndex = null;
-    let nextAmbient = ambientFeatherServiceOverride || null;
-    let nextTraversalStore = null;
-    let nextTraversal = forestTraversalServiceOverride || null;
-    try {
-      if (!nextAmbient) {
-        nextIndex = new SemanticIndexStore(config.semanticIndexPath);
-        nextAmbient = new AmbientFeatherService({ forest: candidate, index: nextIndex, embeddingProvider: new LocalEmbeddingProvider({ model: config.embeddingModel, cacheDir: config.embeddingCachePath }) });
-      }
-      if (nextAmbient && !nextTraversal) {
-        nextTraversalStore = new ForestTraversalStore(config.forestTraversalPath);
-        nextTraversal = new ForestTraversalService({ store: nextTraversalStore, forest: candidate, ambientFeatherService: nextAmbient });
-      }
-      if (closing || generation !== startupGeneration || candidate !== forest) {
-        nextTraversalStore?.close(); nextIndex?.close();
-        return;
-      }
-      // This block is the one capability transition: every Forest-dependent
-      // owner receives the exact verified store before readiness is settled.
-      semanticIndex = nextIndex;
-      ambientFeatherService = nextAmbient;
-      forestTraversalStore = nextTraversalStore;
-      forestTraversalService = nextTraversal;
-      forestVerification = verification;
-      wakeService.forest = candidate;
-      wakeService.forestDataVersion = typeof candidate.dataVersion === 'function' ? candidate.dataVersion() : null;
-      wakeService.ambientFeatherService = nextAmbient;
-      wakeService.forestTraversalService = nextTraversal;
-      gateway.forest = candidate;
-      readiness.settle('forest', 'ready', { code: 'forest_verified' });
-    } catch {
-      nextTraversalStore?.close(); nextIndex?.close();
-      closeProgressiveForest();
-      readiness.settle('forest', 'failed', { code: 'forest_activation_failed' });
-    }
-  };
-  const startProgressiveForestVerification = () => {
-    if (!progressiveMode) return;
-    if (!forest) {
-      if (!readiness.is('forest', 'failed')) readiness.settle('forest', 'failed', { code: progressiveForestOpenFailure ? 'forest_open_failed' : 'forest_unavailable' });
-      return;
-    }
-    forestVerificationAbortController = new AbortController();
-    const generation = startupGeneration;
-    forestSourceSnapshot = JSON.stringify(db.listEligibleUtteranceEvents().map(event => [event.id, event.content, event.createdAt, event.actorKind, event.threadId, event.wakeId || null]));
-    forestDataVersionSnapshot = typeof forest.dataVersion === 'function' ? forest.dataVersion() : null;
-    const verifier = forestVerifierOverride || verifyForestAsync;
-    try {
-      forestVerificationPromise = Promise.resolve(verifier(forestVerificationOptions, { signal: forestVerificationAbortController.signal }))
-        .then(verification => activateProgressiveForest(verification, generation))
-        .catch(() => {
-          if (closing || generation !== startupGeneration) return;
-          void activateProgressiveForest(null, generation);
-        });
-      forestActivationPromise = forestVerificationPromise;
-    } catch {
-      forestVerificationPromise = Promise.resolve().then(() => {
-        if (!closing && generation === startupGeneration) {
-          return activateProgressiveForest(null, generation);
-        }
-      });
-      forestActivationPromise = forestVerificationPromise;
-    }
-  };
-  if (progressiveMode) startProgressiveForestVerification();
+  forestLifecycle?.start();
   function stopIntake() {
     if (!server.listening) return null;
     return new Promise((resolve, reject) => {
@@ -443,8 +355,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
   function close() {
     if (closePromise) return closePromise;
     closing = true;
-    startupGeneration += 1;
-    forestVerificationAbortController?.abort();
+    const progressiveClosing = progressiveMode ? forestLifecycle.beginClose() : null;
     const failures = [];
     for (const stream of [...eventStreams]) {
       try { stream.cleanup(); stream.response.end(); } catch (error) { failures.push(error); }
@@ -454,11 +365,11 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     let gatewayClosing;
     try { gatewayClosing = gateway.close('hub_close'); }
     catch (error) { failures.push(error); }
-    const progressiveClosing = progressiveMode ? (forestActivationPromise || forestVerificationPromise) : null;
     const operations = [intakeClosing, wakeClosing, gatewayClosing, progressiveClosing]
       .filter(operation => operation && typeof operation.then === 'function');
     const closeStores = () => {
       try { eventBus.close(); } catch (error) { failures.push(error); }
+      for (const error of forestLifecycle?.closeStores() || []) failures.push(error);
       try { forestTraversalStore?.close(); } catch (error) { failures.push(error); }
       try { semanticIndex?.close(); } catch (error) { failures.push(error); }
       for (const store of [forest, spine, world, results, db]) {
@@ -487,9 +398,9 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
   return {
     config, db, provider, spine, world, results, sandboxBay, workshop, gateway, eventBus, wakeService, server, wake, close,
     readiness,
-    get forest() { return progressiveMode && !readiness.is('forest', 'ready') ? null : forest; },
-    get forestTraversal() { return progressiveMode && !readiness.is('forest', 'ready') ? null : forestTraversalService; },
-    get forestVerification() { return progressiveMode && !readiness.is('forest', 'ready') ? null : forestVerification; },
-    get forestVerificationPromise() { return forestVerificationPromise; },
+    get forest() { return progressiveMode ? forestLifecycle.forest : forest; },
+    get forestTraversal() { return progressiveMode ? forestLifecycle.forestTraversal : forestTraversalService; },
+    get forestVerification() { return progressiveMode ? forestLifecycle.forestVerification : forestVerification; },
+    get forestVerificationPromise() { return progressiveMode ? forestLifecycle.verificationPromise : null; },
   };
 }
