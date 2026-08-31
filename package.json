@@ -19,6 +19,7 @@
     "forest:traversal:migrate-v3": "node scripts/migrate-forest-traversal-v3.mjs",
     "spine:verify": "node src/scripts/spine-verify.js",
     "world:verify": "node src/scripts/world-verify.js",
+    "baseline:structure": "node src/scripts/structural-baseline.js",
     "world:migrate-a2": "node src/scripts/world-migrate-a2.js",
     "world:migrate-b1": "node src/scripts/world-migrate-b1.js",
     "world:migrate-hearth": "node src/scripts/world-migrate-hearth.js",
