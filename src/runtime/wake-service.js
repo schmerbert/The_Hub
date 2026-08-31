@@ -12,6 +12,7 @@ import { residentToolProfile, schemasForResidentSession } from '../world/tools.j
 import { AttentionMeter } from '../context/attention-meter.js';
 import { renderCrossingGround, renderOrientationGround, renderToolAttentionGround } from '../context/resident-presentation.js';
 import { ProvisionalCollector } from './provisional-collector.js';
+import { WakeEventPublication } from './wake-event-publication.js';
 import {
   REOPEN_RESULT_TOOL, RESULT_REOPEN_TOOL_NAME, parseReopenResultArguments,
   recoverablePointerFromHostReceipt,
@@ -76,144 +77,44 @@ export class WakeService {
     this.closing = false;
     this.cardRevisions = new Map();
     this.suppressedDeltaChannels = new Set();
+    this.eventPublication = new WakeEventPublication({
+      eventBus,
+      cardRevisions: this.cardRevisions,
+      suppressedDeltaChannels: this.suppressedDeltaChannels,
+    });
     this.activeProviderAbortController = null;
   }
 
   publish(kind, { sessionId, wakeId, phase = null, authority = 'host_receipt', committed = true, payload = {}, source = {} }, fallbackPayload = null) {
-    if (!this.eventBus) return null;
-    try {
-      return this.eventBus.publish({ kind, sessionId, wakeId, phase, authority, committed, payload, source });
-    } catch (error) {
-      if (!fallbackPayload || !['wake_stream_secret_refused', 'wake_stream_invalid_json'].includes(error?.code)) throw error;
-      return this.eventBus.publish({ kind, sessionId, wakeId, phase, authority, committed, payload: fallbackPayload, source });
-    }
+    return this.eventPublication.publish(kind, { sessionId, wakeId, phase, authority, committed, payload, source }, fallbackPayload);
   }
 
   publishAfterCommit(kind, detail, fallbackPayload = null) {
-    try { return this.publish(kind, detail, fallbackPayload); }
-    catch { return null; }
+    return this.eventPublication.publishAfterCommit(kind, detail, fallbackPayload);
   }
 
   publishDelta(created, phase, requestId, requestFrame, delta) {
-    const kind = delta?.kind === 'reasoning_content'
-      ? 'provider.thinking.delta'
-      : delta?.kind === 'content'
-        ? 'provider.content.delta'
-        : delta?.kind === 'tool_call'
-          ? 'provider.tool_call.delta'
-          : null;
-    if (!kind) return;
-    const channel = `${requestId}:${kind}:${delta?.kind === 'tool_call' ? (delta.index ?? 'unknown') : 'text'}`;
-    if (this.suppressedDeltaChannels.has(channel)) return;
-    const payload = delta.kind === 'tool_call'
-      ? {
-          choiceIndex: delta.choiceIndex ?? 0,
-          index: delta.index ?? 0,
-          type: delta.type || null,
-          function: {
-            name: delta.function?.name || '',
-          },
-          argumentsOmitted: typeof delta.function?.arguments === 'string' && delta.function.arguments.length > 0,
-        }
-      : {
-          choiceIndex: delta.choiceIndex ?? 0,
-          delta: typeof delta.delta === 'string' ? delta.delta : '',
-        };
-    const event = {
-      kind,
-      sessionId: created.sessionId,
-      wakeId: created.wakeId,
-      phase,
-      authority: 'provider_provisional',
-      committed: false,
-      payload,
-      source: { providerRequestId: requestId, spineRecordId: requestFrame?.record_id || null },
-    };
-    return event;
+    return this.eventPublication.publishDelta(created, phase, requestId, requestFrame, delta);
   }
 
   publishCollectedDelta(event) {
-    const requestId = event.source.providerRequestId;
-    const channel = `${requestId}:${event.kind}:${event.kind === 'provider.tool_call.delta' ? (event.payload?.index ?? 'unknown') : 'text'}`;
-    if (this.suppressedDeltaChannels.has(channel)) return null;
-    try { return this.eventBus?.publish(event); }
-    catch (error) {
-      if (error?.code !== 'wake_stream_delta_secret_refused') throw error;
-      this.suppressedDeltaChannels.add(channel);
-      return this.eventBus?.publish({ ...event, payload: { omitted: true, omittedReason: 'credential_boundary', channelSuppressed: true } });
-    }
+    return this.eventPublication.publishCollectedDelta(event);
   }
 
   clearSuppressedRequest(requestId) {
-    for (const channel of this.suppressedDeltaChannels) if (channel.startsWith(`${requestId}:`)) this.suppressedDeltaChannels.delete(channel);
+    return this.eventPublication.clearSuppressedRequest(requestId);
   }
 
   nextCardRevision(cardId) {
-    const revision = (this.cardRevisions.get(cardId) || 0) + 1;
-    this.cardRevisions.set(cardId, revision);
-    return revision;
+    return this.eventPublication.nextCardRevision(cardId);
   }
 
   toolCardPayload(toolCallId, toolName, state, extra = {}) {
-    const identity = toolCallId || `${toolName}.${sha256(JSON.stringify(extra)).slice(0, 12)}`;
-    const cardId = `card.action.${identity}`;
-    return {
-      cardId,
-      revision: this.nextCardRevision(cardId),
-      cardKind: state === 'completed' ? 'result' : 'action',
-      state,
-      label: toolName,
-      toolCallId: toolCallId || null,
-      toolName,
-      ...extra,
-    };
+    return this.eventPublication.toolCardPayload(toolCallId, toolName, state, extra);
   }
 
   publishCards(created, phase, call, action, hostEventId) {
-    const receiptRefs = {
-      actionReceiptId: action.actionReceipt?.receiptId || null,
-      approvalReceiptId: action.approvalReceipt?.receiptId || null,
-      hostReturnReceiptId: action.scrub?.receipt?.receiptId || null,
-      hostEventId,
-    };
-    if (action.resultRack?.projection) {
-      const projection = action.resultRack.projection;
-      const cardId = `card.result.${action.resultRack.jobId}`;
-      const cardKind = /diff/i.test(action.name || call.function?.name || '') ? 'diff' : 'result';
-      const payload = {
-        cardId,
-        revision: this.nextCardRevision(cardId),
-        cardKind,
-        title: `${action.name || call.function?.name || 'World action'} result`,
-        content: projection.content || '',
-        exactPointer: projection.exactPointer || null,
-        projectionId: projection.projectionId || null,
-        sourceHash: projection.sourceHash || null,
-        receiptRefs,
-      };
-      this.publish('card.upsert', {
-        sessionId: created.sessionId, wakeId: created.wakeId, phase, payload,
-        source: { resultRackJobId: action.resultRack.jobId, actionReceiptId: receiptRefs.actionReceiptId },
-      }, { ...payload, content: '', contentOmitted: true });
-    }
-    if (action.result?.status === 'pending_approval' && action.result?.approvalId) {
-      const cardId = `card.approval.${action.result.approvalId}`;
-      const preview = action.result.preview || {};
-      const payload = {
-        cardId,
-        revision: this.nextCardRevision(cardId),
-        cardKind: 'approval',
-        title: 'Approval required',
-        content: typeof preview.content === 'string' ? preview.content : '',
-        exactPointer: preview.exactPointer || preview.patchOverflow?.exactPointer || null,
-        approvalId: action.result.approvalId,
-        receiptRefs,
-      };
-      this.publish('card.upsert', {
-        sessionId: created.sessionId, wakeId: created.wakeId, phase, payload,
-        source: { approvalId: action.result.approvalId, actionReceiptId: receiptRefs.actionReceiptId },
-      }, { ...payload, content: '', contentOmitted: true });
-    }
+    return this.eventPublication.publishCards(created, phase, call, action, hostEventId);
   }
 
   beginClose() {
