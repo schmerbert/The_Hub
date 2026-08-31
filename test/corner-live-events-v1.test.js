@@ -209,20 +209,23 @@ test('invalid schema, shape, sequence, and unrelated-wake events do not mutate v
 });
 
 test('Corner opens one same-origin EventSource and renders events through textContent with polling fallback', async () => {
-  const [app, html, css, reducer] = await Promise.all([
+  const [app, api, html, css, reducer] = await Promise.all([
     readFile(new URL('../public/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../public/corner-api.js', import.meta.url), 'utf8'),
     readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
     readFile(new URL('../public/styles.css', import.meta.url), 'utf8'),
     readFile(new URL('../public/live-state.js', import.meta.url), 'utf8'),
   ]);
   assert.equal((app.match(/new EventSource\(path\)/g) || []).length, 1);
   assert.match(app, /registerHubEventSource\(source, receiveHubEvent\)/);
-  assert.match(app, /events\/history\?after=\$\{afterSequence\}&limit=\$\{limit\}/);
+  assert.match(app, /from '\.\/corner-api\.js'/);
+  assert.match(api, /events\/history\?after=\$\{afterSequence\}&limit=\$\{limit\}/);
+  assert.doesNotMatch(api, /EventSource/);
   assert.match(app, /setInterval\(pollSlips, 400\)/);
   assert.match(app, /liveState\.connection === 'open'/);
   assert.match(app, /retainWakeSlips/);
   assert.match(app, /terminalReconciliations\.get\(wakeId\)/);
-  assert.match(app, /\/api\/wakes\?projection=compact/);
+  assert.match(api, /\/api\/wakes\?projection=compact/);
   assert.match(app, /clearLiveWake/);
   assert.match(app, /renderThread\(thread\)/);
   assert.match(app, /captureConversationScroll\(conversationScroller\)/);

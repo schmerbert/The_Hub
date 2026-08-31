@@ -13,6 +13,17 @@ import {
   captureConversationScroll,
   restoreConversationScroll,
 } from './render-state.js';
+import {
+  decideApproval,
+  getActiveThread,
+  getApprovals,
+  getEventHistory,
+  getHealth,
+  getWake,
+  getWakeSlips,
+  getWorld,
+  submitWake as submitWakeRequest,
+} from './corner-api.js';
 
 const app = document.querySelector('#app');
 const chip = document.querySelector('#chip');
@@ -136,12 +147,8 @@ function approvalSummary(approval) {
   return `${approval?.kind || 'cut'}${path ? ` · ${path}` : ''}`;
 }
 
-async function decideApproval(approvalId, decision) {
-  await request(`/api/approvals/${encodeURIComponent(approvalId)}/decide`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ decision }),
-  });
+async function decideAndRefreshApproval(approvalId, decision) {
+  await decideApproval(approvalId, decision);
   await refresh();
   if (!tray.hidden && panelHost.querySelector('.inspection-block')) await inspectApprovals();
 }
@@ -175,12 +182,12 @@ function renderSlips(parent, slips) {
       const confirm = node('button', null, 'Confirm');
       confirm.type = 'button';
       confirm.addEventListener('click', async () => {
-        try { await decideApproval(slip.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+        try { await decideAndRefreshApproval(slip.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
       });
       const reject = node('button', null, 'Reject');
       reject.type = 'button';
       reject.addEventListener('click', async () => {
-        try { await decideApproval(slip.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+        try { await decideAndRefreshApproval(slip.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
       });
       actions.append(confirm, reject);
       row.append(label, actions);
@@ -203,12 +210,12 @@ function renderLiveCard(card) {
     const confirm = node('button', null, 'Confirm');
     confirm.type = 'button';
     confirm.addEventListener('click', async () => {
-      try { await decideApproval(card.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+      try { await decideAndRefreshApproval(card.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
     });
     const reject = node('button', null, 'Reject');
     reject.type = 'button';
     reject.addEventListener('click', async () => {
-      try { await decideApproval(card.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+      try { await decideAndRefreshApproval(card.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
     });
     actions.append(confirm, reject);
     row.append(actions);
@@ -354,17 +361,6 @@ function renderThread(data) {
     log.append(wakeElement);
   }
   renderLive({ scrollSnapshot: preservedScroll });
-}
-
-async function request(path, options) {
-  const response = await fetch(path, options);
-  let data;
-  try { data = await response.json(); } catch { throw { code: 'host_unavailable', message: `Host returned HTTP ${response.status}.` }; }
-  if (!response.ok) {
-    if (data && typeof data === 'object' && (data.failureCode || data.status === 'failed')) return { ...data, __failedWake: true };
-    throw data.error || { code: 'host_error', message: data.failureMessage || 'Host request failed.' };
-  }
-  return data;
 }
 
 function appendBlock(parent, label, content, className = '') {
@@ -567,12 +563,12 @@ function renderApprovals(approvals) {
       const confirm = node('button', 'inspect-button', 'Confirm');
       confirm.type = 'button';
       confirm.addEventListener('click', async () => {
-        try { await decideApproval(approval.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+        try { await decideAndRefreshApproval(approval.approvalId, 'confirm'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
       });
       const reject = node('button', 'inspect-button', 'Reject');
       reject.type = 'button';
       reject.addEventListener('click', async () => {
-        try { await decideApproval(approval.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
+        try { await decideAndRefreshApproval(approval.approvalId, 'reject'); } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
       });
       row.append(confirm, reject);
       block.append(row);
@@ -583,13 +579,13 @@ function renderApprovals(approvals) {
 }
 
 async function inspectWorld() {
-  try { currentWorld = await request('/api/world'); currentWorldTab = 'marble'; currentMarbleSelection = 'overview'; currentMarbleRoomId = null; trayHeading.textContent = 'Marble inspector'; app.dataset.surface = 'marble'; tray.hidden = false; renderWorldSurface(); panelHost.focus({ preventScroll: true }); }
+  try { currentWorld = await getWorld(); currentWorldTab = 'marble'; currentMarbleSelection = 'overview'; currentMarbleRoomId = null; trayHeading.textContent = 'Marble inspector'; app.dataset.surface = 'marble'; tray.hidden = false; renderWorldSurface(); panelHost.focus({ preventScroll: true }); }
   catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
 }
 
 async function inspectApprovals() {
   try {
-    const data = await request('/api/approvals');
+    const data = await getApprovals();
     currentApprovals = data.approvals || [];
     trayHeading.textContent = 'Approvals'; delete app.dataset.surface; tray.hidden = false;
     trayTabs.replaceChildren();
@@ -612,13 +608,13 @@ function renderInspection() {
 
 async function inspectWake(wakeId) {
   try {
-    currentWake = await request(`/api/wakes/${encodeURIComponent(wakeId)}`);
+    currentWake = await getWake(wakeId);
     currentInspectionTab = 'summary'; tray.hidden = false; renderInspection(); panelHost.focus({ preventScroll: true });
   } catch (error) { setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed'); }
 }
 
 async function refresh() {
-  const [health, thread] = await Promise.all([request('/api/health'), request('/api/thread?scope=active')]);
+  const [health, thread] = await Promise.all([getHealth(), getActiveThread()]);
   modeModel.textContent = modeLabel(health);
   roomState.textContent = health.currentRoom?.roomId || 'unknown room';
   stationState.textContent = health.engagedFixtureId || health.engagedStationId ? `Engaged · ${health.engagedFixtureId || health.engagedStationId}` : 'No fixture';
@@ -657,9 +653,9 @@ async function pollSlips() {
   if (!busy || slipPollBusy || liveState.connection === 'open') return;
   slipPollBusy = true;
   try {
-    const health = await request('/api/health');
+    const health = await getHealth();
     if (!health.activeWakeId) return;
-    const projected = await request(`/api/wakes/${encodeURIComponent(health.activeWakeId)}/slips`);
+    const projected = await getWakeSlips(health.activeWakeId);
     renderSlips(gap, projected.slips || []);
   } catch {}
   finally { slipPollBusy = false; }
@@ -678,7 +674,7 @@ function stopSlipPoll() {
 
 async function retainWakeSlips(wakeId) {
   if (!wakeId) return;
-  const projected = await request(`/api/wakes/${encodeURIComponent(wakeId)}/slips`);
+  const projected = await getWakeSlips(wakeId);
   wakeSlips.set(wakeId, projected.slips || []);
 }
 
@@ -713,7 +709,7 @@ async function resyncLiveEvents() {
   liveState = setLiveConnection(liveState, 'disconnected');
   renderLive();
   try {
-    liveState = await recoverHubEventHistory(liveState, (afterSequence, limit) => request(`/api/events/history?after=${afterSequence}&limit=${limit}`));
+    liveState = await recoverHubEventHistory(liveState, getEventHistory);
     renderLive();
     const projection = projectLiveState(liveState);
     setState(projection.status);
@@ -799,7 +795,7 @@ async function submitWake(event) {
   setTimeout(() => { if (busy) setState('orienting'); }, 0);
   startSlipPoll();
   try {
-    const wake = await request('/api/wakes?projection=compact', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: submitted }) });
+    const wake = await submitWakeRequest(submitted);
     input.value = '';
     if (!liveState.optimisticUser?.wakeId) liveState = clearOptimisticUser(liveState);
     if (wake.__failedWake || wake.status === 'failed') {

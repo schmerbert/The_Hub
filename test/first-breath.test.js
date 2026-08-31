@@ -308,11 +308,11 @@ test('wake storage rejects a prebuilt manifest with mismatched identity', async 
 });
 
 test('Corner surface is static, responsive, and limited to First Breath APIs', async () => {
-  const files = await Promise.all(['public/index.html', 'public/styles.css', 'public/app.js', 'public/wave.js'].map(path => readFile(new URL(`../${path}`, import.meta.url), 'utf8')));
-  const [html, css, app, wave] = files;
+  const files = await Promise.all(['public/index.html', 'public/styles.css', 'public/app.js', 'public/corner-api.js', 'public/wave.js'].map(path => readFile(new URL(`../${path}`, import.meta.url), 'utf8')));
+  const [html, css, app, api, wave] = files;
   assert.match(html, /id="chip"/); assert.match(html, /id="bench"/); assert.match(html, /id="tray"/); assert.match(html, /aria-live/);
   assert.match(css, /\[hidden\] \{ display: none !important; \}/); assert.match(css, /@media \(min-width: 701px\)/); assert.match(css, /#app\[data-mode="compact"\] \.bench \{ display: none; \}/); assert.match(css, /#app\[data-mode="expanded"\] \.chip \{ display: none; \}/); assert.match(css, /@media \(max-width: 700px\)/); assert.match(css, /#btn-compact \{ display: none; \}/); assert.match(css, /prefers-reduced-motion/);
-  assert.match(app, /matchMedia\('\(max-width: 700px\)'\)/); assert.match(app, /next === 'compact'\) next = 'expanded'/); assert.match(app, /setMode\('expanded'\)/); assert.match(app, /setMode\('compact'\)/); assert.match(app, /\/api\/wakes/); assert.match(app, /\/api\/thread/); assert.match(app, /Inspect wake/); assert.match(app, /wakesForActiveSession/); assert.match(app, /This lifespan/); assert.match(html, /This lifespan/); assert.match(wave, /class CornerWave/);
-  const surface = `${html}\n${css}\n${app}\n${wave}`.toLowerCase();
+  assert.match(app, /matchMedia\('\(max-width: 700px\)'\)/); assert.match(app, /next === 'compact'\) next = 'expanded'/); assert.match(app, /setMode\('expanded'\)/); assert.match(app, /setMode\('compact'\)/); assert.match(api, /\/api\/wakes/); assert.match(api, /\/api\/thread/); assert.match(app, /Inspect wake/); assert.match(app, /wakesForActiveSession/); assert.match(app, /This lifespan/); assert.match(html, /This lifespan/); assert.match(wave, /class CornerWave/);
+  const surface = `${html}\n${css}\n${app}\n${api}\n${wave}`.toLowerCase();
   for (const residue of ['chronicle', 'vault', 'forest', 'reach', 'empty reply', 'looking']) assert.equal(surface.includes(residue), false, `surface contains forbidden residue: ${residue}`);
 });
