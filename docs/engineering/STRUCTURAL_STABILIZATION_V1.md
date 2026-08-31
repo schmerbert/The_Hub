@@ -109,6 +109,18 @@ Configured live stores remain untouched by measurement unless the operator expli
 
 Health alone accounted for two `verification()` and twenty `assertVerified()` facade calls. This is one diagnostic run, not a production latency claim. Its purpose is to preserve the pre-refactor call shape; later runs must compare the same disposable scenario and separately measure configured cold/warm behavior.
 
+### Installed structural checkpoints — 2026-08-31
+
+The first mechanical pass installed bounded owners without changing public facades:
+
+- progressive Forest lifecycle moved from server composition to `src/runtime/progressive-forest-lifecycle.js`;
+- wake event publication moved to `src/runtime/wake-event-publication.js`;
+- provider dispatch, callback gating, provisional collection, and return custody moved to `src/runtime/provider-phase.js`;
+- immutable World event/schema vocabulary and schema installation moved to `src/world/event-contract.js`; and
+- Corner same-origin HTTP transport moved to `public/corner-api.js`.
+
+The comparable post-extraction baseline retained 3984-byte health and 344-byte wake payloads, four `verification()` calls, 104 `assertVerified()` calls, one Glass Trace verification, one Roots verification, and the health-only 2/20 World call shape. Timing remained in the same diagnostic band (575.64 ms composition, 9.48 ms binding, 186.74 ms health, and 1206.3 ms wake). No verification checkpoint or cached-success optimization has been installed; the 104-call ordinary-wake shape remains the principal measured performance pressure for the next design gate.
+
 ## 6. Structural acceptance
 
 For every extraction:

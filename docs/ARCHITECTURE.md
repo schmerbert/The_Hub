@@ -37,12 +37,13 @@ Forest utterance admission uses a separate `utterance_identity/v1` policy. It pr
 | Session | `src/session/lifespan.js` | Process-lived session identity, complete active history, and Session Zero ancestry |
 | Hearth | `src/hearth/handshake.js`, `src/hearth/scroll.js` | Native first-call action validation, exact recency extracts, and resident Scroll |
 | Reasoning posture | `src/context/`, `src/runtime/`, provider adapter | Deterministic place/action fitting and exact provider effort witness; no capability or authority change |
-| Startup readiness | `src/runtime/readiness.js`, `src/server/app.js`, `src/corner/desktop-host.js` | Process-local shell/conversation/feature readiness, bounded timings, deferred Forest activation, and shutdown cancellation; owns no domain integrity claim |
+| Startup readiness | `src/runtime/readiness.js`, `src/runtime/progressive-forest-lifecycle.js`, `src/server/app.js`, `src/corner/desktop-host.js` | Process-local shell/conversation/feature readiness, bounded timings, deferred Forest activation, stale-proof refusal, and shutdown cancellation; owns no domain integrity claim |
 | Provider Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Subtractive provider projection and exact provider-return selection |
 | Tool-history fitting | `src/context/tool-pairs.js` | Declared old completed tool-exchange omission and source-reference projection |
 | Spine | `src/spine/store.js` | Exact provider request and bounded raw-return custody, including one admitted-body SSE frame appended at termination |
 | Forest | `src/forest/` | Home utterance and Journal planting, Wild admission, custody, traversal, rebuildable semantic projection, backfill, and verification |
 | Forest health projection | `src/forest/health.js` | Domain-owned active/inactive, integrity, catch-up, Wild, and Intake health projection for transport surfaces |
+| World event contract | `src/world/event-contract.js`, `src/world/events.js` | Immutable event and schema vocabulary plus exact schema installation behind the stable events facade; replay, projection, and inspection remain World-owned |
 | World state | `src/world/graph.js` | Room graph, location/fixture state, briefs, timers, action receipts, approvals, append-only approval completion custody, and verified actor-local presence |
 | World spatial horizon | `src/world/spatial-horizon.js` | Bounded read-only rendering of verified Hub containment and installed route structure; never owns topology or movement authority |
 | Place and room packages | `src/places/` | Inert topology declarations plus behavior owned entirely by one place or room; universal replay, authority, and crossings remain in World |
@@ -61,11 +62,11 @@ Forest utterance admission uses a separate `utterance_identity/v1` policy. It pr
 | Result/attention compatibility | `src/world/results.js`, `src/context/attention-meter.js` | Stable re-export facade plus provider-presentation byte attention measurement |
 | Host-return Scrub | `src/scrub/host-return.js` | Validated identity or named `result_rack_projection_v1` host result projection |
 | Corner slips | `src/corner/slips.js` | Deterministic active/completed progress from persisted phases, receipts, and approvals |
-| Wake orchestration | `src/runtime/wake-service.js` | Wake lifecycle, provider phases, terminal history admission, tool rounds, and receipt-derived live events |
+| Wake orchestration | `src/runtime/wake-service.js`, `src/runtime/provider-phase.js`, `src/runtime/wake-event-publication.js` | Public wake lifecycle and terminal admission, with bounded provider-phase execution and append-before-broadcast event publication delegated to runtime-owned phase modules |
 | Wake stream | `src/ledger/wake-stream.js`, `src/ledger/source.js`, `src/runtime/hub-event-bus.js` | Append-only hash-linked event journal, provisional credential boundary, and bounded in-process replay/broadcast |
 | Provider streaming | `src/providers/sse.js`, `src/providers/deepseek.js`, `src/scrub/provider-return.js` | Strict OpenAI-compatible SSE parsing, safe provisional deltas, bounded admitted-body Spine custody, and independent exact terminal assembly |
 | Corner desktop | `src/corner/electron-main.js`, `src/corner/desktop-host.js`, `src/corner/desktop-controller.js`, `src/corner/preload.cjs`, `src/corner/window-geometry.js` | Single-instance Electron lifecycle, loopback host ownership, secure narrow bridge, tray/window behavior, and display geometry |
-| Expandable Corner surfaces | `public/app.js`, `public/styles.css` | Conversation-preserving work-surface expansion; the read-only Marble Inspector is the first navigable surface and consumes Builder installation witnesses |
+| Expandable Corner surfaces | `public/app.js`, `public/corner-api.js`, `public/styles.css` | Conversation-preserving work-surface expansion with same-origin HTTP transport separated behind a narrow browser module; the read-only Marble Inspector is the first navigable surface and consumes Builder installation witnesses |
 | Context compatibility | `src/context/assemble.js` | Compatibility assembly for pre-session callers |
 
 `src/core/config.js` and `src/core/hash.js` are active shared owners. The obsolete Core re-export hallways were removed after all repository callers moved to the dedicated Ledger, Forest, Spine, and Context owners. `src/providers/dispatch.js` validates a presentation before deriving the legacy `messages` argument used by injected test providers.
