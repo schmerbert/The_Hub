@@ -41,9 +41,9 @@ html[data-shell="desktop"] button, html[data-shell="desktop"] textarea, html[dat
 .mode-model, .status, #thread-note { color: var(--muted); font: .7rem var(--mono); }
 .mode-model { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status { text-transform: lowercase; }
-.status[data-state="calling provider"], .status[data-state="assembling"], .status[data-state="orienting"], .status[data-state="thinking"], .status[data-state="responding"], .status[data-state="preparing tools"], .status[data-state="message ready"], .status[data-state="using tools"], .status[data-state="awaiting approval"], .status[data-state="working"] { color: var(--amber); }
+.status[data-state="calling provider"], .status[data-state="assembling"], .status[data-state="orienting"], .status[data-state="thinking"], .status[data-state="responding"], .status[data-state="preparing tools"], .status[data-state="preparing"], .status[data-state="message ready"], .status[data-state="using tools"], .status[data-state="awaiting approval"], .status[data-state="working"] { color: var(--amber); }
 .status[data-state="committed"], .status[data-state="idle"] { color: var(--mint); }
-.status[data-state="failed"], .status[data-state="host unavailable"] { color: var(--danger); }
+.status[data-state="failed"], .status[data-state="host unavailable"], .status[data-state="continuity unavailable"] { color: var(--danger); }
 .ghost { padding: .45rem .65rem; border: 1px solid transparent; border-radius: 999px; color: var(--muted); background: transparent; font-size: .78rem; }
 .ghost:hover { color: var(--text); border-color: var(--line); background: var(--panel-soft); }
 .approvals-button { position: relative; }

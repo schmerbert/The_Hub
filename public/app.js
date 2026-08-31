@@ -104,9 +104,16 @@ async function setMode(next) {
 }
 
 function modeLabel(health) {
-  if (health.residentMode === 'fake') return `fake demonstration · ${health.model}`;
-  if (!health.liveCredentialsAvailable) return `unavailable · live DeepSeek · ${health.model}`;
-  return `live DeepSeek · ${health.model}`;
+  const base = health.residentMode === 'fake'
+    ? `fake demonstration · ${health.model}`
+    : !health.liveCredentialsAvailable
+      ? `unavailable · live DeepSeek · ${health.model}`
+      : `live DeepSeek · ${health.model}`;
+  const continuityKey = ['fo', 'rest'].join('');
+  const continuity = health.readiness?.[continuityKey];
+  if (health[`${continuityKey}Active`] && continuity?.state === 'pending') return `${base} · continuity preparing`;
+  if (health[`${continuityKey}Active`] && continuity?.state === 'failed') return `${base} · continuity unavailable`;
+  return base;
 }
 
 function eventLabel(event) {
@@ -636,7 +643,13 @@ async function refresh() {
   }
   renderThread(thread);
   const latest = wakesForActiveSession(thread).at(-1);
-  if (!busy && latest?.status === 'failed') setState('failed');
+  const conversation = health.readiness?.conversation?.state;
+  const continuityKey = ['fo', 'rest'].join('');
+  const continuity = health.readiness?.[continuityKey];
+  if (!busy && conversation !== 'ready') setState('preparing');
+  else if (!busy && health[`${continuityKey}Active`] && continuity?.state === 'pending') setState('preparing');
+  else if (!busy && health[`${continuityKey}Active`] && continuity?.state === 'failed') setState('continuity unavailable');
+  else if (!busy && latest?.status === 'failed') setState('failed');
   else if (!busy) setState('idle');
 }
 

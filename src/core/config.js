@@ -51,6 +51,7 @@ export function readConfig(env = process.env) {
     binderWindowSnapshotPath: env.HUB_BINDER_WINDOW_SNAPSHOT_PATH || join(runtimeRoot, 'binder-window.json'),
     workshopRoot: env.HUB_WORKSHOP_ROOT || process.cwd(),
     forestActive: env.HUB_FOREST_ACTIVE === 'true',
+    progressiveStartup: false,
     port: integer(env, 'HUB_PORT', 3000, { min: 0, max: 65535 }),
     messageCeiling: integer(env, 'HUB_MESSAGE_CEILING', 20, { min: 1 }),
     hearthScrollBudget: integer(env, 'HUB_HEARTH_SCROLL_BUDGET', 12000, { min: 1 }),
@@ -93,6 +94,7 @@ export function resolveHubConfig(env = process.env, overrides = {}) {
     resultPath: overrides.resultPath || (dbWasSelected && !env.HUB_RESULT_PATH ? join(dirname(dbPath), 'results.sqlite') : base.resultPath),
     binderWindowSnapshotPath: overrides.binderWindowSnapshotPath || (dbWasSelected && !env.HUB_BINDER_WINDOW_SNAPSHOT_PATH ? join(dirname(dbPath), 'binder-window.json') : base.binderWindowSnapshotPath),
     forestActive: overrides.activateForest === undefined ? base.forestActive : Boolean(overrides.activateForest),
+    progressiveStartup: Boolean(overrides.progressiveStartup),
   };
   return immutable(resolved);
 }

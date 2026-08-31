@@ -20,6 +20,8 @@ Source Ledger -> session/Hearth assembly -> provider-presentation Scrub
 WakeService -> durable wake_stream_events -> bounded process bus -> SSE / Corner
 ```
 
+Desktop startup has a process-local progressive-readiness boundary. Source, Spine, current World/Hearth, and wake orchestration remain the synchronous conversation gate. When active Forest custody is configured, strict full Forest verification runs in a cancellable worker; Forest, semantic Exhale, and traversal remain absent from Wake Service and Gateway until that exact proof settles. `/api/health` projects bounded shell, conversation, and Forest states plus monotonic stage timings. Direct `createHub()` callers retain the synchronous compatibility path.
+
 Provider-bound Scrub is a projection, not a memory operation. It may remove only declared exact spans or declared complete messages, preserving the roles, order, and content that remain. Whole-message fitting currently removes only older completed assistant-tool/result exchanges; it retains the current and configured recent exchanges, records exact omitted source positions and hashes, and adds a deterministic disclosure while the Source Ledger retains the original history. Spine records the exact validated JSON sent to the provider.
 
 Forest utterance admission uses a separate `utterance_identity/v1` policy. It proves that an admitted utterance is unchanged; it is not provider-history fitting. Journal admission is a separate exact Resident-act crossing: an explicit `write_journal` tool call plants `home/journal`, retaining request/Spine ancestry without creating a conversation turn or `responds_to` edge.
@@ -35,6 +37,7 @@ Forest utterance admission uses a separate `utterance_identity/v1` policy. It pr
 | Session | `src/session/lifespan.js` | Process-lived session identity, complete active history, and Session Zero ancestry |
 | Hearth | `src/hearth/handshake.js`, `src/hearth/scroll.js` | Native first-call action validation, exact recency extracts, and resident Scroll |
 | Reasoning posture | `src/context/`, `src/runtime/`, provider adapter | Deterministic place/action fitting and exact provider effort witness; no capability or authority change |
+| Startup readiness | `src/runtime/readiness.js`, `src/server/app.js`, `src/corner/desktop-host.js` | Process-local shell/conversation/feature readiness, bounded timings, deferred Forest activation, and shutdown cancellation; owns no domain integrity claim |
 | Provider Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Subtractive provider projection and exact provider-return selection |
 | Tool-history fitting | `src/context/tool-pairs.js` | Declared old completed tool-exchange omission and source-reference projection |
 | Spine | `src/spine/store.js` | Exact provider request and bounded raw-return custody, including one admitted-body SSE frame appended at termination |

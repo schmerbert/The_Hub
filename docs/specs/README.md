@@ -18,6 +18,7 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Recoverable and semantic Exhale | [`FOREST_EXHALE_V2.md`](FOREST_EXHALE_V2.md) |
 | Hearth wake | [`HOUSE_HEARTH_WAKE_V1.md`](HOUSE_HEARTH_WAKE_V1.md), [`SESSION_HEARTH_V1.md`](SESSION_HEARTH_V1.md), [`HEARTH_SCROLL_V2.md`](HEARTH_SCROLL_V2.md) |
 | Fitted reasoning and settled-Hearth reread | [`RESPONSIVE_PRESENCE_V1.md`](RESPONSIVE_PRESENCE_V1.md) |
+| Progressive shell, conversation, and feature readiness | [`PROGRESSIVE_READINESS_V1.md`](PROGRESSIVE_READINESS_V1.md) |
 | World event integrity | [`WORLD_EVENT_PROJECTION_DRIFT_V1.md`](WORLD_EVENT_PROJECTION_DRIFT_V1.md) |
 | World spatial horizon | [`SPATIAL_HORIZON_V1.md`](SPATIAL_HORIZON_V1.md) |
 | Current World topology | [`WORLD_GRAPH_WORKSHOP_V1.md`](WORLD_GRAPH_WORKSHOP_V1.md), [`THRESHOLD_HOUSE_GARDEN_V1.md`](THRESHOLD_HOUSE_GARDEN_V1.md) |

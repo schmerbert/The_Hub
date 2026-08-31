@@ -12,8 +12,8 @@ function listen(server, port) {
   });
 }
 
-export async function startDesktopHost({ env = process.env, createHubFactory = createHub } = {}) {
-  const hub = createHubFactory({ env: { ...env } });
+export async function startDesktopHost({ env = process.env, createHubFactory = createHub, progressiveStartup = true } = {}) {
+  const hub = createHubFactory({ env: { ...env }, progressiveStartup });
   try {
     await listen(hub.server, hub.config.port);
   } catch (error) {

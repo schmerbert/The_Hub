@@ -16,16 +16,17 @@ recoverable exhales
 
 ## Sequence
 
-### Next responsiveness pass — progressive startup and incremental verification
+### Responsiveness pass — progressive startup first slice implemented
 
-Open the Corner immediately with truthful readiness state, then admit conversation after only the Source, current World/Hearth, and required ancestry gates are ready. Embedding warmup, semantic synchronization, broad Forest health, Workshop backend preparation, and builder diagnostics should proceed behind explicit feature-local readiness rather than silently blocking the shell.
+The desktop now binds the Corner after the essential Source, current World/Hearth, and required ancestry gates, while strict active-Forest verification runs off the HTTP event loop. Health and Corner distinguish shell, conversation, and Forest readiness; Forest, semantic Exhale, and traversal are not mounted until the strict proof succeeds. Failure and stale concurrent Source movement leave continuity boundedly unavailable, and shutdown cancels pending verification. Direct `createHub()` callers retain synchronous compatibility.
 
-Replace repeated full immutable-prefix scans with verified ancestry checkpoints and incremental suffix verification. A background full audit remains required; deferred work must never make an unverified Forest action, feather, or room capability available. Record startup-stage timings before optimizing further so improvements are measured rather than inferred.
+The next measured optimization question is repeated full immutable-prefix scanning, especially World replay. A future verified ancestry checkpoint must bind exact store identity, verifier/schema version, prefix head, suffix continuity, full projection agreement, invalidation, and background audit. File metadata or cached success is explicitly insufficient. The installed readiness timings provide evidence before that separate protocol is adopted.
 
 After startup, the preferred UX passes are verified multi-step travel, visible action progress, and measurement-led tool/payload trimming.
 
 Owners: desktop host/readiness projection, Forest and World verification, semantic projection lifecycle, wake admission
 Invariant: faster availability cannot weaken drift refusal, fabricate readiness, or let deferred subsystems act before their own gates pass
+Law: [`PROGRESSIVE_READINESS_V1.md`](specs/PROGRESSIVE_READINESS_V1.md)
 
 ### 1. Silver Bullet holster — implemented
 
