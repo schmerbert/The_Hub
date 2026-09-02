@@ -1,9 +1,14 @@
 import { placeModule } from '../../declaration.js';
+import { SPOTLIGHT_TOOL_NAMES } from './tools.js';
 
 // Spotlight is installed as a room shell, not as a source of authority.  The
 // host owns the door, sockets, and every future observation crossing.
 export const SPOTLIGHT = placeModule({
   id: 'room.spotlight',
+  // Room movement is World-owned and remains separate from the observatory's
+  // provider-facing hands.  It is safe to mount because the door event is the
+  // sole authority that can make the route reachable.
+  mountedTools: ['move_through_door', ...SPOTLIGHT_TOOL_NAMES],
   nodes: [
     [
       'room.spotlight',

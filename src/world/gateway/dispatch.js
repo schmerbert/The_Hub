@@ -3,11 +3,12 @@ import { NAVIGATION_HANDLERS } from './handlers/navigation.js';
 import { WORKSHOP_HANDLERS } from './handlers/workshop.js';
 import { GIT_HANDLERS } from './handlers/git.js';
 import { RUNTIME_HANDLERS } from './handlers/runtime.js';
+import { SPOTLIGHT_HANDLERS } from './handlers/spotlight.js';
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 
 const HANDLERS = new Map();
-for (const group of [NAVIGATION_HANDLERS, WORKSHOP_HANDLERS, GIT_HANDLERS, RUNTIME_HANDLERS]) {
+for (const group of [NAVIGATION_HANDLERS, WORKSHOP_HANDLERS, GIT_HANDLERS, RUNTIME_HANDLERS, SPOTLIGHT_HANDLERS]) {
   for (const [name, handler] of Object.entries(group)) {
     if (HANDLERS.has(name)) throw new Error(`Duplicate World tool handler: ${name}`);
     HANDLERS.set(name, handler);

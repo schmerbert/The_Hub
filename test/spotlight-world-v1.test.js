@@ -14,13 +14,14 @@ function fixture(version = 'spotlight', options = {}) {
   return { dir, path, world, close() { world.close(); rmSync(dir, { recursive: true, force: true }); } };
 }
 
-test('fresh Spotlight World installs the observatory shell after Binder Window with exactly five fixtures', () => {
+test('fresh Spotlight World installs the observatory shell and enterable door after Binder Window', () => {
   const fx = fixture();
   try {
     const events = fx.world.sqlite.prepare('SELECT event_kind,payload_json FROM world_event_journal ORDER BY sequence').all();
-    assert.equal(events.at(-2).event_kind, 'topology.binder_window_installed/v1');
-    assert.equal(events.at(-1).event_kind, 'topology.spotlight_installed/v1');
-    assert.deepEqual(JSON.parse(events.at(-1).payload_json), spotlightTopologyEventPayload());
+    assert.equal(events.at(-3).event_kind, 'topology.binder_window_installed/v1');
+    assert.equal(events.at(-2).event_kind, 'topology.spotlight_installed/v1');
+    assert.equal(events.at(-1).event_kind, 'topology.spotlight_door_installed/v1');
+    assert.deepEqual(JSON.parse(events.at(-2).payload_json), spotlightTopologyEventPayload());
 
     assert.equal(fx.world.node('room.spotlight').node_type, 'room');
     const fixtures = fx.world.sqlite.prepare("SELECT id FROM world_nodes WHERE node_type='fixture' AND id LIKE 'fixture.spotlight_%' ORDER BY id").all().map(row => row.id);
@@ -28,11 +29,11 @@ test('fresh Spotlight World installs the observatory shell after Binder Window w
       'fixture.spotlight_archive', 'fixture.spotlight_bell', 'fixture.spotlight_landscape', 'fixture.spotlight_table', 'fixture.spotlight_telescope',
     ]);
     const edges = fx.world.sqlite.prepare("SELECT edge_type,from_node_id,to_node_id,door_identity FROM world_edges WHERE from_node_id='room.spotlight' OR to_node_id='room.spotlight'").all();
-    assert.equal(edges.length, 6);
-    assert.ok(edges.every(edge => edge.edge_type === 'contains' && edge.door_identity === null));
-    assert.equal(edges.filter(edge => edge.from_node_id === 'room.spotlight').length, 5);
-    assert.deepEqual({ ...edges.find(edge => edge.to_node_id === 'room.spotlight') }, { edge_type: 'contains', from_node_id: 'place.hub', to_node_id: 'room.spotlight', door_identity: null });
-    assert.equal(fx.world.sqlite.prepare("SELECT COUNT(*) AS count FROM world_edges WHERE edge_type IN ('door','passage') AND (from_node_id='room.spotlight' OR to_node_id='room.spotlight')").get().count, 0);
+    assert.equal(edges.length, 8);
+    assert.equal(edges.filter(edge => edge.edge_type === 'contains').length, 6);
+    assert.equal(edges.filter(edge => edge.from_node_id === 'room.spotlight' && edge.edge_type === 'contains').length, 5);
+    assert.deepEqual({ ...edges.find(edge => edge.to_node_id === 'room.spotlight' && edge.edge_type === 'contains') }, { edge_type: 'contains', from_node_id: 'place.hub', to_node_id: 'room.spotlight', door_identity: null });
+    assert.equal(fx.world.sqlite.prepare("SELECT COUNT(*) AS count FROM world_edges WHERE edge_type='door' AND door_identity='door.spotlight' AND (from_node_id='room.spotlight' OR to_node_id='room.spotlight')").get().count, 2);
     assert.equal(fx.world.verification().verified, true);
     assert.ok(replayWorldEvents(fx.world.sqlite).spotlightExtension);
   } finally { fx.close(); }
@@ -42,15 +43,17 @@ test('Binder Window World requires backup-confirmed Spotlight migration and pres
   const fx = fixture('binder_window');
   try {
     fx.world.ensureLifespan('life');
-    const beforeLocation = fx.world.current('life').room_node_id;
+    const beforeLocation = fx.world.sqlite.prepare("SELECT room_node_id FROM world_locations WHERE session_id='life'").get()?.room_node_id || 'place.house';
     const beforeNodes = fx.world.sqlite.prepare('SELECT id,created_at,last_event_sequence,last_event_hash FROM world_nodes ORDER BY id').all();
     assert.equal(fx.world.inspectSpotlightUpgrade().status, 'upgrade_required');
     assert.throws(() => fx.world.migrateSpotlight(), error => error.code === 'world_spotlight_backup_required');
     const migrated = fx.world.migrateSpotlight({ backupConfirmed: true });
     assert.equal(migrated.status, 'migrated');
-    assert.equal(fx.world.current('life').room_node_id, beforeLocation);
+    assert.equal(fx.world.sqlite.prepare("SELECT room_node_id FROM world_locations WHERE session_id='life'").get().room_node_id, beforeLocation);
     assert.deepEqual(fx.world.sqlite.prepare("SELECT id,created_at,last_event_sequence,last_event_hash FROM world_nodes WHERE id IN ('room.center','room.workshop','fixture.binder_window') ORDER BY id").all(), beforeNodes.filter(row => ['room.center', 'room.workshop', 'fixture.binder_window'].includes(row.id)));
     assert.equal(fx.world.inspectSpotlightUpgrade().status, 'current');
+    assert.equal(fx.world.inspectSpotlightDoorUpgrade().status, 'upgrade_required');
+    fx.world.migrateSpotlightDoor({ backupConfirmed: true });
     assert.equal(fx.world.verification().verified, true);
     assert.throws(() => fx.world.sqlite.prepare("DELETE FROM world_event_journal WHERE event_kind='topology.spotlight_installed/v1'").run(), /append-only/);
   } finally { fx.close(); }

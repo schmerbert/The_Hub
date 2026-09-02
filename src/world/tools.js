@@ -1,4 +1,5 @@
 import { CEILING_WIRES, mountedToolNames } from './ceiling.js';
+import { SPOTLIGHT_TOOLS, SPOTLIGHT_TOOL_APPROVAL_CLASS, SPOTLIGHT_TOOL_NAMES } from '../places/hub/spotlight/tools.js';
 
 export const MOVE_TOOL = { type: 'function', function: { name: 'move_through_door', description: 'Move through a declared door from the current room.', parameters: { type: 'object', properties: { door_id: { type: 'string' } }, required: ['door_id'], additionalProperties: false } } };
 export const B1_TOOLS = [
@@ -64,11 +65,13 @@ export const TOOL_APPROVAL_CLASS = Object.freeze({
   workshop_git_status: 'auto', workshop_git_diff: 'auto', workshop_git_log: 'auto', workshop_git_show: 'auto', workshop_git_branch_list: 'auto',
   workshop_git_add: 'auto', workshop_git_commit: 'auto', workshop_git_checkout: 'confirm',
   workshop_brief_upsert: 'auto', workshop_brief_get: 'auto', workshop_pending_diff: 'auto', workshop_approval_status: 'auto', workshop_approval_list: 'auto', workshop_tool_catalog: 'auto',
+  ...SPOTLIGHT_TOOL_APPROVAL_CLASS,
 });
 
-const BY_NAME = new Map([MOVE_TOOL, ...B1_TOOLS, ...FIXTURE_TOOLS, ...HEARTH_TOOLS, ...WORKSHOP_TOOLS].map(tool => [tool.function.name, tool]));
+const BY_NAME = new Map([MOVE_TOOL, ...B1_TOOLS, ...FIXTURE_TOOLS, ...HEARTH_TOOLS, ...WORKSHOP_TOOLS, ...SPOTLIGHT_TOOLS].map(tool => [tool.function.name, tool]));
 export const TOOL_NAMES = new Set(BY_NAME.keys());
 export const WORKSHOP_TOOL_NAMES = WORKSHOP_TOOLS.map(tool => tool.function.name);
+export { SPOTLIGHT_TOOLS, SPOTLIGHT_TOOL_NAMES };
 
 export function schemasForTools(toolNames, { workshopMaxLines = null, workshopMaxResults = null } = {}) {
   return toolNames.map(name => {

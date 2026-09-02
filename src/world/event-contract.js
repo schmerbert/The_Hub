@@ -32,6 +32,7 @@ export const WORLD_EVENT_KINDS = deepFreeze({
   'topology.forest_installed/v1': { schemaVersion: 1, stretch: 'F1' },
   'topology.binder_window_installed/v1': { schemaVersion: 1, stretch: 'BW1' },
   'topology.spotlight_installed/v1': { schemaVersion: 1, stretch: 'SP1' },
+  'topology.spotlight_door_installed/v1': { schemaVersion: 1, stretch: 'SP2' },
   'room.installation.revised/v1': { schemaVersion: 1, stretch: 'B1' },
   'location.crossed/v1': { schemaVersion: 1, stretch: 'B1' },
   'passage.operated/v1': { schemaVersion: 1, stretch: 'B1' },

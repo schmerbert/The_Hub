@@ -7,6 +7,7 @@ import { applySandboxPromotion } from './promotion.js';
 import { id, sha256 } from '../core/hash.js';
 import { dispatchWorldToolImmediate, parseWorldToolIntent } from './gateway/dispatch.js';
 import { inspectFixtureContents } from './gateway/fixture-inspectors.js';
+import { createSpotlightCapabilityService } from '../places/hub/spotlight/gate.js';
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 const ATOMIC_CROSSING = Symbol('world_atomic_crossing');
@@ -26,10 +27,11 @@ function approvalEffectEvidence(approval) {
   return { preimage: preview, postcondition };
 }
 export class WorldActionGateway {
-  constructor({ world, workshop, forest = null, resultRack = null, recipeRunner = null, binderWindow = null, approvalMode = 'confirm', recipeTimeoutMs = 120000, readHearth = null }) {
+  constructor({ world, workshop, forest = null, resultRack = null, recipeRunner = null, binderWindow = null, spotlight = null, spotlightService = null, approvalMode = 'confirm', recipeTimeoutMs = 120000, readHearth = null }) {
     this.world = world;
     this.workshop = workshop;
     this.binderWindow = binderWindow;
+    this.spotlight = spotlightService || spotlight || createSpotlightCapabilityService();
     this.readHearth = readHearth;
     this.forest = forest;
     this.resultRack = resultRack;
@@ -87,6 +89,7 @@ export class WorldActionGateway {
       noteKiln: (state, action) => this.noteKiln(state, { sessionId, wakeId, commandId: parsed.call.id, action }),
       onRecipeComplete: (finalResult, runId) => this.handleRecipeComplete(finalResult, { runId, sessionId, wakeId }),
       readHearth: targetSessionId => this.readHearth?.(targetSessionId),
+      spotlight: this.spotlight,
     };
     let dispatched; let crossing;
     this.world.transaction(() => {

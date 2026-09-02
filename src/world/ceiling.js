@@ -4,6 +4,7 @@ import { CENTER } from '../places/hub/center.js';
 import { GARDEN } from '../places/garden/index.js';
 import { HOUSE } from '../places/house/index.js';
 import { THRESHOLD } from '../places/threshold/index.js';
+import { SPOTLIGHT_TOOL_NAMES } from '../places/hub/spotlight/tools.js';
 export const approvalAnchor = 'fixture.workshop_workbench';
 export const APPROVAL_ANCHOR = approvalAnchor;
 
@@ -17,6 +18,7 @@ export const WIRE_GROUPS = Object.freeze([
   { id: 'clipboard', label: 'clipboard' },
   { id: 'heartbeat', label: 'heartbeat' },
   { id: 'meta', label: 'meta' },
+  { id: 'spotlight', label: 'spotlight' },
 ]);
 
 const wires = [
@@ -65,15 +67,17 @@ const wires = [
   ['workshop_timer_status', 'heartbeat'],
   ['workshop_timer_cancel', 'heartbeat'],
   ['workshop_tool_catalog', 'meta'],
+  ...SPOTLIGHT_TOOL_NAMES.map(name => [name, 'spotlight']),
 ];
 
 export const CEILING_WIRES = Object.freeze(wires.map(([name, groupId]) => Object.freeze({ name, groupId })));
 const WIRES_BY_GROUP = new Map(WIRE_GROUPS.map(group => [group.id, CEILING_WIRES.filter(wire => wire.groupId === group.id)]));
-const WORKSHOP_TOOL_NAMES = Object.freeze(CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture', 'tend_hearth'].includes(name)));
+const WORKSHOP_TOOL_NAMES = Object.freeze(CEILING_WIRES.map(wire => wire.name).filter(name => !['move_through_passage', 'operate_passage', 'turn_fixture', 'tend_hearth'].includes(name) && CEILING_WIRES.find(wire => wire.name === name)?.groupId !== 'spotlight'));
 
 export const ROOM_PROFILES = Object.freeze({
   [CENTER.id]: CENTER.mountedTools,
   'room.workshop': WORKSHOP_TOOL_NAMES,
+  'room.spotlight': ['move_through_door', ...SPOTLIGHT_TOOL_NAMES],
   [GARDEN.id]: GARDEN.mountedTools,
   [HOUSE.id]: HOUSE.mountedTools,
   [THRESHOLD.id]: THRESHOLD.mountedTools,

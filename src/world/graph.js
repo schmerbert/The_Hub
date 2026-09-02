@@ -10,6 +10,7 @@ import { hearthTopologyEventPayload } from './topology-hearth.js';
 import { forestTopologyEventPayload } from './topology-forest.js';
 import { binderWindowTopologyEventPayload } from './topology-binder-window.js';
 import { spotlightTopologyEventPayload } from './topology-spotlight.js';
+import { spotlightDoorTopologyEventPayload } from './topology-spotlight-door.js';
 import {
   ACTION_RECEIPT_COLUMNS, APPROVAL_COLUMNS, APPROVAL_RECEIPT_COLUMNS, BRIEF_COLUMNS, EDGE_COLUMNS, FIXTURE_RUNTIME_COLUMNS,
   LOCATION_COLUMNS, NODE_COLUMNS, OBJECT_STATE_COLUMNS, PASSAGE_COLUMNS, TIMER_COLUMNS, assertWorldVerified, createWorldEvent, custodyRowHash, emptyWorldState,
@@ -108,7 +109,7 @@ export class WorldGraphStore {
         if (['hearth', 'forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapHearthExtension('world_migration');
         if (['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapForestExtension('world_migration');
         if (['binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapBinderWindowExtension('world_migration');
-        if (this.topologyVersion === 'spotlight') this.#bootstrapSpotlightExtension('world_migration');
+        if (this.topologyVersion === 'spotlight') { this.#bootstrapSpotlightExtension('world_migration'); this.#bootstrapSpotlightDoorExtension('world_migration'); }
       } else this.bootstrapFreshTopology();
     } catch (error) {
       this.sqlite.close();
@@ -224,12 +225,12 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       if (verify) this.transactionNeedsVerification = true;
       return fn();
     }
-    if (verify) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight' });
+    if (verify) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' });
     this.sqlite.exec('BEGIN IMMEDIATE'); this.transactionDepth += 1;
     this.transactionNeedsVerification = verify;
     try {
       const result = fn();
-      if (this.transactionNeedsVerification) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight' });
+      if (this.transactionNeedsVerification) assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' });
       this.sqlite.exec('COMMIT');
       return result;
     } catch (error) {
@@ -238,19 +239,20 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     } finally { this.transactionDepth -= 1; this.transactionNeedsVerification = false; }
   }
   eventHead() { return this.sqlite.prepare('SELECT sequence,event_hash FROM world_event_journal ORDER BY sequence DESC LIMIT 1').get() || null; }
-  appendRoomInstallationRevisionEvent({ payload, afterEvent = null } = {}) {
+  appendRoomInstallationRevisionEvent({ roomId = null, payload, afterEvent = null } = {}) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw Object.assign(new Error('Room installation revision payload is required.'), { code: 'room_installation_revision_invalid' });
+    const aggregateId = roomId || payload.roomId;
+    if (!['room.workshop', 'room.spotlight'].includes(aggregateId) || payload.roomId !== aggregateId) throw Object.assign(new Error('Room installation revision room identity is invalid.'), { code: 'room_installation_revision_invalid' });
     this.assertVerified();
-    const existing = this.sqlite.prepare("SELECT * FROM world_event_journal WHERE event_kind='room.installation.revised/v1' AND aggregate_kind='room_installation' AND aggregate_id='room.workshop' ORDER BY aggregate_revision DESC LIMIT 1").get();
-    if (existing) {
+    const existing = this.sqlite.prepare("SELECT * FROM world_event_journal WHERE event_kind='room.installation.revised/v1' AND aggregate_kind='room_installation' AND aggregate_id=? ORDER BY aggregate_revision,sequence").all(aggregateId);
+    for (const candidate of existing) {
       let existingPayload;
-      try { existingPayload = JSON.parse(existing.payload_json); } catch { throw Object.assign(new Error('Existing room installation revision payload is invalid.'), { code: 'room_installation_revision_conflict' }); }
-      if (canonicalize(existingPayload) !== canonicalize(payload)) throw Object.assign(new Error('Conflicting Workshop installation revision event already exists.'), { code: 'room_installation_revision_conflict' });
-      return { status: 'current', event: existing };
+      try { existingPayload = JSON.parse(candidate.payload_json); } catch { throw Object.assign(new Error('Existing room installation revision payload is invalid.'), { code: 'room_installation_revision_conflict' }); }
+      if (canonicalize(existingPayload) === canonicalize(payload)) return { status: 'current', event: candidate };
     }
     const head = this.eventHead();
     const event = this._appendPhysicalEvent({
-      eventKind: 'room.installation.revised/v1', aggregateKind: 'room_installation', aggregateId: 'room.workshop', aggregateRevision: this.aggregateRevision('room_installation', 'room.workshop') + 1,
+      eventKind: 'room.installation.revised/v1', aggregateKind: 'room_installation', aggregateId, aggregateRevision: this.aggregateRevision('room_installation', aggregateId) + 1,
       actor: 'world_migration', causation: { boundary: 'room_installation_revision_v1', physicalHeadHash: head?.event_hash || null, physicalHeadSequence: head?.sequence || 0 },
       payload, replayPrior: replayWorldEvents(this.sqlite), afterProjection: afterEvent,
     });
@@ -260,8 +262,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const row = this.sqlite.prepare('SELECT MAX(aggregate_revision) AS revision FROM world_event_journal WHERE aggregate_kind=? AND aggregate_id=?').get(aggregateKind, aggregateId);
     return Math.max(row?.revision || 0, projectionRevision || 0);
   }
-  verification(options = {}) { return verifyWorldSqlite(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', ...options }); }
-  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight' }); }
+  verification(options = {}) { return verifyWorldSqlite(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight', ...options }); }
+  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' }); }
   _withTopologyProjectionWrites(fn) {
     for (const trigger of ['world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) this.sqlite.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
     try { return fn(); }
@@ -361,7 +363,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     if (['hearth', 'forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapHearthExtension('world_bootstrap');
     if (['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapForestExtension('world_bootstrap');
     if (['binder_window', 'spotlight'].includes(this.topologyVersion)) this.#bootstrapBinderWindowExtension('world_bootstrap');
-    if (this.topologyVersion === 'spotlight') this.#bootstrapSpotlightExtension('world_bootstrap');
+    if (this.topologyVersion === 'spotlight') { this.#bootstrapSpotlightExtension('world_bootstrap'); this.#bootstrapSpotlightDoorExtension('world_bootstrap'); }
   }
   #bootstrapB1Extension(actor = 'world_migration') {
     const head = this.eventHead();
@@ -400,6 +402,14 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     return this._appendPhysicalEvent({
       eventKind: 'topology.spotlight_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'spotlight', aggregateRevision: 1,
       actor, causation: { boundary: 'spotlight_observatory_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: spotlightTopologyEventPayload(), skipVerification: true,
+      replayPrior: replayWorldEvents(this.sqlite),
+    });
+  }
+  #bootstrapSpotlightDoorExtension(actor = 'world_migration') {
+    const head = this.eventHead();
+    return this._appendPhysicalEvent({
+      eventKind: 'topology.spotlight_door_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'spotlight_door', aggregateRevision: 1,
+      actor, causation: { boundary: 'spotlight_observatory_door_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: spotlightDoorTopologyEventPayload(), skipVerification: true,
       replayPrior: replayWorldEvents(this.sqlite),
     });
   }
@@ -688,6 +698,33 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       const next = reduceWorldEvent(prior, event); insertWorldEvent(this.sqlite, event); this.eventFailureInjector?.({ phase: 'after_event_append', event }); this._materializeProjection(next, prior); this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
       const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true });
       if (!verification.verified) throw Object.assign(new Error('Spotlight Observatory migration did not produce a verified projection.'), { code: 'world_spotlight_migration_verification_failed', verification });
+      this.sqlite.exec('COMMIT;'); this.topologyVersion = 'spotlight';
+      return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
+    } catch (error) { try { this.sqlite.exec('ROLLBACK;'); } catch {} throw error; }
+  }
+  inspectSpotlightDoorUpgrade() {
+    const current = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true, requireSpotlightDoor: true });
+    if (current.verified) return { status: 'current', upgradeRequired: false, verification: current };
+    const spotlightDoor = this.sqlite.prepare("SELECT sequence,event_hash FROM world_event_journal WHERE event_kind='topology.spotlight_door_installed/v1' ORDER BY sequence LIMIT 1").get();
+    if (spotlightDoor) return { status: 'corrupt_or_incomplete_spotlight_door', upgradeRequired: false, spotlightDoor, verification: current };
+    const spotlight = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true, requireSpotlightDoor: false });
+    if (!spotlight.verified) return { status: 'corrupt_spotlight', upgradeRequired: false, verification: spotlight };
+    return { status: 'upgrade_required', upgradeRequired: true, verification: spotlight, backupExpectation: 'Create and verify a byte-for-byte backup of the World database before applying the Spotlight door migration.' };
+  }
+  migrateSpotlightDoor({ backupConfirmed = false } = {}) {
+    if (backupConfirmed !== true) throw Object.assign(new Error('Spotlight door migration requires explicit confirmation that a recoverable World database backup exists.'), { code: 'world_spotlight_door_backup_required' });
+    const inspection = this.inspectSpotlightDoorUpgrade();
+    if (!inspection.upgradeRequired) {
+      if (inspection.status === 'current') return inspection;
+      throw Object.assign(new Error('Spotlight door migration refused because the Spotlight journal is corrupt or a partial door extension exists.'), { code: 'world_spotlight_door_migration_refused', inspection });
+    }
+    this.sqlite.exec('BEGIN IMMEDIATE;');
+    try {
+      const prior = replayWorldEvents(this.sqlite); const head = this.eventHead();
+      const event = createWorldEvent({ head, eventKind: 'topology.spotlight_door_installed/v1', aggregateKind: 'topology_extension', aggregateId: 'spotlight_door', aggregateRevision: 1, actor: 'world_migration', causation: { boundary: 'spotlight_observatory_door_v1', physicalHeadHash: head.event_hash, physicalHeadSequence: head.sequence }, payload: spotlightDoorTopologyEventPayload(), occurredAt: new Date(this.nowMs()).toISOString() });
+      const next = reduceWorldEvent(prior, event); insertWorldEvent(this.sqlite, event); this.eventFailureInjector?.({ phase: 'after_event_append', event }); this._materializeProjection(next, prior); this.eventFailureInjector?.({ phase: 'after_projection_apply', event });
+      const verification = verifyWorldSqlite(this.sqlite, { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true, requireSpotlightDoor: true });
+      if (!verification.verified) throw Object.assign(new Error('Spotlight door migration did not produce a verified projection.'), { code: 'world_spotlight_door_migration_verification_failed', verification });
       this.sqlite.exec('COMMIT;'); this.topologyVersion = 'spotlight';
       return { status: 'migrated', upgradeRequired: false, boundary: { sequence: event.sequence, eventHash: event.event_hash }, verification };
     } catch (error) { try { this.sqlite.exec('ROLLBACK;'); } catch {} throw error; }

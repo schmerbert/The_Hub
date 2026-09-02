@@ -15,7 +15,7 @@ test('verified World presence distinguishes known containment, routes, and withh
     assert.match(house, /Garden is the exterior junction beside the Hub\./);
     assert.match(house, /Verified Hub rooms: Center \(room\.center\), Spotlight Observatory \(room\.spotlight\), Workshop \(room\.workshop\)\./);
     assert.match(house, /Known route to the Workshop: House -> Garden -> Center -> Workshop\./);
-    assert.match(house, /Spotlight Observatory exists within the Hub, but no traversable route to it is installed\./);
+    assert.match(house, /Known route to the Spotlight Observatory: House -> Garden -> Center -> Spotlight Observatory\./);
 
     const nodes = world.sqlite.prepare("SELECT id,node_type AS nodeType FROM world_nodes WHERE lifecycle='standing' ORDER BY id").all();
     const edges = world.sqlite.prepare("SELECT edge_type AS edgeType,from_node_id AS fromNodeId,to_node_id AS toNodeId FROM world_edges ORDER BY id").all();
@@ -26,5 +26,6 @@ test('verified World presence distinguishes known containment, routes, and withh
     const center = spatialHorizon({ currentRoomId:'room.center', nodes, edges });
     assert.match(center, /You are within the Hub in the Center\./);
     assert.match(center, /Known route to the Workshop: Center -> Workshop\./);
+    assert.match(center, /Known route to the Spotlight Observatory: Center -> Spotlight Observatory\./);
   } finally { world.close(); await rm(dir, { recursive:true, force:true }); }
 });

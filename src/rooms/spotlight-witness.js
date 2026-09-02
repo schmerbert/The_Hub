@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { canonicalize, sha256 } from '../core/hash.js';
 import { SPOTLIGHT } from '../places/hub/spotlight/index.js';
 import { INSTALLED_WORLD_EDGES, INSTALLED_WORLD_NODES } from '../world/topology.js';
 import { B1_WORLD_EDGES, B1_WORLD_NODES } from '../world/topology-b1.js';
@@ -6,6 +7,10 @@ import { HEARTH_WORLD_EDGES, HEARTH_WORLD_NODES } from '../world/topology-hearth
 import { FOREST_WORLD_EDGES, FOREST_WORLD_NODES } from '../world/topology-forest.js';
 import { BINDER_WINDOW_WORLD_EDGES, BINDER_WINDOW_WORLD_NODES } from '../world/topology-binder-window.js';
 import { SPOTLIGHT_WORLD_EDGES, SPOTLIGHT_WORLD_NODES } from '../world/topology-spotlight.js';
+import { SPOTLIGHT_DOOR_WORLD_EDGES } from '../world/topology-spotlight-door.js';
+import { CEILING_WIRES, mountedToolNames } from '../world/ceiling.js';
+import { TOOL_APPROVAL_CLASS, SPOTLIGHT_TOOLS } from '../world/tools.js';
+import { WORLD_TOOL_HANDLER_NAMES } from '../world/gateway/dispatch.js';
 import { buildRoomInstallationWitness } from './installation-witness.js';
 
 const MANIFEST_URL = new URL('../places/hub/spotlight/room.json', import.meta.url);
@@ -19,8 +24,13 @@ export function spotlightInstallationWitness(overrides = {}) {
   ];
   const edges = [
     ...INSTALLED_WORLD_EDGES, ...B1_WORLD_EDGES, ...HEARTH_WORLD_EDGES,
-    ...FOREST_WORLD_EDGES, ...BINDER_WINDOW_WORLD_EDGES, ...SPOTLIGHT_WORLD_EDGES,
+    ...FOREST_WORLD_EDGES, ...BINDER_WINDOW_WORLD_EDGES, ...SPOTLIGHT_WORLD_EDGES, ...SPOTLIGHT_DOOR_WORLD_EDGES,
   ];
+  const ceiling = new Set(CEILING_WIRES.map(wire => wire.name));
+  const mounted = new Set(mountedToolNames('room.spotlight'));
+  const handlers = new Set(WORLD_TOOL_HANDLER_NAMES);
+  const schemas = new Map(SPOTLIGHT_TOOLS.map(schema => [schema.function.name, schema]));
+  const toolNames = MANIFEST.affordanceGroups.flatMap(group => group.tools);
   const facts = {
     manifest: MANIFEST,
     manifestBytes: MANIFEST_BYTES,
@@ -33,7 +43,14 @@ export function spotlightInstallationWitness(overrides = {}) {
       entranceId: 'door.spotlight',
     },
     fixtures: SPOTLIGHT.nodes.filter(([, type]) => type === 'fixture').map(([id]) => id),
-    tools: [],
+    tools: toolNames.map(name => ({
+      name,
+      ceiling: ceiling.has(name),
+      mounted: mounted.has(name),
+      schemaHash: schemas.has(name) ? sha256(canonicalize(schemas.get(name))) : null,
+      handler: handlers.has(name),
+      approvalClass: TOOL_APPROVAL_CLASS[name] || null,
+    })),
     sockets: MANIFEST.sockets.map(socket => ({
       id: socket.id, capability: socket.capability, owner: 'host', state: 'optional_unwired', implementation: null,
     })),

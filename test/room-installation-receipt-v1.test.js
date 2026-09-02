@@ -62,7 +62,7 @@ test('Hub startup opens the boundary once and exposes inherited Workshop ancestr
   assert.equal(inspection.installationReceipts[0].ancestry, 'inherited_pre_boundary');
   assert.equal(inspection.installationReceipts[1].roomId, 'room.spotlight');
   assert.equal(inspection.installationReceipts[1].ancestry, 'forward_installation');
-  assert.equal(inspection.installationReceipts[1].bindings.entrancePolicy, 'withheld');
+  assert.equal(inspection.installationReceipts[1].bindings.entrancePolicy, 'installed');
   await hub.close();
 });
 

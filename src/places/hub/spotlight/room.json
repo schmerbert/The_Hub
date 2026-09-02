@@ -1,26 +1,36 @@
 {
   "schemaVersion": 1,
   "apiVersion": "room-installation.v1",
-  "identity": { "id": "room.spotlight", "kind": "room", "version": "1.0.0" },
+  "identity": { "id": "room.spotlight", "kind": "room", "version": "1.2.0" },
   "status": { "classification": "standing", "autoInstall": false },
   "package": { "entrypoint": "index.js", "declarationExport": "SPOTLIGHT" },
   "placement": {
     "requestedParent": "place.hub",
     "hostOwnsDoor": true,
-    "entrancePolicy": "withheld"
+    "entrancePolicy": "installed"
   },
   "sockets": [
     { "id": "socket.observation_source", "capability": "source.spotlight_observations", "suppliedBy": "host", "optional": true },
     { "id": "socket.observation_custody", "capability": "custody.spotlight_observations", "suppliedBy": "host", "optional": true },
     { "id": "socket.packet_custody", "capability": "custody.spotlight_packets", "suppliedBy": "host", "optional": true },
-    { "id": "socket.replay_clock", "capability": "clock.spotlight_replay", "suppliedBy": "host", "optional": true }
+    { "id": "socket.replay_clock", "capability": "clock.spotlight_replay", "suppliedBy": "host", "optional": true },
+    { "id": "socket.strategy", "capability": "strategy.spotlight", "suppliedBy": "host", "optional": true },
+    { "id": "socket.trade_account", "capability": "account.spotlight_trade", "suppliedBy": "host", "optional": true },
+    { "id": "socket.trade_approval", "capability": "approval.spotlight_trade", "suppliedBy": "host", "optional": true },
+    { "id": "socket.trade_execution", "capability": "execution.spotlight_trade", "suppliedBy": "host", "optional": true },
+    { "id": "socket.ring_approval", "capability": "approval.spotlight_ring", "suppliedBy": "host", "optional": true },
+    { "id": "socket.ring_execution", "capability": "execution.spotlight_ring", "suppliedBy": "host", "optional": true }
   ],
   "affordanceGroups": [
-    { "id": "affordance.spotlight_landscape", "fixtureId": "fixture.spotlight_landscape", "effect": "observe", "approvalPolicy": "host_owned", "requires": [], "tools": [] },
-    { "id": "affordance.spotlight_telescope", "fixtureId": "fixture.spotlight_telescope", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.observation_source", "socket.observation_custody"], "tools": [] },
-    { "id": "affordance.spotlight_archive", "fixtureId": "fixture.spotlight_archive", "effect": "observe", "approvalPolicy": "host_owned", "requires": [], "tools": [] },
-    { "id": "affordance.spotlight_table", "fixtureId": "fixture.spotlight_table", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.packet_custody"], "tools": [] },
-    { "id": "affordance.spotlight_bell", "fixtureId": "fixture.spotlight_bell", "effect": "observe", "approvalPolicy": "host_owned", "requires": [], "tools": [] }
+    { "id": "affordance.spotlight_landscape", "fixtureId": "fixture.spotlight_landscape", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.observation_custody"], "tools": ["spotlight_observation_list", "spotlight_observation_read"] },
+    { "id": "affordance.spotlight_telescope", "fixtureId": "fixture.spotlight_telescope", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.observation_source", "socket.observation_custody"], "tools": ["spotlight_observe"] },
+    { "id": "affordance.spotlight_archive", "fixtureId": "fixture.spotlight_archive", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.replay_clock", "socket.observation_custody", "socket.packet_custody"], "tools": ["spotlight_replay"] },
+    { "id": "affordance.spotlight_table", "fixtureId": "fixture.spotlight_table", "effect": "observe", "approvalPolicy": "host_owned", "requires": ["socket.observation_custody", "socket.packet_custody"], "tools": ["spotlight_packet_build"] },
+    { "id": "affordance.spotlight_trade_proposal", "fixtureId": "fixture.spotlight_table", "effect": "govern", "approvalPolicy": "host_owned", "requires": ["socket.strategy", "socket.packet_custody"], "tools": ["spotlight_trade_propose"] },
+    { "id": "affordance.spotlight_trade_execution", "fixtureId": "fixture.spotlight_table", "effect": "execute", "approvalPolicy": "host_owned", "requires": ["socket.strategy", "socket.trade_account", "socket.trade_approval", "socket.trade_execution", "socket.packet_custody"], "tools": ["spotlight_trade_execute"] },
+    { "id": "affordance.spotlight_ring_proposal", "fixtureId": "fixture.spotlight_table", "effect": "govern", "approvalPolicy": "host_owned", "requires": ["socket.strategy", "socket.packet_custody"], "tools": ["spotlight_ring_propose"] },
+    { "id": "affordance.spotlight_ring_execution", "fixtureId": "fixture.spotlight_table", "effect": "execute", "approvalPolicy": "host_owned", "requires": ["socket.strategy", "socket.trade_account", "socket.ring_approval", "socket.ring_execution", "socket.packet_custody"], "tools": ["spotlight_ring_adjust"] },
+    { "id": "affordance.spotlight_bell", "fixtureId": "fixture.spotlight_bell", "effect": "observe", "approvalPolicy": "host_owned", "requires": [], "tools": ["spotlight_capability_status"] }
   ],
   "custody": [
     { "id": "custody.spotlight_observations", "installedBy": "host", "appliesTo": ["observe"], "optional": true },
