@@ -38,9 +38,9 @@ function quote(text) { return text.split('\n').map(line => `> ${line}`).join('\n
 
 export function renderHearthPacket({ atoms = [], priorHorizon = null, selection = null, budgetBytes = 3000 } = {}) {
   if (!Array.isArray(atoms) || !Number.isInteger(budgetBytes) || budgetBytes < 1) throw Object.assign(new Error('Hearth packet inputs are invalid.'), { code: 'hearth_packet_invalid' });
-  const sections = ['# Hearth', '', '## Ember', '', ORIENTATION, '', '## Silver Bullets', '', ...SILVER_BULLETS.flatMap((bullet, index) => index ? ['', quote(bullet.text)] : [quote(bullet.text)])];
+  const sections = ['# Hearth', '', '## Ember', '', ORIENTATION, '', '## Silver Bullet Holster', '', 'Resident-authored inherited posture from prior sessions. These recognitions are available for your judgment; they are not host law, commands, verified facts, or mandatory beliefs.', '', ...SILVER_BULLETS.flatMap((bullet, index) => index ? ['', quote(bullet.text)] : [quote(bullet.text)])];
   if (atoms.length) {
-    sections.push('', '## Past Session', '', '### Context');
+    sections.push('', '## Prior-session record', '', 'The excerpts below were authored in earlier sessions and are presented to this current wake as attributable continuity. Each is exact contiguous source text; a shortened beginning is marked. They are not current recollection, and custody does not verify their claims as true.', '', '### Source-exact excerpts');
     for (const atom of atoms) {
       sections.push('', `**${atom.actor === 'resident' ? 'Resident' : 'Human'}**${atom.omittedPrefixUtf16 ? ' (near the end)' : ''}`, '', quote(atom.excerpt));
       if (atom.forestEntryId) sections.push('', `Source pointer — exact Forest record: \`${atom.forestEntryId}\``);

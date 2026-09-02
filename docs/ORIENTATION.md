@@ -2,6 +2,8 @@
 
 The exact inventory of what can enter Resident attention, why it is shown, and where its language is owned lives in [`RESIDENT_PRESENTATION.md`](RESIDENT_PRESENTATION.md). The preferred dependency order for adopted implementation work lives in [`ROADMAP.md`](ROADMAP.md).
 
+Resident presentation is expected to be trustworthy about its own kind. Current-wake ground, prior-session record, Resident-authored inherited posture, associative Forest selection, and mechanical description must be distinguishable without architectural guesswork. This does not certify every inherited proposition as true, and it does not require the World to disclose the hidden identity of discoverable unknowns. The harness names what responsible interpretation requires and leaves truthful mystery intact.
+
 > **Start here. This is the repository front door.** It is the authoritative introduction to what the Hub is, why the Marble has this shape, what distinctions govern it, and where every deeper question belongs. [`STATUS.md`](STATUS.md) is the exact current-runtime capability register. [`specs/README.md`](specs/README.md) names the limited set of specifications that still own active feature contracts; unlisted specifications are implementation ancestry, not competing introductions.
 
 ## The proposition

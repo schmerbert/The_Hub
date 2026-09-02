@@ -2,6 +2,8 @@
 
 > **Status: Implemented, with the Silver Bullet holster and settled-reread revisions below.** This specification restores the Hearth as a literal fixture in `place.house` and makes its first-wake return the active carrier of Resident continuity. The installed cut includes the fixture, explicit World extension and migration, House initial-location law, deterministic packet, six Silver Bullets, revised Glass presentation, and lawful exact rereading through the standing House affordance. Bullet mutation tools and Backpack Threads remain deferred. [`../STATUS.md`](../STATUS.md) remains runtime authority.
 
+[`RESIDENT_PRESENTATION_CLARITY_V1.md`](RESIDENT_PRESENTATION_CLARITY_V1.md) revises the Holster and prior-session section headers. The bullets remain exact Resident-authored inherited posture available for judgment, not host law, commands, verified facts, mandatory belief, or proof of present recollection.
+
 ## 1. Purpose
 
 The current runtime preserves the two-breath Hearth call but lacks the literal Hearth whose fire once held the wake packet. Glass consequently carries some continuity as passive provider context even though the intended experience is active:

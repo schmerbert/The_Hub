@@ -36,8 +36,13 @@ test('Glass composer keeps invariant ground separate from direct continuity and 
   assert.deepEqual(result.cast.bandOrder, GLASS_BAND_ORDER);
   assert.equal(result.refs[0].message.content, STABLE_GLASS_TEXT);
   assert.equal(result.cast.bands[1].items[0].message.content, CLINICAL_WAKE_ANCHOR);
+  assert.match(CLINICAL_WAKE_ANCHOR, /Prior-session record follows/);
+  assert.match(CLINICAL_WAKE_ANCHOR, /not current recollection/);
+  assert.match(CLINICAL_WAKE_ANCHOR, /does not verify its claims as true/);
+  assert.match(result.cast.bands[1].items[1].message.content, /Prior-session Resident record — exact contiguous source excerpt/);
+  assert.match(result.cast.bands[1].items[1].message.content, /not current recollection or verified truth/);
   assert.equal(result.cast.bands[1].items[1].message.role, 'system');
-  assert.equal(result.cast.bands[1].items[1].message.content.endsWith(atom.excerpt), true);
+  assert.match(result.cast.bands[1].items[1].message.content, new RegExp(atom.excerpt));
   assert.equal(result.cast.bands[1].items[1].presentationTransform, 'attributable_exact_quote_v1');
   assert.equal(result.cast.bands[1].items[1].sourceEventId, atom.sourceEventId);
   assert.equal(result.cast.bands[3].state, 'deferred');

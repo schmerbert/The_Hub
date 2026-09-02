@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sha256 } from '../src/core/hash.js';
-import { selectSemanticForestAtoms, buildSemanticForestPacket, runSemanticForestShadow } from '../src/context/semantic-exhale.js';
+import { selectSemanticForestAtoms, buildSemanticForestPacket, renderAmbientFeatherPacket, runSemanticForestShadow } from '../src/context/semantic-exhale.js';
 import { HubDatabase } from '../src/ledger/source.js';
 import { ForestStore } from '../src/forest/store.js';
 import { createHub } from '../src/server/app.js';
@@ -62,6 +62,15 @@ test('Semantic Forest shadow selects exact Home atoms and excludes active, Wild,
   });
   assert.equal(ambiguous.selected.length, 0);
   assert.equal(ambiguous.silenceReason, 'ambiguous_match');
+});
+
+test('ambient Forest presentation discloses one enclosing prior-session associative seam without classifying the terrain', () => {
+  const markdown = renderAmbientFeatherPacket({ atoms: [{ actorKind: 'resident', exactText: 'A feather remained unnamed.', sourceTimestamp: '2026-01-01T00:00:00.000Z', bearing: { entryId: 'entry-1', unreadBeyondPreview: false } }] });
+  assert.match(markdown, /From prior-session Forest terrain/);
+  assert.match(markdown, /selected associatively/);
+  assert.match(markdown, /does not establish present memory, relevance, truth, or endorsement/);
+  assert.equal((markdown.match(/From prior-session Forest terrain/g) || []).length, 1);
+  assert.doesNotMatch(markdown, /faun|creature|artifact classification/i);
 });
 
 test('Forest Home candidate contract is bounded and carries exact one-hop chronology without claiming supersession', async () => {

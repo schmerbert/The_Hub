@@ -340,6 +340,8 @@ export function renderAmbientFeatherPacket(packet) {
   if (!packet?.atoms?.length) return null;
   return [
     packet.transientLanding ? '# Passing birds in this clearing' : '# A breath from the Forest',
+    '',
+    'From prior-session Forest terrain; selected associatively for possible bearing in this human turn. Selection does not establish present memory, relevance, truth, or endorsement. The quoted glints remain exact attributable excerpts.',
     ...(packet.transientLanding ? ['', 'These distant bearings were selected for this human turn. They may change or depart on the next turn. They are not predictions, fixed signs, or local paths; choosing one with walk_toward makes the path.'] : []),
     ...packet.atoms.flatMap(atom => [
       '',

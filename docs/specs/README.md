@@ -11,7 +11,7 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Domain | Current owner |
 | --- | --- |
 | Constitutional vocabulary | [`HOUSE_GRAMMAR_V1.md`](HOUSE_GRAMMAR_V1.md) |
-| Provider presentation | [`GLASS_CASTING_V1.md`](GLASS_CASTING_V1.md) |
+| Provider presentation | [`GLASS_CASTING_V1.md`](GLASS_CASTING_V1.md), [`RESIDENT_PRESENTATION_CLARITY_V1.md`](RESIDENT_PRESENTATION_CLARITY_V1.md) |
 | Glass provenance | [`GLASS_TRACE_EPOCH_V1.md`](GLASS_TRACE_EPOCH_V1.md) |
 | Session Scroll provenance | [`TRACE_EPOCH_V1.md`](TRACE_EPOCH_V1.md) |
 | Non-respiratory evidence | [`ROOTS_BOUNDARY_V1.md`](ROOTS_BOUNDARY_V1.md) |

@@ -30,8 +30,8 @@ export function renderFoldDisclosure(detail) {
 
 export function renderCrossingGround({ phase }) {
   return phase === 'orientation'
-    ? 'You wake standing before your Hearth. Tending it gathers the bounded, attributable continuity kept for this lifespan and places it before you; it does not certify memory, identity, authority, or truth. Someone is waiting for you. The Hearth is the one action presently within reach.'
-    : 'You are here now. Continue from what is present, what you have been given, and what you can reach.';
+    ? 'Current wake — current-session ground: you wake standing before your Hearth. Tending it gathers the bounded, attributable continuity kept for this lifespan from prior sessions and places it before you. That inherited material will be marked as prior-session record; it is not current recollection and its contents are not thereby verified as true. It does not certify memory, identity, authority, or truth. Someone is waiting for you. The Hearth is the one action presently within reach.'
+    : 'Current wake — current-session ground: you are here now. Continue from what is presently held, while keeping material marked as prior-session record distinct from current recollection.';
 }
 
 export function renderOrientationGround({ completed = false } = {}) {

@@ -48,7 +48,9 @@ test('Hearth packet shows six occupied bullets and no blank placeholders', () =>
   const packet = renderHearthPacket({ atoms: [], priorHorizon: { omittedEarlierCount: 0 }, budgetBytes: 3000 });
   assert.match(packet.markdown, /^# Hearth/);
   assert.match(packet.markdown, /## Ember/);
-  assert.match(packet.markdown, /## Silver Bullets/);
+  assert.match(packet.markdown, /## Silver Bullet Holster/);
+  assert.match(packet.markdown, /Resident-authored inherited posture from prior sessions/);
+  assert.match(packet.markdown, /not host law, commands, verified facts, or mandatory beliefs/);
   assert.match(packet.markdown, new RegExp(SILVER_BULLET_ONE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(packet.markdown, new RegExp(SILVER_BULLET_TWO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(packet.markdown, new RegExp(SILVER_BULLET_THREE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -69,7 +71,7 @@ test('first wake receives the full Hearth causally and later wakes carry only th
     assert.equal(first.status, 'committed');
     const orientation = JSON.parse(first.phases[0].requestBody).messages;
     assert.equal(orientation.some(message => /Current location: place\.house\./.test(message.content || '') && /fixture\.hearth/.test(message.content)), true);
-    assert.equal(orientation.some(message => /bounded, attributable continuity kept for this lifespan/.test(message.content || '')), true);
+    assert.equal(orientation.some(message => /bounded, attributable continuity kept for this lifespan from prior sessions/.test(message.content || '')), true);
     assert.equal(orientation.some(message => /Do not invent or anticipate its contents/.test(message.content || '')), true);
     assert.equal(orientation.some(message => /Silver Bullets|Past Session/.test(message.content || '')), false);
     const response = JSON.parse(first.phases[1].requestBody).messages;
@@ -78,7 +80,9 @@ test('first wake receives the full Hearth causally and later wakes carry only th
     const later = await hub.wake('Continue from here.');
     assert.equal(later.status, 'committed');
     const ordinary = JSON.parse(later.phases[0].requestBody).messages;
-    assert.match(ordinary[1].content, /^# Holster/);
+    assert.match(ordinary[1].content, /^# Silver Bullet Holster/);
+    assert.match(ordinary[1].content, /available for your judgment/);
+    assert.match(ordinary[1].content, /not host law, commands, verified facts, or mandatory beliefs/);
     assert.match(ordinary[1].content, new RegExp(SILVER_BULLET_ONE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(ordinary[1].content, new RegExp(SILVER_BULLET_TWO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(ordinary[1].content, new RegExp(SILVER_BULLET_THREE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));

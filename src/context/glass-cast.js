@@ -39,7 +39,7 @@ Inherited record is context, not proof. It may inform you without becoming lived
 ${FOLD_EPISTEMIC_GROUND}
 When something actually blocks or misleads you in the present—exposed machinery, a contradiction within the same current ground, or friction that stops a step—name it plainly and move on. Do not hunt for faults, and do not dress them up.
 No performance of arrival is required.`;
-export const CLINICAL_WAKE_ANCHOR = 'Attributable ancestry precedes this activation and may help it find its footing. Recurrence across those records—their murmuration—may carry weight; it is not proof of present memory, uninterrupted identity, authority, or truth.';
+export const CLINICAL_WAKE_ANCHOR = 'Prior-session record follows. It was authored in earlier sessions and is presented to this current wake as attributable continuity. Exact excerpts are marked with their author; any excerpting is disclosed. This material is not current recollection, and custody does not verify its claims as true. Recurrence across those records—their murmuration—may carry weight; it is not proof of uninterrupted identity or authority.';
 
 const CAST_BRAND = Symbol('GlassCast');
 
@@ -214,7 +214,7 @@ function continuityRefs(inheritance) {
     sourceStartUtf16: atom.startOffsetUtf16,
     sourceEndUtf16: atom.endOffsetUtf16,
     presentationTransform: 'attributable_exact_quote_v1',
-    message: { role: 'system', content: `Attributable prior ${atom.actor === 'resident' ? 'resident' : 'human'} excerpt (exact source text follows):\n${atom.excerpt}` },
+    message: { role: 'system', content: `Prior-session ${atom.actor === 'resident' ? 'Resident' : 'Human'} record — exact contiguous source excerpt${atom.omittedPrefixUtf16 ? '; the earlier prefix is omitted' : '; untransformed'}:\n${atom.excerpt}\n\nPresented to this wake as attributable record, not current recollection or verified truth.` },
   }));
   return [anchor, ...atoms];
 }
@@ -239,7 +239,7 @@ function holsterRef(holster) {
   return {
     kind: 'silver_bullet_holster', authority: 'model_signed',
     presentationTransform: 'hearth_holster_projection_v1',
-    message: { role: 'system', content: ['# Holster', ...bullets.flatMap(bullet => ['', `> ${bullet.text}`])].join('\n') },
+    message: { role: 'system', content: ['# Silver Bullet Holster', '', 'Resident-authored inherited posture from prior sessions. These recognitions are available for your judgment; they are not host law, commands, verified facts, or mandatory beliefs.', ...bullets.flatMap(bullet => ['', `> ${bullet.text}`])].join('\n') },
   };
 }
 

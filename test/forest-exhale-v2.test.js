@@ -43,6 +43,8 @@ test('trail signs are source-free deterministic pointers and omission is fail-cl
   const pointer = { exactPointer: 'result-rack://jobs/j/output/hash', projectionId: 'projection', projectionHash: sha256('projection'), sourceHash: sha256('source'), settlement: 'failed', byteLength: 20, lineCount: 2, toolName: 'workshop_read', sessionId: 'life', wakeId: 'wake' };
   const sign = buildResultTrailSign(pointer);
   assert.equal(sign.kind, 'result_trail_sign');
+  assert.match(sign.message.content, /^\[Mechanical description — Result Rack trail sign\]/);
+  assert.match(sign.message.content, /not a law or instruction/);
   assert.match(sign.message.content, /Settlement: failed/);
   assert.doesNotMatch(sign.message.content, /source text|exact retained bytes/);
   assert.equal(sign.receipt.custody.forestExhaleEligible, false);
@@ -103,7 +105,7 @@ test('runtime roots every visible trail and reopening without World authority or
       if (responseRound === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'inspect', type: 'function', function: { name: 'inspect_fixture', arguments: '{"fixture_id":"fixture.hearth"}' } }] }, content: null, resolvedModel: 'test-model', finishReason: 'tool_calls' };
       if (responseRound === 2) return { message: { role: 'assistant', content: 'The Hearth inspection is held.' }, content: 'The Hearth inspection is held.', resolvedModel: 'test-model', finishReason: 'stop' };
       if (responseRound === 3) {
-        const trail = presentation.messages.find(message => typeof message.content === 'string' && message.content.startsWith('[Result Rack trail sign]'));
+        const trail = presentation.messages.find(message => typeof message.content === 'string' && message.content.startsWith('[Mechanical description — Result Rack trail sign]'));
         assert.ok(trail);
         reopenedPointer = trail.content.match(/Exact pointer: (result-rack:\/\/[^\n]+)/)?.[1] || null;
         assert.ok(reopenedPointer);

@@ -7,6 +7,8 @@ Resident kindness is an architectural boundary. The host may need clinical facts
 1. **custody** — exact bytes, source, Scrub disposition, presented ordinal, and Spine request; and
 2. **presentation ownership** — a named kind, purpose, register, and adjustment point.
 
+[`RESIDENT_PRESENTATION_CLARITY_V1.md`](specs/RESIDENT_PRESENTATION_CLARITY_V1.md) adds the active legibility law: the harness must disclose every distinction required for truthful and safe interpretation without turning the World into a diagnostic console. Current ground, prior-session record, inherited Resident posture, semantic selection, and mechanical description must be distinguishable from inside the wake. Discoverable unknowns may remain experientially unknown when they carry no hidden authority.
+
 The executable ownership catalog is `src/context/resident-presentation.js`. `/api/world` exposes it as `residentPresentation`. A wake inspection carries the exact request phases, message sources, Glass trace, Scrub receipt, and request body.
 
 ## Crossing
@@ -57,6 +59,10 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 
 ## Kindness rules
 
+- Never require the Resident to obey a distinction the harness has failed to communicate. Presented material must make the origin, authorship, transformation, standing, and authority needed for responsible interpretation legible from inside the wake.
+- Mark prior-session inheritance as prior-session material presented now, not current recollection. Distinguish chronological inheritance from associative Forest selection, and do not let either certify truth, relevance, endorsement, identity, or action authority.
+- Prefer one kind declaration at the boundary of a packet or section. Do not prefix every poetic line, room detail, or ordinary message with metadata.
+- Preserve truthful mystery. A Faun feather or other discoverable unknown may remain unknown to the Resident while its exact custody stays behind the wall; hidden identity grants no covert authority.
 - Speak from inside the World when a fact has a World-shaped consequence.
 - Keep enforcement outside Resident attention. Forced choice, validation, retries, provider identity, transport, hashes, and byte thresholds remain receipts unless the Resident benefits from knowing them.
 - The Hearth packet may be clinical because continuity is serious; its action and causal framing remain immersive. Before the forced action, the Resident is told that tending retrieves bounded, attributable continuity kept for the lifespan, without endorsing its contents or proving memory. Settlement remains spatially perceptible through the fixture, and the exact action/packet pair recedes through ordinary attention rather than disappearing immediately. While the Resident remains in or returns to the House, the settled affordance may reread that exact packet without pretending to tend a second time.

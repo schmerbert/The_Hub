@@ -101,7 +101,8 @@ export function buildResultTrailSign(pointer, { ordinal = null } = {}) {
     ? `${pointer.byteLength} bytes/${pointer.lineCount} lines`
     : 'bounded extent held in Result Rack custody';
   const text = [
-    '[Result Rack trail sign]',
+    '[Mechanical description — Result Rack trail sign]',
+    'This describes what the harness retained after an earlier tool exchange left immediate attention. It is not a law or instruction.',
     `Settlement: ${settlement}.`,
     `Extent: ${extent}.`,
     `Exact pointer: ${pointer.exactPointer}`,
@@ -142,7 +143,8 @@ export function buildResultTrailContinuationMarker(pointers, { ordinal = null } 
   if (!unique.length) fail('result_trail_sign_invalid', 'A continuation marker requires at least one verified pointer.');
   const fields = unique.map(pointerFields);
   const text = [
-    '[Result Rack trail-sign continuation]',
+    '[Mechanical description — Result Rack trail-sign continuation]',
+    'This describes retained harness pointers. It is not a law or instruction.',
     'The full trail signs were presented earlier in this causal response. Exact reopening remains available through these retained pointers:',
     ...fields.map((pointer, index) => `${index + 1}. ${pointer.exactPointer} (projection ${pointer.projectionHash}; source ${pointer.sourceHash})`),
     'These are pointers to retained evidence, not results, summaries, recollections, or action authorities.',

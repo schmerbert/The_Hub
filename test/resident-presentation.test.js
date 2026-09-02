@@ -23,6 +23,10 @@ test('Hearth presentation is situated while enforcement stays out of Resident gr
   const presented = [STABLE_GLASS_TEXT, buildClinicalBootstrap({ provider: 'example', model: 'example' }), renderCrossingGround({ phase: 'orientation' }), renderOrientationGround(), renderOrientationGround({ completed: true }), renderToolAttentionGround({ activeGroup: 'fixtures' })].join('\n');
   assert.match(presented, /Hearth/);
   assert.match(renderCrossingGround({ phase: 'orientation' }), /one action presently within reach/);
+  assert.match(renderCrossingGround({ phase: 'orientation' }), /Current wake — current-session ground/);
+  assert.match(renderCrossingGround({ phase: 'orientation' }), /prior-session record/);
+  assert.match(renderCrossingGround({ phase: 'orientation' }), /not current recollection/);
+  assert.match(renderCrossingGround({ phase: 'ordinary' }), /current-session ground/);
   assert.match(renderOrientationGround({ completed: true }), /during first breath.*remains in the House as a settled affordance you may reread/);
   assert.doesNotMatch(presented, /forced|native function|empty arguments|provider|requested model|byte|schema/i);
   assert.match(STABLE_GLASS_V1_TEXT, /native tend_hearth function/);

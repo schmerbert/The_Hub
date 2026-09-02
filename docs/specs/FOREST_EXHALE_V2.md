@@ -2,6 +2,8 @@
 
 > **Status: Recoverable Result Exhale and ambient vector-feather shadow selection implemented; live semantic Forest Exhale uninstalled.** This specification revises the deferred Forest Exhale direction retained by [`HEARTH_NOTES_FOREST_EXHALE_V1.md`](HEARTH_NOTES_FOREST_EXHALE_V1.md) so it fits current Glass, Result Rack, Session Scroll trace, and Roots law. Verified Result Rack trail signs, the universal `reopen_result` crossing, non-respirable Roots exposure custody, and the Home-only semantic shadow checkpoint are installed. No semantic Forest feather enters Glass or provider attention until downwind behavior is reviewed and live breathing is explicitly enabled.
 
+[`RESIDENT_PRESENTATION_CLARITY_V1.md`](RESIDENT_PRESENTATION_CLARITY_V1.md) revises the visible register of the implemented live packet and Result trail sign. One enclosing seam identifies semantic arrivals as associatively selected prior-session terrain without asserting relevance, truth, memory, endorsement, or hidden identity; Result trail signs identify themselves as mechanical descriptions rather than law.
+
 ## 1. Pressure and classification
 
 Change classification: **revising and extending**.
