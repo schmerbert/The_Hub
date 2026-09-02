@@ -28,6 +28,7 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Workshop bounded discovery and wake landing | [`WORKSHOP_USABILITY_V2.md`](WORKSHOP_USABILITY_V2.md) |
 | Resident–Builder correspondence | [`BUILDER_CHANNEL_V1.md`](BUILDER_CHANNEL_V1.md) |
 | Provider streaming | [`WAKE_STREAM_V1.md`](WAKE_STREAM_V1.md) |
+| Corner place-first renderer | [`CORNER_PLACE_FIRST_V1.md`](CORNER_PLACE_FIRST_V1.md), [`CORNER_DESKTOP_V1.md`](CORNER_DESKTOP_V1.md) |
 | Forest/Spine intake | [`SPINE_FOREST_INGESTION.md`](SPINE_FOREST_INGESTION.md) |
 | Resident Journal planting | [`FOREST_JOURNAL_V1.md`](FOREST_JOURNAL_V1.md) |
 | Security direction | [`SECURITY_PRIVACY_CUSTODY_V1.md`](SECURITY_PRIVACY_CUSTODY_V1.md) |

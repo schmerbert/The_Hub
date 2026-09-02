@@ -40,6 +40,9 @@ const statusEl = document.querySelector('#status');
 const modeModel = document.querySelector('#mode-model');
 const roomState = document.querySelector('#room-state');
 const stationState = document.querySelector('#station-state');
+const placeName = document.querySelector('#place-name');
+const placeBearing = document.querySelector('#place-bearing');
+const reachList = document.querySelector('#reach-list');
 const approvalState = document.querySelector('#approval-state');
 const inspectWorldButton = document.querySelector('#inspect-world');
 const inspectApprovalsButton = document.querySelector('#inspect-approvals');
@@ -67,6 +70,8 @@ let currentWorld = null;
 let currentWorldTab = 'marble';
 let currentMarbleSelection = 'overview';
 let currentMarbleRoomId = null;
+let placeWorld = null;
+let placeWorldSignature = null;
 const wakeSlips = new Map();
 let slipPoll = null;
 let slipPollBusy = false;
@@ -86,6 +91,64 @@ function node(tag, className, content) {
   if (className) element.className = className;
   if (content !== undefined) element.textContent = content;
   return element;
+}
+
+function readableText(content) {
+  const body = node('div', 'event-body');
+  let fenced = false;
+  for (const line of String(content ?? '').split('\n')) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('```')) fenced = !fenced;
+    let kind = 'rich-line';
+    if (fenced || trimmed.startsWith('```')) kind += ' rich-code';
+    else if (/^#{1,3}\s/.test(trimmed)) kind += ' rich-heading';
+    else if (/^>\s?/.test(trimmed)) kind += ' rich-quote';
+    else if (/^(?:[-*]|\d+\.)\s/.test(trimmed)) kind += ' rich-list';
+    else if (!trimmed) kind += ' rich-blank';
+    body.append(node('div', kind, line || '\u00a0'));
+  }
+  return body;
+}
+
+function appendEventText(event, label, content) {
+  event.append(node('span', 'event-label', label), readableText(content));
+}
+
+function placeKey(roomId) {
+  const segment = String(roomId || 'center').split('.').at(-1).toLowerCase();
+  return ['house', 'garden', 'forest', 'workshop', 'spotlight'].includes(segment) ? segment : 'center';
+}
+
+function displayName(id) {
+  return String(id || 'Center').split('.').at(-1).replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function renderPlace(world, health) {
+  const projection = world?.projection;
+  const roomId = projection?.roomId || health.currentRoom?.roomId || 'room.center';
+  const name = displayName(roomId);
+  app.dataset.place = placeKey(roomId);
+  placeName.textContent = name;
+  placeBearing.textContent = projection?.text || health.currentRoom?.text || `Present in ${name}.`;
+  reachList.replaceChildren();
+  const fixtures = Array.isArray(projection?.fixtures) ? projection.fixtures : [];
+  const tools = Array.isArray(world?.tools) ? world.tools : [];
+  const exits = Array.isArray(projection?.exits) ? projection.exits : [];
+  const items = [];
+  for (const fixture of fixtures.slice(0, 3)) items.push({ kind: fixture.id === projection?.engagedFixtureId ? 'Engaged' : 'Fixture', name: displayName(fixture.id), detail: fixture.text });
+  for (const tool of tools.slice(0, Math.max(0, 5 - items.length))) items.push({ kind: 'Available hand', name: displayName(tool.function?.name) });
+  if (!items.length && exits.length) for (const exit of exits.slice(0, 3)) items.push({ kind: 'Passage', name: displayName(exit.to), detail: displayName(exit.doorId) });
+  if (!items.length) {
+    const empty = node('p', 'reach-empty', 'Nothing is presently mounted here.');
+    reachList.append(empty);
+    return;
+  }
+  for (const item of items) {
+    const card = node('div', 'reach-item');
+    card.append(node('span', 'reach-kind', item.kind), node('span', 'reach-name', item.name));
+    if (item.detail) card.append(node('p', 'reach-detail', item.detail));
+    reachList.append(card);
+  }
 }
 
 function setState(state) {
@@ -172,7 +235,7 @@ function renderSlips(parent, slips) {
       parent.append(detail);
     } else if (slip.kind === 'speech') {
       const event = node('div', 'event resident intermediate-resident');
-      event.append(node('span', 'event-label', slip.label), node('span', null, slip.detail));
+      appendEventText(event, slip.label, slip.detail);
       parent.append(event);
     } else if (slip.kind === 'pending' && slip.decidable && slip.approvalId) {
       const row = node('div', 'slip pending slip-pending');
@@ -245,7 +308,7 @@ function renderLiveTimeline(projection) {
     }
     if (segment.kind === 'speech' && segment.text) {
       const event = node('div', 'event resident provisional-resident intermediate-resident');
-      event.append(node('span', 'event-label', 'Resident · en route'), node('span', null, segment.text));
+      appendEventText(event, 'Resident · en route', segment.text);
       elements.push(event);
     }
     if (segment.kind === 'tool') {
@@ -260,7 +323,7 @@ function renderLiveTimeline(projection) {
   }
   if (projection.draft && !projection.timeline.some(segment => segment.kind === 'speech')) {
     const event = node('div', 'event resident provisional-resident');
-    event.append(node('span', 'event-label', 'Resident · provisional'), node('span', null, projection.draft));
+    appendEventText(event, 'Resident · provisional', projection.draft);
     elements.push(event);
   }
   liveGap.replaceChildren(...elements);
@@ -272,7 +335,7 @@ function renderLive({ scrollSnapshot = null, forceTail = false } = {}) {
   const conversation = [];
   if (projection.optimisticUser) {
     const event = node('div', 'event user optimistic-user');
-    event.append(node('span', 'event-label', 'You · sending'), node('span', null, projection.optimisticUser.content));
+    appendEventText(event, 'You · sending', projection.optimisticUser.content);
     conversation.push(event);
   }
   if (conversation.length) {
@@ -338,7 +401,7 @@ function renderThread(data) {
     const utterances = group.events.filter(item => item.eventKind === 'utterance' && (item.actorKind === 'user' || item.actorKind === 'resident'));
     for (const event of utterances.filter(item => item.actorKind === 'user')) {
       const eventElement = node('div', `event ${event.actorKind}`);
-      eventElement.append(node('span', 'event-label', eventLabel(event)), node('span', null, event.content));
+      appendEventText(eventElement, eventLabel(event), event.content);
       wakeElement.append(eventElement);
     }
     const steps = wakeSlips.get(group.wake.id);
@@ -349,7 +412,7 @@ function renderThread(data) {
     }
     for (const event of utterances.filter(item => item.actorKind === 'resident')) {
       const eventElement = node('div', `event ${event.actorKind}`);
-      eventElement.append(node('span', 'event-label', eventLabel(event)), node('span', null, event.content));
+      appendEventText(eventElement, eventLabel(event), event.content);
       wakeElement.append(eventElement);
     }
     const actionRow = node('div', 'wake-actions');
@@ -619,6 +682,14 @@ async function refresh() {
   roomState.textContent = health.currentRoom?.roomId || 'unknown room';
   stationState.textContent = health.engagedFixtureId || health.engagedStationId ? `Engaged · ${health.engagedFixtureId || health.engagedStationId}` : 'No fixture';
   if (health.heartbeat?.line) stationState.textContent += ` · ${health.heartbeat.line}`;
+  const nextPlaceWorldSignature = `${health.currentRoom?.roomId || 'unknown'}|${health.engagedFixtureId || health.engagedStationId || ''}`;
+  if (!placeWorld || placeWorldSignature !== nextPlaceWorldSignature) {
+    try {
+      placeWorld = await getWorld();
+      placeWorldSignature = nextPlaceWorldSignature;
+    } catch {}
+  }
+  renderPlace(placeWorld, health);
   const pending = health.pendingApprovals || 0;
   if (pending > 0) {
     approvalState.hidden = false;

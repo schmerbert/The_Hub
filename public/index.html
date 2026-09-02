@@ -25,12 +25,12 @@
               <span id="identity-name" class="name">Resident</span>
               <span id="mode-model" class="mode-model">Checking mode…</span>
               <span id="status" class="status" role="status" aria-live="polite">idle</span>
-              <span id="room-state" class="mode-model">Center</span>
-              <span id="station-state" class="mode-model">No station</span>
+              <span id="room-state" class="sr-only">Center</span>
+              <span id="station-state" class="sr-only">No station</span>
               <span id="approval-state" class="mode-model" hidden></span>
             </div>
           </div>
-          <div class="title-actions"><button id="inspect-world" type="button" class="ghost">Inspect world</button><button id="inspect-approvals" type="button" class="ghost approvals-button">Approvals<span id="approvals-badge" class="approvals-badge" hidden></span></button><button id="btn-compact" type="button" class="ghost" aria-label="Collapse Corner workbench">Collapse</button></div>
+          <div class="title-actions"><button id="inspect-world" type="button" class="ghost">Behind the wall</button><button id="inspect-approvals" type="button" class="ghost approvals-button">Approvals<span id="approvals-badge" class="approvals-badge" hidden></span></button><button id="btn-compact" type="button" class="ghost" aria-label="Collapse Corner workbench">Collapse</button></div>
         </header>
 
         <div class="workspace">
@@ -44,11 +44,23 @@
           </aside>
 
           <section class="rail" aria-labelledby="conversation-heading">
+            <div class="place-heading">
+              <div><span class="place-kicker">You are here</span><h1 id="place-name">Center</h1><p id="place-bearing">The quiet junction of the Hub.</p></div>
+              <span id="place-pulse" class="place-pulse" aria-hidden="true"></span>
+            </div>
             <div class="rail-heading"><h2 id="conversation-heading">Conversation</h2><span id="thread-note">This lifespan</span></div>
-            <div id="log" class="log" aria-live="polite"></div>
-            <div id="live-conversation" class="live-conversation" aria-live="polite"></div>
-            <div id="live-gap" class="gap live-gap" aria-live="polite"></div>
-            <div id="gap" class="gap" aria-live="polite"></div>
+            <div class="rail-body">
+              <div class="conversation-column">
+                <div id="log" class="log" aria-live="polite"></div>
+                <div id="live-conversation" class="live-conversation" aria-live="polite"></div>
+                <div id="live-gap" class="gap live-gap" aria-live="polite"></div>
+                <div id="gap" class="gap" aria-live="polite"></div>
+              </div>
+              <aside class="within-reach" aria-labelledby="reach-heading">
+                <div class="reach-heading"><span class="place-kicker">This place</span><h2 id="reach-heading">Within reach</h2></div>
+                <div id="reach-list" class="reach-list"><p class="reach-empty">Listening for the room…</p></div>
+              </aside>
+            </div>
             <form id="compose" class="compose">
               <label class="sr-only" for="input">Message</label>
               <textarea id="input" rows="2" maxlength="4000" placeholder="Write to Resident…" autocomplete="off" spellcheck="true"></textarea>
