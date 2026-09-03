@@ -30,7 +30,7 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid var(--amber); 
 .chip:hover { transform: translateY(-1px) scale(1.02); }
 .chip canvas { display: block; width: 100%; height: 100%; }
 .chip-ring { position: absolute; inset: 7px; border: 1px solid rgba(212, 164, 90, .28); border-radius: 18px; pointer-events: none; }
-.bench { position: relative; isolation: isolate; width: min(100% - 1.5rem, 1040px); min-height: min(740px, calc(100vh - 1.5rem)); margin: .75rem auto; display: grid; grid-template-rows: auto 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: radial-gradient(90% 75% at 92% 2%, var(--place-glow), transparent 52%), radial-gradient(75% 55% at 5% 100%, var(--place-warmth), transparent 55%), linear-gradient(165deg, #15201b, var(--ink) 58%, #0a0f0d); box-shadow: var(--shadow); transition: background-color .5s ease; }
+.bench { position: relative; isolation: isolate; width: min(100% - 1.5rem, 1040px); height: min(740px, calc(100vh - 1.5rem)); min-height: 0; margin: .75rem auto; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: radial-gradient(90% 75% at 92% 2%, var(--place-glow), transparent 52%), radial-gradient(75% 55% at 5% 100%, var(--place-warmth), transparent 55%), linear-gradient(165deg, #15201b, var(--ink) 58%, #0a0f0d); box-shadow: var(--shadow); transition: background-color .5s ease; }
 .bench::before { content: ""; position: absolute; z-index: -1; inset: 0; opacity: .28; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,.016) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px); background-size: 46px 46px; mask-image: linear-gradient(to bottom, black, transparent 78%); }
 #app[data-place="house"] { --place-glow: rgba(212, 164, 90, .15); --place-warmth: rgba(160, 92, 48, .11); }
 #app[data-place="garden"] { --place-glow: rgba(117, 165, 116, .16); --place-warmth: rgba(203, 176, 103, .07); }
@@ -97,15 +97,15 @@ h2 { margin: 0; font-size: .86rem; font-weight: 600; letter-spacing: .02em; }
 .wire-path { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font: .65rem/1.5 var(--mono); }
 .wire-hash { overflow-wrap: anywhere; color: rgba(126, 184, 160, .7); font: .58rem/1.4 var(--mono); }
 .omitted { color: var(--amber); }
-.rail { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
+.rail { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; overflow: hidden; }
 .place-heading { display: flex; align-items: center; justify-content: space-between; min-height: 6.7rem; padding: 1.05rem 1.25rem .8rem; border-bottom: 1px solid rgba(214, 196, 150, .1); }
 .place-kicker { display: block; margin-bottom: .25rem; color: var(--amber); font: .61rem var(--mono); letter-spacing: .14em; text-transform: uppercase; }
 .place-heading h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.65rem, 4vw, 2.35rem); font-weight: 400; line-height: 1; letter-spacing: -.02em; }
 .place-heading p { margin: .45rem 0 0; max-width: 34rem; color: var(--muted); font-size: .77rem; line-height: 1.45; }
 .place-pulse { width: 3.25rem; height: 3.25rem; flex: 0 0 auto; border: 1px solid rgba(126, 184, 160, .28); border-radius: 50%; background: radial-gradient(circle, var(--place-glow), transparent 66%); box-shadow: inset 0 0 24px var(--place-glow), 0 0 26px var(--place-glow); }
 .rail-heading { padding: .85rem 1rem .55rem; }
-.rail-body { display: grid; grid-template-columns: minmax(0, 1fr) 12.5rem; min-width: 0; min-height: 0; }
-.conversation-column { min-width: 0; min-height: 0; overflow-y: auto; scrollbar-color: rgba(212, 164, 90, .55) transparent; }
+.rail-body { display: grid; grid-template-columns: minmax(0, 1fr) 12.5rem; min-width: 0; min-height: 0; overflow: hidden; }
+.conversation-column { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: scroll; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-color: rgba(212, 164, 90, .55) transparent; }
 .log { min-height: 220px; padding: .35rem 1rem .8rem; display: flex; flex-direction: column; gap: .95rem; }
 .within-reach { min-width: 0; overflow-y: auto; padding: .75rem .8rem; border-left: 1px solid rgba(214, 196, 150, .12); background: rgba(4, 9, 7, .19); }
 .reach-heading { padding: .15rem .15rem .6rem; }
@@ -184,7 +184,7 @@ h2 { margin: 0; font-size: .86rem; font-weight: 600; letter-spacing: .02em; }
 @media (max-width: 700px) {
   .chip { display: none; }
   #btn-compact { display: none; }
-  .bench { width: 100%; min-height: 100vh; margin: 0; border: 0; border-radius: 0; }
+  .bench { width: 100%; height: 100vh; min-height: 0; margin: 0; border: 0; border-radius: 0; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, auto) minmax(0, 1fr); }
   #app[data-surface="marble"] .workspace { grid-template-columns: 1fr; }
   .tray { max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--line); }
@@ -192,7 +192,7 @@ h2 { margin: 0; font-size: .86rem; font-weight: 600; letter-spacing: .02em; }
   .log { min-height: 240px; }
   .place-heading { min-height: 5.7rem; padding: .8rem 1rem .65rem; }
   .place-pulse { width: 2.5rem; height: 2.5rem; }
-  .rail-body { grid-template-columns: 1fr; }
+  .rail-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
   .within-reach { max-height: 7.5rem; border-left: 0; border-top: 1px solid rgba(214, 196, 150, .12); }
   .reach-heading { display: flex; align-items: baseline; gap: .5rem; }
   .reach-heading .place-kicker { margin: 0; }
@@ -241,7 +241,7 @@ html[data-shell="desktop"] .rail {
   overflow: hidden;
 }
 html[data-shell="desktop"] .rail-body { overflow: hidden; }
-html[data-shell="desktop"] .conversation-column { overflow: hidden; }
+html[data-shell="desktop"] .conversation-column { display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 html[data-shell="desktop"] .conversation-scroll {
   min-width: 0;
   min-height: 0;

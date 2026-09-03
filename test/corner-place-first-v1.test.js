@@ -51,3 +51,14 @@ test('Corner holds the composer behind explicit Forest readiness', async () => {
   assert.match(app, /readinessPoll = setInterval/);
   assert.match(css, /data-state="Forest waking…"/);
 });
+
+test('browser conversation owns a bounded wheel-scroll viewport', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.bench \{[^}]*height: min\(740px, calc\(100vh - 1\.5rem\)\);[^}]*grid-template-rows: auto minmax\(0, 1fr\);[^}]*overflow: hidden/s);
+  assert.match(css, /\.rail \{[^}]*grid-template-rows: auto auto minmax\(0, 1fr\) auto;[^}]*overflow: hidden/s);
+  assert.match(css, /\.rail-body \{[^}]*min-height: 0;[^}]*overflow: hidden/s);
+  assert.match(css, /\.conversation-column \{[^}]*min-height: 0;[^}]*overflow-y: scroll;[^}]*overscroll-behavior: contain;[^}]*scrollbar-gutter: stable/s);
+  assert.match(css, /\.bench \{ width: 100%; height: 100vh; min-height: 0;/);
+  assert.match(css, /\.rail-body \{ grid-template-columns: 1fr; grid-template-rows: minmax\(0, 1fr\) auto; \}/);
+  assert.match(css, /html\[data-shell="desktop"\] \.conversation-column \{ display: grid; grid-template-rows: minmax\(0, 1fr\); overflow: hidden; \}/);
+});
