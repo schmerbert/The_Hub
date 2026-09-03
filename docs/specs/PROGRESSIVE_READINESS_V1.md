@@ -4,7 +4,7 @@
 
 ## 1. Pressure and classification
 
-This is an **extending** protocol change. The synchronous composition root currently performs broad Forest verification before the desktop host can bind and before the Corner can render. That preserves integrity, but it makes an optional continuity subsystem indistinguishable from the minimum conditions required to show an honest shell.
+This is an **extending** protocol change with a subsequent **revising** admission checkpoint. The synchronous composition root currently performs broad Forest verification before the desktop host can bind and before the Corner can render. That preserves integrity, but it makes an optional continuity subsystem indistinguishable from the minimum conditions required to show an honest shell. The first progressive mechanism allowed a wake to proceed without Forest while verification was pending; the observed stale-source race showed that this is not an honest continuing session contract.
 
 The protected invariant is unchanged: no request, projection, or action may use a subsystem whose required authority and ancestry have not been verified. The revised mechanism separates **shell readiness**, **conversation readiness**, and **feature readiness** instead of treating all startup work as one implicit boolean.
 
@@ -33,7 +33,7 @@ Conversation admission requires `conversation=ready`. Forest actions, health cla
 
 ## 4. Progressive desktop startup
 
-The desktop host may select progressive startup. In that mode:
+The desktop and standalone browser hosts select progressive startup. Direct composition callers may retain synchronous startup compatibility. In progressive mode:
 
 - essential stores and gates settle before conversation becomes ready;
 - the HTTP shell binds without waiting for optional Forest full verification;
@@ -43,7 +43,16 @@ The desktop host may select progressive startup. In that mode:
 - failure leaves Forest unavailable, reports a bounded failed readiness state, and preserves conversation when the essential gates remain sound; and
 - shutdown waits for or safely terminates pending startup work before closing stores.
 
-There is no unverified grace period. A wake accepted while Forest is pending proceeds without Forest continuity and records no claim that Forest participated.
+There is no unverified grace period. A wake is not admitted while an active Forest is pending or failed. This hold is process-local and does not delay shell binding, health, static assets, room rendering, or other essential conversation inspection. The Corner disables its composer with `Forest waking…` while verification is pending and `Continuity unavailable` after bounded failure; it unlocks only after Forest readiness is settled to `ready`.
+
+### 4.1 Startup admission hold revision
+
+- **Old rule:** a wake accepted while Forest verification was pending could proceed without Forest continuity.
+- **Pressure case:** the desktop returned as usable while the long Forest proof was still running; a wake then advanced Source before the proof completed. The lifecycle correctly refused stale activation, but the lifespan was left with an avoidable split between conversation and continuity.
+- **Protected invariant retained:** no request, projection, or action may use Forest authority or ancestry before strict verification succeeds, and no stale proof may be admitted retroactively.
+- **New rule:** in progressive startup, Wake Service refuses admission before any Source wake row is created whenever Forest readiness is `pending` or `failed`. The refusal uses the bounded readiness code, and direct orchestration callers receive the same gate as the HTTP crossing.
+- **Scope and compatibility:** shell/health remain progressive and direct non-progressive `createHub()` startup remains synchronous. No store migration or retroactive admission is introduced. A failed stage still requires a new process startup in v1.
+- **New witnesses:** pending and failed HTTP refusal tests assert no new Source event or wake; a direct-call bypass test asserts the same; the existing stale-snapshot test remains because a Source change from another authorized path must still revoke the proof.
 
 ## 5. Verification checkpoints
 
@@ -80,7 +89,7 @@ Startup records monotonic durations for essential composition, loopback binding,
 
 1. The desktop shell answers health and static requests while Forest verification is deliberately held pending.
 2. Health distinguishes shell, conversation, and Forest readiness with bounded fields.
-3. A wake accepted during pending Forest verification cannot use Forest, Exhale, or traversal.
+3. A wake submitted during pending or failed active Forest verification is refused before Source admission and cannot use Forest, Exhale, or traversal.
 4. Successful strict verification activates Forest-dependent capability once.
 5. Failed verification leaves Forest unavailable while core conversation remains honest.
 6. Shutdown during pending verification closes cleanly and cannot activate afterward.

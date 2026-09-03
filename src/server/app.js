@@ -45,7 +45,7 @@ function statusFor(code) {
   if (code === 'sandbox_backend_unavailable' || code === 'sandbox_workspace_not_writable') return 503;
   if (code?.startsWith('sandbox_')) return 400;
   if (['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json', 'attention_ceiling_exceeded', 'world_invalid_argument', 'world_tool_invalid', 'world_tool_unknown', 'world_wrong_room', 'world_wrong_station', 'world_not_engaged', 'world_station_unknown', 'world_station_unreachable', 'world_fixture_unknown', 'world_fixture_unreachable', 'world_fixture_not_turnable', 'world_wrong_location_or_passage', 'world_passage_closed', 'world_passage_operation_invalid', 'world_passage_operation_refused', 'workshop_path_invalid', 'workshop_path_forbidden', 'workshop_not_found', 'workshop_not_file', 'workshop_not_directory', 'workshop_range', 'workshop_limit', 'workshop_oversized', 'workshop_binary', 'workshop_invalid_argument', 'workshop_patch_missing', 'workshop_patch_ambiguous', 'workshop_patch_stale', 'workshop_recipe_unknown', 'workshop_approval_not_found', 'workshop_approval_not_pending', 'workshop_git_failed', 'workshop_git_unavailable'].includes(code)) return 400;
-  if (['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'wake_ritual_invalid'].includes(code)) return 503;
+  if (['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'forest_verification_pending', 'forest_verification_failed', 'forest_verification_stale', 'forest_activation_failed', 'forest_open_failed', 'forest_unavailable', 'wake_ritual_invalid'].includes(code)) return 503;
   if (code === 'hearth_orientation_invalid' || code?.startsWith('provider_')) return 502;
   return 500;
 }
@@ -173,7 +173,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     throw error;
   }
   const eventBus = new HubEventBus(db);
-  const wakeService = new WakeService({ config, db, provider, forest: progressiveMode ? null : forest, spine, world, gateway, eventBus, ambientFeatherService, forestTraversalService });
+  const wakeService = new WakeService({ config, db, provider, forest: progressiveMode ? null : forest, spine, world, gateway, eventBus, ambientFeatherService, forestTraversalService, forestReadiness: () => readiness.projection().forest });
   const wake = (content, options) => wakeService.wake(content, options);
   if (progressiveMode) {
     forestLifecycle = createProgressiveForestLifecycle({

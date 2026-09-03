@@ -63,6 +63,7 @@ if (desktopShell) {
 }
 
 let busy = false;
+let latestHealth = null;
 let currentWake = null;
 let currentInspectionTab = 'summary';
 let currentApprovals = [];
@@ -72,6 +73,7 @@ let currentMarbleSelection = 'overview';
 let currentMarbleRoomId = null;
 let placeWorld = null;
 let placeWorldSignature = null;
+let readinessPoll = null;
 const wakeSlips = new Map();
 let slipPoll = null;
 let slipPollBusy = false;
@@ -157,6 +159,49 @@ function setState(state) {
   if (state !== 'failed' && state !== 'host unavailable') statusEl.removeAttribute('title');
   waveCompact.setState(state);
   waveMain.setState(state);
+}
+
+function composerGate(health) {
+  if (health.readiness?.conversation?.state !== 'ready') return {
+    kind: 'conversation',
+    status: 'preparing',
+    placeholder: 'Preparing…',
+    title: 'Conversation is still preparing.',
+  };
+  const continuityKey = ['fo', 'rest'].join('');
+  const continuity = health.readiness?.[continuityKey];
+  if (!health[`${continuityKey}Active`] || continuity?.state === 'ready') return null;
+  if (continuity?.state === 'pending') return {
+    kind: 'forest-pending',
+    status: 'Forest waking…',
+    placeholder: 'Forest waking…',
+    title: 'Continuity is waking. The Corner will open the composer when the Forest is ready.',
+  };
+  return {
+    kind: 'forest-failed',
+    status: 'continuity unavailable',
+    placeholder: 'Continuity unavailable',
+    title: 'Continuity is unavailable for this lifespan. No wake can be admitted.',
+  };
+}
+
+function syncComposer(health) {
+  latestHealth = health;
+  const gate = composerGate(health);
+  const locked = busy || Boolean(gate);
+  input.disabled = locked;
+  sendButton.disabled = locked;
+  form.dataset.readiness = gate?.kind || 'ready';
+  input.placeholder = gate?.placeholder || 'Write to Resident…';
+  if (gate) input.title = gate.title;
+  else input.removeAttribute('title');
+  if (gate?.kind === 'forest-pending') {
+    if (!readinessPoll) readinessPoll = setInterval(() => { if (!busy) void refresh().catch(() => {}); }, 1000);
+  } else if (readinessPoll) {
+    clearInterval(readinessPoll);
+    readinessPoll = null;
+  }
+  return gate;
 }
 
 function applyMode(next) {
@@ -678,6 +723,7 @@ async function inspectWake(wakeId) {
 
 async function refresh() {
   const [health, thread] = await Promise.all([getHealth(), getActiveThread()]);
+  const gate = syncComposer(health);
   modeModel.textContent = modeLabel(health);
   roomState.textContent = health.currentRoom?.roomId || 'unknown room';
   stationState.textContent = health.engagedFixtureId || health.engagedStationId ? `Engaged · ${health.engagedFixtureId || health.engagedStationId}` : 'No fixture';
@@ -710,12 +756,7 @@ async function refresh() {
   }
   renderThread(thread);
   const latest = wakesForActiveSession(thread).at(-1);
-  const conversation = health.readiness?.conversation?.state;
-  const continuityKey = ['fo', 'rest'].join('');
-  const continuity = health.readiness?.[continuityKey];
-  if (!busy && conversation !== 'ready') setState('preparing');
-  else if (!busy && health[`${continuityKey}Active`] && continuity?.state === 'pending') setState('preparing');
-  else if (!busy && health[`${continuityKey}Active`] && continuity?.state === 'failed') setState('continuity unavailable');
+  if (!busy && gate) setState(gate.status);
   else if (!busy && latest?.status === 'failed') setState('failed');
   else if (!busy) setState('idle');
 }
@@ -884,17 +925,24 @@ async function submitWake(event) {
     setTimeout(() => { if (!busy) setState('idle'); }, 1200);
     if (wake.id) currentWake = wake;
   } catch (error) {
-    setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed');
     const failure = error.message || error.code || 'failed';
     statusEl.title = failure;
-    statusEl.textContent = `failed: ${failure}`;
     await refresh().catch(() => {});
+    const startupGate = error.code?.startsWith('forest_') && latestHealth ? composerGate(latestHealth) : null;
+    if (startupGate) setState(startupGate.status);
+    else {
+      setState(error.code === 'host_unavailable' ? 'host unavailable' : 'failed');
+      statusEl.textContent = `failed: ${failure}`;
+    }
     liveState = clearLiveWake(clearOptimisticUser(liveState));
     renderLive();
   } finally {
     stopSlipPoll();
     gap.replaceChildren();
-    busy = false; input.disabled = false; sendButton.disabled = false; input.focus({ preventScroll: true });
+    busy = false;
+    if (latestHealth) syncComposer(latestHealth);
+    else { input.disabled = false; sendButton.disabled = false; }
+    if (!input.disabled) input.focus({ preventScroll: true });
   }
 }
 

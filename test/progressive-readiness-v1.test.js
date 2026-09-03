@@ -45,6 +45,15 @@ async function fixture(forestVerifier) {
   };
 }
 
+async function postWake(base, content) {
+  const response = await fetch(`${base}/api/wakes`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  return { response, body: await response.json() };
+}
+
 test('readiness projection settles once and exposes bounded monotonic timing', () => {
   let now = 10;
   const readiness = new ReadinessProjection({ clock: () => now, timestamp: () => `t${now}` });
@@ -86,6 +95,27 @@ test('progressive health withholds Forest until strict verification settles', as
   } finally { await f.close(); }
 });
 
+test('pending Forest holds HTTP and direct wake admission without delaying health', async () => {
+  const gate = deferred();
+  const f = await fixture(() => gate.promise);
+  try {
+    const beforeEvents = f.hub.db.listEligibleUtteranceEvents().length;
+    const pending = await postWake(f.base, 'arrived before continuity was ready');
+    assert.equal(pending.response.status, 503);
+    assert.equal(pending.body.error.code, 'forest_verification_pending');
+    assert.match(pending.body.error.message, /still waking/i);
+    assert.equal(f.hub.db.listEligibleUtteranceEvents().length, beforeEvents);
+    assert.equal(f.hub.db.getThread().wakes.length, 0);
+    await assert.rejects(f.hub.wakeService.performWake('direct bypass attempt'), error => error.code === 'forest_verification_pending');
+    assert.equal(f.hub.db.listEligibleUtteranceEvents().length, beforeEvents);
+
+    gate.resolve({ ok: true, entryCount: 0, wildCount: 0, eligibleWildCount: 0, intakeOfferCount: 0, intakeHeldCount: 0, intakeUnresolvedCount: 0 });
+    await f.hub.forestVerificationPromise;
+    const health = await fetch(`${f.base}/api/health`).then(response => response.json());
+    assert.equal(health.readiness.forest.state, 'ready');
+  } finally { await f.close(); }
+});
+
 test('failed verification stays bounded and core conversation remains ready', async () => {
   const gate = deferred();
   const f = await fixture(() => gate.promise);
@@ -98,6 +128,10 @@ test('failed verification stays bounded and core conversation remains ready', as
     assert.equal(health.readiness.forest.code, 'forest_verification_failed');
     assert.equal(JSON.stringify(health).includes('sensitive verifier detail'), false);
     assert.equal(f.hub.forest, null);
+    const refused = await postWake(f.base, 'continuity should remain closed');
+    assert.equal(refused.response.status, 503);
+    assert.equal(refused.body.error.code, 'forest_verification_failed');
+    assert.equal(f.hub.db.getThread().wakes.length, 0);
   } finally { await f.close(); }
 });
 

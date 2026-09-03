@@ -22,9 +22,9 @@ export function installShutdownHandlers(hub, { processTarget = process, logger =
   return shutdown;
 }
 
-export function startHubProcess() {
+export function startHubProcess({ progressiveStartup = true } = {}) {
   loadEnvFile();
-  const hub = createHub();
+  const hub = createHub({ progressiveStartup });
   hub.server.listen(hub.config.port, () => {
     console.log(`The Hub listening on http://localhost:${hub.config.port} (${hub.config.mode}, ${hub.config.model}, thinking=${hub.config.thinking})`);
   });

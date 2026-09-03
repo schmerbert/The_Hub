@@ -15,13 +15,17 @@ import { isSimpleEmbodiedAction } from './reasoning-posture.js';
 import { ProviderPhase, providerCancellation } from './provider-phase.js';
 
 export class WakeService {
-  constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null, ambientFeatherService = null, forestTraversalService = null }) {
+  constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null, ambientFeatherService = null, forestTraversalService = null, forestReadiness = null }) {
     this.config = config;
     this.db = db;
     this.provider = provider;
     this.forest = forest;
     this.ambientFeatherService = ambientFeatherService;
     this.forestTraversalService = forestTraversalService;
+    // Progressive startup owns the readiness observation. Wake Service only
+    // translates a non-ready observation into a bounded admission refusal;
+    // it never inspects the opened-but-unverified Forest itself.
+    this.forestReadiness = forestReadiness;
     this.forestDataVersion = typeof forest?.dataVersion === 'function' ? forest.dataVersion() : null;
     this.spine = spine;
     this.world = world;
@@ -108,9 +112,24 @@ export class WakeService {
     return this.providerPhase.registerPresentationBoundary({ forest: this.forest, wakeId, requestFrame, requestBodyString, presentation, sourceMessages, sourceRefs });
   }
 
+  assertForestReadyForWake() {
+    if (!this.config.forestActive || typeof this.forestReadiness !== 'function') return;
+    const stage = this.forestReadiness();
+    if (!stage || stage.state === 'ready' || stage.state === 'inactive') return;
+    if (stage.state === 'pending') throw {
+      code: 'forest_verification_pending',
+      message: 'The Forest is still waking. Send again when continuity is ready.',
+    };
+    throw {
+      code: stage.code || 'forest_unavailable',
+      message: 'Continuity is unavailable for this lifespan. No wake was admitted.',
+    };
+  }
+
   async wake(content, { completionProjection = 'full' } = {}) {
     if (this.closing) throw { code: 'hub_closing', message: 'The Hub is shutting down and is not accepting new wakes.' };
     if (this.wakeInProgress) throw { code: 'wake_in_progress', message: 'Another wake is already in progress.' };
+    this.assertForestReadyForWake();
     this.wakeInProgress = true;
     const operation = this.performWake(content, { completionProjection });
     this.activeWakePromise = operation;
@@ -123,6 +142,10 @@ export class WakeService {
   }
 
   async performWake(content, { completionProjection = 'full' } = {}) {
+    // Keep the domain boundary intact for direct callers as well as HTTP.
+    // This second check closes the bypass where a caller invokes the
+    // orchestration method without going through wake().
+    this.assertForestReadyForWake();
     const { config, db, provider, forest, spine, world, gateway, attentionMeter } = this;
     const submitted = typeof content === 'string' ? content : '';
     const trimmed = submitted.trim();

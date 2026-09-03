@@ -33,3 +33,21 @@ test('conversation typography is built only from textContent-backed nodes', asyn
   assert.match(app, /appendEventText\(eventElement, eventLabel\(event\), event\.content\)/);
   assert.doesNotMatch(app, /insertAdjacentHTML|DOMParser|createContextualFragment/);
 });
+
+test('Corner holds the composer behind explicit Forest readiness', async () => {
+  const [html, app, css] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../public/styles.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(html, /id="compose"/);
+  assert.match(app, /function composerGate\(health\)/);
+  assert.match(app, /status: 'Forest waking…'/);
+  assert.match(app, /placeholder: 'Forest waking…'/);
+  assert.match(app, /placeholder: 'Continuity unavailable'/);
+  assert.match(app, /input\.disabled = locked/);
+  assert.match(app, /sendButton\.disabled = locked/);
+  assert.match(app, /syncComposer\(latestHealth\)/);
+  assert.match(app, /readinessPoll = setInterval/);
+  assert.match(css, /data-state="Forest waking…"/);
+});
