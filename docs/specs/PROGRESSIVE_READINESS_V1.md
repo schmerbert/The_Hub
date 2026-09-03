@@ -17,7 +17,7 @@ The protected invariant is unchanged: no request, projection, or action may use 
 - **Public contract:** a bounded readiness projection returned by `/api/health`.
 - **Explicit non-owners:** the Corner does not infer readiness; HTTP does not verify domain stores; a background task does not grant capability merely by completing.
 - **Failure witness:** the readiness projection records a bounded stage code and state. Existing domain failures retain their typed refusal behavior.
-- **Migration and compatibility:** no store migration. Direct `createHub()` callers retain synchronous startup unless progressive startup is explicitly selected by the desktop host.
+- **Migration and compatibility:** no store migration. Direct `createHub()` callers retain synchronous startup unless progressive startup is explicitly selected; the desktop and standalone browser hosts select it by default.
 
 ## 3. Readiness model
 
@@ -31,7 +31,7 @@ Each stage is one of `pending`, `ready`, `failed`, or `inactive`. A stage carrie
 
 Conversation admission requires `conversation=ready`. Forest actions, health claims, semantic selection, and traversal require `forest=ready`. `pending`, `failed`, and `inactive` are distinct and must not be collapsed into success.
 
-## 4. Progressive desktop startup
+## 4. Progressive Corner startup
 
 The desktop and standalone browser hosts select progressive startup. Direct composition callers may retain synchronous startup compatibility. In progressive mode:
 

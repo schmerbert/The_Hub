@@ -36,11 +36,11 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Passive Binder Window | [`BINDER_WINDOW_V1.md`](BINDER_WINDOW_V1.md) |
 | Spotlight observatory production shell | [`SPOTLIGHT_OBSERVATORY_V1.md`](SPOTLIGHT_OBSERVATORY_V1.md) |
 
-## Adopted but not installed
+## Adopted directions with substantial uninstalled remainder
 
-- [`FOREST_PATHS_ROLLING_FOLD_V1.md`](FOREST_PATHS_ROLLING_FOLD_V1.md)
-- [`FOREST_EXHALE_V2.md`](FOREST_EXHALE_V2.md) — recoverable Result slice installed; semantic selection shadow-only and uninstalled
-- [`OUTSIDE_ORGANS_DIRECTION_V1.md`](OUTSIDE_ORGANS_DIRECTION_V1.md)
+- [`FOREST_PATHS_ROLLING_FOLD_V1.md`](FOREST_PATHS_ROLLING_FOLD_V1.md) — directional walking and `place.forest` implemented; rolling folds, recursive frames, and synthesis remain uninstalled
+- [`FOREST_EXHALE_V2.md`](FOREST_EXHALE_V2.md) — recoverable Result and live Home-only ambient semantic Exhale implemented; higher-canopy, Faun, and Wild participation remain uninstalled
+- [`OUTSIDE_ORGANS_DIRECTION_V1.md`](OUTSIDE_ORGANS_DIRECTION_V1.md) — passive Binder Window and enterable Spotlight implemented; live outside transport and Box/Pipes crossings remain uninstalled
 - [`VAULT_V1.md`](VAULT_V1.md)
 
 These constrain future design only to the extent stated in [`../STATUS.md`](../STATUS.md). They must never be described as current runtime capability.

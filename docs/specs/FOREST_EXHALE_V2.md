@@ -1,6 +1,6 @@
 # Forest Exhale v2 — Bounded Breath, Rooted Exposure
 
-> **Status: Recoverable Result Exhale and ambient vector-feather shadow selection implemented; live semantic Forest Exhale uninstalled.** This specification revises the deferred Forest Exhale direction retained by [`HEARTH_NOTES_FOREST_EXHALE_V1.md`](HEARTH_NOTES_FOREST_EXHALE_V1.md) so it fits current Glass, Result Rack, Session Scroll trace, and Roots law. Verified Result Rack trail signs, the universal `reopen_result` crossing, non-respirable Roots exposure custody, and the Home-only semantic shadow checkpoint are installed. No semantic Forest feather enters Glass or provider attention until downwind behavior is reviewed and live breathing is explicitly enabled.
+> **Status: Recoverable Result Exhale and live Home-only ambient vector-feather Exhale implemented.** This specification revises the deferred Forest Exhale direction retained by [`HEARTH_NOTES_FOREST_EXHALE_V1.md`](HEARTH_NOTES_FOREST_EXHALE_V1.md) so it fits current Glass, Result Rack, Session Scroll trace, and Roots law. Verified Result Rack trail signs, the universal `reopen_result` crossing, non-respirable Roots exposure custody, retained shadow ancestry, and exact live presentation custody are installed. Higher-canopy dolls, Faun feathers, Wild participation, causal interpretation, and downwind review tooling remain uninstalled.
 
 [`RESIDENT_PRESENTATION_CLARITY_V1.md`](RESIDENT_PRESENTATION_CLARITY_V1.md) revises the visible register of the implemented live packet and Result trail sign. One enclosing seam identifies semantic arrivals as associatively selected prior-session terrain without asserting relevance, truth, memory, endorsement, or hidden identity; Result trail signs identify themselves as mechanical descriptions rather than law.
 
@@ -71,7 +71,7 @@ Missing, altered, disposed, oversized, malformed, stale, cross-thread, or policy
 
 ### 3.2 Semantic Forest Exhale
 
-A semantic Forest Exhale is an optional request-time projection of zero, one, or at most two exact atoms from eligible Forest custody. It is not installed live by the first slice of this specification.
+A semantic Forest Exhale is an optional request-time projection of zero to three exact atoms from eligible Forest custody. The first slice kept it shadow-only; the active live revision is specified in section 6.2.
 
 Selection and payload remain separate. A replaceable selector may rank eligible atoms, but every visible payload atom must remain one exact contiguous span from one admitted Forest entry. Generated bridges, summaries, paraphrases, merged sentences, or reconstructed gaps are prohibited.
 
@@ -157,7 +157,7 @@ Shadow review evaluates at least:
 - cases where silence would have been truer; and
 - selector drift across version or policy changes.
 
-Moving from shadow to live semantic Exhale requires an explicit status change and reviewed pressure corpus. Passing custody tests alone is insufficient.
+The completed move from shadow to live semantic Exhale required an explicit status change and reviewed pressure corpus. Passing custody tests alone was insufficient, and future policy revisions retain that review standard.
 
 ### 6.1 Installed shadow policy
 

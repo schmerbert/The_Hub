@@ -504,7 +504,7 @@ The exact manifest schema and Room SDK are not adopted by this document. The slo
 | Ceiling/Patch Bay room/location capability mounting | Implemented |
 | Home exact human/resident utterance, deliberate Resident Journal planting, and typed Wild Workshop-source admission | Implemented |
 | Vault room and Forest-to-Vault pointer direction | Adopted, not implemented |
-| Recoverable Result Exhale | Implemented; semantic Forest Exhale remains staged and uninstalled |
+| Recoverable Result Exhale and Home-only ambient semantic Forest Exhale | Implemented |
 | Marble as the broader durable constitutional lens | Adopted conceptual grammar |
 | Home/Wild synthesis ceremony | Adopted conceptual grammar; not implemented |
 | Garden as universal foreign-route filter | Adopted conceptual grammar; not implemented |

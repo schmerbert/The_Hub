@@ -16,15 +16,15 @@ recoverable exhales
 
 ## Sequence
 
-### Responsiveness pass — progressive startup first slice implemented
+### Responsiveness pass — progressive startup and wake hold implemented
 
-The desktop now binds the Corner after the essential Source, current World/Hearth, and required ancestry gates, while strict active-Forest verification runs off the HTTP event loop. Health and Corner distinguish shell, conversation, and Forest readiness; Forest, semantic Exhale, and traversal are not mounted until the strict proof succeeds. Failure and stale concurrent Source movement leave continuity boundedly unavailable, and shutdown cancels pending verification. Direct `createHub()` callers retain synchronous compatibility.
+The desktop and standalone browser hosts now bind the Corner after the essential Source, current World/Hearth, and required ancestry gates, while strict active-Forest verification runs off the HTTP event loop. Health and Corner distinguish shell, conversation, and Forest readiness; Forest, semantic Exhale, and traversal are not mounted until the strict proof succeeds. While an active Forest is pending or failed, wake admission is held before Source mutation and Corner labels the reason; successful verification unlocks the composer automatically. Failure and stale Source movement leave continuity boundedly unavailable, and shutdown cancels pending verification. Direct `createHub()` callers retain synchronous compatibility.
 
 The next measured optimization question is repeated full immutable-prefix scanning, especially World replay. A future verified ancestry checkpoint must bind exact store identity, verifier/schema version, prefix head, suffix continuity, full projection agreement, invalidation, and background audit. File metadata or cached success is explicitly insufficient. The installed readiness timings provide evidence before that separate protocol is adopted.
 
 After startup, the preferred UX passes are verified multi-step travel, visible action progress, and measurement-led tool/payload trimming.
 
-Owners: desktop host/readiness projection, Forest and World verification, semantic projection lifecycle, wake admission
+Owners: Corner hosts/readiness projection, Forest and World verification, semantic projection lifecycle, wake admission
 Invariant: faster availability cannot weaken drift refusal, fabricate readiness, or let deferred subsystems act before their own gates pass
 Law: [`PROGRESSIVE_READINESS_V1.md`](specs/PROGRESSIVE_READINESS_V1.md)
 
@@ -54,11 +54,11 @@ After first breath, keep the causal Hearth action and return in the ordinary rec
 Owners: Glass fitting and Session Scroll presentation
 Invariant: no duplicate first-response presentation and no fabricated continuity after omission
 
-### 3a. Semantic Exhale shadow stage — implemented
+### 3a. Semantic Exhale shadow-to-live sequence — implemented
 
 Run the source-exact Forest selector over eligible real turns without placing its packet in Glass or provider attention. Root every candidate set, exclusion, selection, and would-be packet as `shadowed`; review silence, stale standing, vividness bias, missing counterweights, echo, and monoculture before any live semantic breath.
 
-The installed baseline is Home-only and deterministic. It uses exact lexical/entity evidence plus bounded room and fixture relevance signals, records chronological neighbors for counterweight review, and lawfully selects silence. Embeddings, Wild participation, automatic contradiction judgment, and live Glass presentation remain deferred.
+The retained lexical shadow baseline is Home-only and deterministic. The active runtime now uses local ambient vector feathers with exact Home bearings, lawful silence, direct-echo suppression, bounded live-context saturation, Roots selection witnesses, and exact Glass/Scrub/Spine custody for nonempty later-turn packets. Wild participation, automatic contradiction judgment, Faun feathers, and higher-canopy projection remain deferred.
 
 Owner: Forest candidate contract, Context Exhale projector, Roots exposure custody
 Gate: explicit reviewed transition from shadow to live; custody tests alone are insufficient
@@ -119,7 +119,7 @@ Owner: active constitutional vocabulary in [`HOUSE_GRAMMAR_V1.md`](specs/HOUSE_G
 
 ### 8. Forest threshold and safe entry
 
-**Installed first slice:** intentional entry is now fitted at the Garden treeline. An active walk keeps World presence in the Garden, exposes only Forest traversal actions, and retains an explicit return tether.
+**Installed and revised:** intentional entry is fitted at the Garden treeline, and projected entry may begin from another retained place. An active walk now gives truthful World presence in `place.forest`, exposes only Forest traversal actions, and retains the exact departure anchor for return.
 
 Install the Garden-to-Forest crossing only after retrieval and return semantics are concrete. Entry must be paced and chosen rather than a bulk context injection. Glass and the holster remain findable; uncertainty, contradiction, and suspected contamination may be named without penalty.
 

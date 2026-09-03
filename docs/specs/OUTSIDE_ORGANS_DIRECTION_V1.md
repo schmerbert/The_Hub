@@ -1,6 +1,6 @@
 # Outside Organs v1 — Window, Watering Hole, and Manhole
 
-> **Status: Adopted architectural direction; Binder Window first slice implemented in code, configured World migration pending.** The Binder, The Box, and The Pipes are independent working systems outside this repository. [`BINDER_WINDOW_V1.md`](BINDER_WINDOW_V1.md) owns the passive Center fixture and frozen dashboard-snapshot crossing. This direction does not connect The Box or Pipes, install a Road crossing, expose credentials, authorize payment, or make their current APIs conformant merely by naming them.
+> **Status: Adopted architectural direction; passive Binder Window and enterable Spotlight observatory implemented.** The Binder, The Box, and The Pipes are independent working systems outside this repository. [`BINDER_WINDOW_V1.md`](BINDER_WINDOW_V1.md) owns the passive Center fixture and frozen dashboard-snapshot crossing; [`SPOTLIGHT_OBSERVATORY_V1.md`](SPOTLIGHT_OBSERVATORY_V1.md) owns the installed observatory shell and capped hands. This direction does not connect live outside transport, The Box, or Pipes, install a Road crossing, expose credentials, authorize payment, or make outside APIs conformant merely by naming them.
 
 ## 1. Pressure and classification
 
