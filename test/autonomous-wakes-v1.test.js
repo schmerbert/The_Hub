@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createHub } from '../src/server/app.js';
 import { HubDatabase } from '../src/ledger/source.js';
 import { FakeResidentProvider } from '../src/providers/fake.js';
-import { autonomousToolAllowed, AUTONOMOUS_WORLD_TOOLS, REST_FOR_TOOL_NAME } from '../src/runtime/autonomous-wakes.js';
+import { autonomousToolAllowed, AUTONOMOUS_WORLD_TOOLS, REST_FOR_TOOL_NAME, renderAutonomousWakeGround } from '../src/runtime/autonomous-wakes.js';
 
 async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'hub-autonomous-wakes-'));
@@ -39,8 +39,9 @@ test('autonomous wake ledger is append-only, replaces pending rest, and verifies
   const db = new HubDatabase(join(dir, 'hub.sqlite'));
   try {
     const seat = { world: { roomId: 'place.house', engagedFixtureId: null, revision: 1 }, forest: { active: false } };
-    const first = db.autonomous.schedule({ sessionId: db.session.id, dueAt: new Date(Date.now() + 60_000).toISOString(), intention: 'listen', seat });
-    const second = db.autonomous.schedule({ sessionId: db.session.id, dueAt: new Date(Date.now() + 120_000).toISOString(), intention: 'wander', seat });
+    const restedAt = new Date().toISOString();
+    const first = db.autonomous.schedule({ sessionId: db.session.id, lifeId: db.session.id, contextGeneration: 1, planKind: 'bench_rest', restedAt, requestedDurationMs: 60_000, dueAt: new Date(Date.parse(restedAt) + 60_000).toISOString(), intention: 'listen', seat });
+    const second = db.autonomous.schedule({ sessionId: db.session.id, lifeId: db.session.id, contextGeneration: 1, planKind: 'bench_rest', restedAt, requestedDurationMs: 120_000, dueAt: new Date(Date.parse(restedAt) + 120_000).toISOString(), intention: 'wander', seat });
     assert.equal(db.autonomous.recent(db.session.id).find(plan => plan.planId === first.planId).status, 'cancelled');
     assert.equal(db.autonomous.pending(db.session.id).planId, second.planId);
     assert.equal(db.autonomous.claim(second.planId).eventKind, 'claimed');
@@ -82,9 +83,31 @@ test('manual self-directed wake resumes the same session and seat without invent
     assert.equal(names.includes('write_journal'), false);
     assert.equal(names.includes('workshop_apply_patch'), false);
     assert.equal(names.includes('spotlight_observe'), false);
-    assert.match(JSON.stringify(request.messages), /same Resident lifespan/);
+    assert.match(JSON.stringify(request.messages), /context generation 1/);
+    assert.match(JSON.stringify(request.messages), /exactly 0 milliseconds of rest/);
     assert.match(JSON.stringify(request.messages), /up to 24 tool rounds|24 tool rounds|24/);
+
+    const bench = f.hub.autonomousWakes.schedule({ sessionId: f.hub.db.session.id, seconds: 3600, intention: 'Continue from this exact seat.' });
+    assert.equal(bench.lifeId, f.hub.db.session.id);
+    assert.equal(bench.contextGeneration, 1);
+    assert.equal(bench.planKind, 'bench_rest');
+    assert.equal(bench.requestedDurationMs, 3_600_000);
+    assert.equal(Date.parse(bench.dueAt) - Date.parse(bench.restedAt), 3_600_000);
+    assert.deepEqual(bench.seat.world.roomId, before.roomId);
   } finally { await f.close(); }
+});
+
+test('bench timing distinguishes the exact promise, elapsed rest, and scheduler lateness', () => {
+  const ground = renderAutonomousWakeGround({
+    kind: 'self_directed',
+    plan: { lifeId: 'life-1', contextGeneration: 7, intention: 'continue the path' },
+    timing: { restedAt: '2026-09-12T19:00:00.000Z', requestedDurationMs: 3_600_000, dueAt: '2026-09-12T20:00:00.000Z', wokeAt: '2026-09-12T20:00:03.125Z', elapsedMs: 3_603_125, latenessMs: 3_125 },
+  });
+  assert.match(ground, /life life-1, context generation 7/);
+  assert.match(ground, /requested exactly 3600000 milliseconds/);
+  assert.match(ground, /exactly 3603125 milliseconds elapsed/);
+  assert.match(ground, /3125 milliseconds after the due time/);
+  assert.match(ground, /continue the path/);
 });
 
 test('autonomous authority is a narrow reusable capability gate', () => {

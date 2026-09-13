@@ -38,7 +38,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | `stable_glass` | every call; World physics and epistemic boundary | clinical backplate | `src/context/glass-cast.js` |
 | `silver_bullet_holster` | after successful Hearth tending; occupied bullets remain above the fold | continuity | `src/hearth/packet.js` |
 | `crossing_ground` | every call; minimal present footing | experiential | `src/context/resident-presentation.js` |
-| `autonomous_wake_ground` | self-directed return; declares non-human origin, same-Resident continuity, retained seat/intention, generous horizon, and reduced hands | experiential crossing ground | `src/runtime/autonomous-wakes.js`, `src/runtime/provider-phase.js` |
+| `autonomous_wake_ground` | self-directed return; declares non-human origin, retained life/context generation, exact seat/intention, requested/due/actual/elapsed timing, generous horizon, and reduced hands | experiential crossing ground | `src/runtime/autonomous-wakes.js`, `src/runtime/provider-phase.js` |
 | `orientation_ground` | Hearth action/return; situated waking plus the bounded retrieval affordance and its epistemic limits | experiential | `src/context/resident-presentation.js` |
 | `hearth_trail_sign` | after ordinary attention moves the exact completed Hearth pair from the living edge; retains packet hash and bounded exact source bearings | continuity | `src/context/tool-pairs.js` |
 | `world_current_ground` | room-aware calls; verified presence plus bounded containment/route horizon | clinical World projection | `src/world/graph.js#presenceMessage`, `src/world/spatial-horizon.js` |

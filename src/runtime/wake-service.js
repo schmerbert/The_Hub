@@ -165,7 +165,7 @@ export class WakeService {
     const firstTurn = !db.sessionHasOrientation();
     const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;
     const created = autonomous
-      ? db.createAutonomousSessionWake({ provider: providerName, model: config.model, plan: origin.plan })
+      ? db.createAutonomousSessionWake({ provider: providerName, model: config.model, plan: origin.plan, timing: origin.timing })
       : db.createSessionWake({ provider: providerName, model: config.model, content: submitted });
     const triggerEvent = db.getEvent(created.eventId);
     if (!firstTurn) world.ageHearthSettlement?.(created.sessionId);

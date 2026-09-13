@@ -6,7 +6,7 @@ The Hub is a local harness for a continuing Resident: a model-mediated collabora
 
 The runtime currently opens one process-lived Resident session per server start. Its first human message takes a native two-breath Hearth handshake; later messages remain ordinary turns in the same complete active history. The implementation uses Node.js, SQLite, a replaceable provider boundary, a browser Corner surface, and an Electron desktop shell.
 
-After the Hearth is tended, the Resident may use `rest_for` to choose a bounded delay and wake autonomously at the exact seat where it rested. The return remains in the same lifespan and ordinary custody path, receives up to 24 reversible/read-only action rounds by default, and creates no invented human message. A manual local proof crossing is also available; outside Hearth-origin heartbeats are deliberately still separate and unimplemented.
+After the Hearth is tended, the Resident may use `rest_for` to choose a bounded delay and wake autonomously at the exact seat where it rested. The plan binds the current Resident life/context generation and separately records the exact rest time, requested duration, due time, actual dispatch time, elapsed interval, and lateness. The return remains in the same ordinary custody path, receives up to 24 reversible/read-only action rounds by default, and creates no invented human message. A manual local proof crossing is also available; outside Hearth-origin heartbeats are deliberately still separate and unimplemented.
 
 ## Run an explicit fake-mode demonstration
 

@@ -21,6 +21,10 @@ The Resident may call `rest_for` with a bounded delay and optional loose intenti
 
 The wake begins at the current verified seat. It does not reconstruct or restore an older copied projection: if lawful movement occurred after scheduling, stale seat disagreement refuses rather than teleporting or silently substituting a location.
 
+In this slice, one open process-lived session is one Resident life and carries `life_id = session_id`, with context generation `1`. Provider phases and later wakes do not themselves create new lives. A future explicit context-reset crossing must increment or replace that generation and turn an outstanding bench rest into an attributable successor handoff rather than claiming same-life continuation.
+
+The bench promise retains `rested_at`, exact requested duration in milliseconds, computed `due_at`, actual `woke_at`, derived elapsed milliseconds, and nonnegative dispatch lateness. The wake ground tells the Resident each value precisely. Requested duration, due time, actual dispatch, and elapsed time are never substituted for one another; process suspension or competing work may therefore appear as honest lateness.
+
 One pending rest is permitted per lifespan. Replacing or cancelling it is append-only. A crash leaves the plan pending; startup may claim an overdue plan once. Claim identity makes duplicate timer delivery inert.
 
 ### Hearth-origin heartbeat — deferred
@@ -50,7 +54,7 @@ The resulting terminal response is ordinary Resident-authored canonical speech a
 
 ## Failure and recovery
 
-Missing Hearth settlement, a closed lifespan, stale seat, concurrent wake, unavailable Forest readiness, invalid delay/intention, duplicate claim, shutdown, provider failure, or custody drift fails boundedly. The plan receives an append-only terminal event where appropriate. Failure cannot create a user utterance, move the Resident, widen authority, or retry a claimed provider crossing invisibly.
+Missing Hearth settlement, a closed or reset life/context generation, stale seat, concurrent wake, unavailable Forest readiness, invalid delay/intention, duplicate claim, shutdown, provider failure, or custody drift fails boundedly. The plan receives an append-only terminal event where appropriate. Failure cannot create a user utterance, move the Resident, widen authority, or retry a claimed provider crossing invisibly.
 
 ## First proving surface
 

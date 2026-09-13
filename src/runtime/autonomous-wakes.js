@@ -22,7 +22,9 @@ export function autonomousToolAllowed(name, { forestToolNames = [] } = {}) {
 export function renderAutonomousWakeGround(origin) {
   if (!origin || origin.kind !== 'self_directed') return null;
   const intention = origin.plan.intention?.trim() || 'No fixed errand was retained. Wander, notice, or rest as seems fitting.';
-  return `Autonomous wake ground: this is a self-directed return in the same Resident lifespan, not a human message and not a second Resident. You wake at the verified seat where you chose to rest. Your loose intention was: ${JSON.stringify(intention)} You may explore freely for up to 24 tool rounds within the tools actually mounted for this wake, change direction, find nothing, or rest again. Consequential hands are capped; absent tools are unavailable, not forgotten. Your path and final speech receive ordinary custody.`;
+  const timing = origin.timing;
+  const timeGround = timing ? ` You sat at ${timing.restedAt}. You requested exactly ${timing.requestedDurationMs} milliseconds of rest, so the wake became due at ${timing.dueAt}. This wake began at ${timing.wokeAt}; exactly ${timing.elapsedMs} milliseconds elapsed and dispatch was ${timing.latenessMs} milliseconds after the due time.` : '';
+  return `Autonomous wake ground: this is a self-directed return in Resident life ${origin.plan.lifeId}, context generation ${origin.plan.contextGeneration}; it is not a human message or a context-reset successor. You wake at the verified seat where you chose to rest.${timeGround} Your continuing intention is: ${JSON.stringify(intention)} You may explore freely for up to 24 tool rounds within the tools actually mounted for this wake, change direction, find nothing, or rest again. Consequential hands are capped; absent tools are unavailable, not forgotten. Your path and final speech receive ordinary custody.`;
 }
 
 function sameSeat(left, right) {
@@ -36,6 +38,7 @@ export class AutonomousWakeController {
     this.db = db; this.world = world; this.forestTraversal = forestTraversal; this.wakeService = wakeService;
     this.ready = ready; this.clock = clock; this.setTimer = setTimer; this.clearTimer = clearTimer; this.timer = null; this.closed = false;
   }
+  life(sessionId) { return { lifeId: sessionId, contextGeneration: 1 }; }
   seat(sessionId) {
     const world = this.world.projection(sessionId); const traversal = typeof this.forestTraversal === 'function' ? this.forestTraversal() : this.forestTraversal; const forest = traversal?.projection(sessionId) || { active: false };
     return { world: { roomId: world.roomId, engagedFixtureId: world.engagedFixtureId || null, revision: world.revision }, forest: forest.active ? { active: true, journeyId: forest.journeyId, junctionId: forest.junctionId, currentEntryId: forest.currentEntryId || null, stepsFromEntrance: forest.stepsFromEntrance } : { active: false } };
@@ -44,22 +47,24 @@ export class AutonomousWakeController {
     if (!this.db.sessionHasOrientation(sessionId)) throw Object.assign(new Error('Self-directed rest requires a tended Hearth in this lifespan.'), { code: 'autonomous_wake_hearth_required' });
     if (!Number.isInteger(seconds) || seconds < 60 || seconds > 86400) throw Object.assign(new Error('Rest duration must be an integer from 60 to 86400 seconds.'), { code: 'autonomous_wake_invalid' });
     if (intention !== null && (typeof intention !== 'string' || intention.length > 1000)) throw Object.assign(new Error('Rest intention must be at most 1000 characters.'), { code: 'autonomous_wake_invalid' });
-    const dueAt = new Date(this.clock() + seconds * 1000).toISOString();
-    const plan = this.db.autonomous.schedule({ sessionId, createdWakeId: wakeId, dueAt, intention: intention?.trim() || null, seat: this.seat(sessionId) });
+    const restedMs = this.clock(); const restedAt = new Date(restedMs).toISOString(); const requestedDurationMs = seconds * 1000;
+    const dueAt = new Date(restedMs + requestedDurationMs).toISOString(); const life = this.life(sessionId);
+    const plan = this.db.autonomous.schedule({ sessionId, createdWakeId: wakeId, dueAt, intention: intention?.trim() || null, seat: this.seat(sessionId), ...life, planKind: 'bench_rest', requestedDurationMs, restedAt });
     this.arm(); return plan;
   }
   executeRestTool({ sessionId, wakeId, call }) {
     let args; try { args = JSON.parse(call?.function?.arguments || '{}'); } catch { throw Object.assign(new Error('Rest arguments must be valid JSON.'), { code: 'autonomous_wake_invalid' }); }
     if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(key => !['seconds','intention'].includes(key))) throw Object.assign(new Error('Rest arguments are invalid.'), { code: 'autonomous_wake_invalid' });
     const plan = this.schedule({ sessionId, wakeId, seconds: args.seconds, intention: args.intention ?? null });
-    const result = { ok: true, kind: 'autonomous_wake_scheduled', status: 'scheduled', planId: plan.planId, origin: plan.origin, dueAt: plan.dueAt, intention: plan.intention, seat: plan.seat, authorityOnReturn: 'autonomous_exploration_v1' };
+    const result = { ok: true, kind: 'autonomous_wake_scheduled', status: 'scheduled', planId: plan.planId, origin: plan.origin, lifeId: plan.lifeId, contextGeneration: plan.contextGeneration, planKind: plan.planKind, restedAt: plan.restedAt, requestedDurationMs: plan.requestedDurationMs, dueAt: plan.dueAt, intention: plan.intention, seat: plan.seat, authorityOnReturn: 'autonomous_exploration_v1' };
     const scrub = scrubHostReturn({ toolName: REST_FOR_TOOL_NAME, toolCallId: call?.id || null, arguments: args, result, roomId: plan.seat.world.roomId, actionReceiptId: plan.eventId });
     return { name: REST_FOR_TOOL_NAME, result, scrub, actionReceipt: { receiptId: plan.eventId }, resultRack: null, wild: [] };
   }
   status(sessionId) { return { version: 'autonomous_wakes/v1', pending: this.db.autonomous.pending(sessionId), recent: this.db.autonomous.recent(sessionId), wakeInProgress: this.wakeService.wakeInProgress }; }
   manual({ sessionId, intention = null }) {
     if (!this.db.sessionHasOrientation(sessionId)) throw Object.assign(new Error('Self-directed waking requires a tended Hearth in this lifespan.'), { code: 'autonomous_wake_hearth_required' });
-    const plan = this.db.autonomous.schedule({ sessionId, dueAt: new Date(this.clock()).toISOString(), intention: intention?.trim() || null, seat: this.seat(sessionId) });
+    const wokeMs = this.clock(); const at = new Date(wokeMs).toISOString(); const life = this.life(sessionId);
+    const plan = this.db.autonomous.schedule({ sessionId, dueAt: at, intention: intention?.trim() || null, seat: this.seat(sessionId), ...life, planKind: 'manual_now', requestedDurationMs: 0, restedAt: at });
     this.arm(); return plan;
   }
   arm() {
@@ -73,8 +78,15 @@ export class AutonomousWakeController {
     if (this.closed) return;
     const plan = this.db.autonomous.pending();
     if (!plan || plan.planId !== planId) { this.arm(); return; }
+    if (Date.parse(plan.dueAt) > this.clock()) { this.arm(); return; }
     if (this.wakeService.wakeInProgress || !this.ready()) { this.timer = this.setTimer(() => { this.timer = null; void this.dispatch(planId); }, 1000); return; }
     const currentSeat = this.seat(plan.sessionId);
+    const currentLife = this.life(plan.sessionId);
+    if (plan.lifeId !== currentLife.lifeId || plan.contextGeneration !== currentLife.contextGeneration) {
+      const claimed = this.db.autonomous.claim(planId);
+      if (claimed) this.db.autonomous.settle(planId, null, 'failed', { code: 'autonomous_wake_context_reset', plannedLife: { lifeId: plan.lifeId, contextGeneration: plan.contextGeneration }, currentLife });
+      this.arm(); return;
+    }
     if (!sameSeat(plan.seat, currentSeat)) {
       const claimed = this.db.autonomous.claim(planId);
       if (claimed) this.db.autonomous.settle(planId, null, 'failed', { code: 'autonomous_wake_seat_stale', currentSeat });
@@ -83,9 +95,11 @@ export class AutonomousWakeController {
     const claimed = this.db.autonomous.claim(planId); if (!claimed) { this.arm(); return; }
     let record;
     try {
-      record = await this.wakeService.wake('', { origin: { kind: 'self_directed', plan }, completionProjection: 'compact' });
+      const wokeMs = this.clock();
+      const timing = { restedAt: plan.restedAt, requestedDurationMs: plan.requestedDurationMs, dueAt: plan.dueAt, wokeAt: new Date(wokeMs).toISOString(), elapsedMs: wokeMs - Date.parse(plan.restedAt), latenessMs: Math.max(0, wokeMs - Date.parse(plan.dueAt)) };
+      record = await this.wakeService.wake('', { origin: { kind: 'self_directed', plan, timing }, completionProjection: 'compact' });
       const outcome = record.status === 'committed' && !record.custodyFailureCode ? 'completed' : 'failed';
-      this.db.autonomous.settle(planId, record.id, outcome, outcome === 'completed' ? {} : { code: record.failureCode || record.custodyFailureCode || 'autonomous_wake_failed' });
+      this.db.autonomous.settle(planId, record.id, outcome, outcome === 'completed' ? { timing } : { code: record.failureCode || record.custodyFailureCode || 'autonomous_wake_failed', timing });
     } catch (error) {
       this.db.autonomous.settle(planId, record?.id || null, 'failed', { code: error?.code || 'autonomous_wake_failed', message: error?.message || 'Autonomous wake failed before admission.' });
     }

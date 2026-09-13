@@ -379,13 +379,14 @@ export class HubDatabase {
     return { wakeId, eventId, sessionId: session.id, turnOrdinal, context: [{ role: 'system', content: STABLE_GLASS_TEXT }, message] };
   }
 
-  createAutonomousSessionWake({ provider, model, plan }) {
+  createAutonomousSessionWake({ provider, model, plan, timing }) {
     if (!plan || plan.origin !== 'self_directed' || !plan.planId || !plan.seat) throw Object.assign(new Error('Autonomous wake plan is invalid.'), { code: 'autonomous_wake_invalid' });
     const wakeId = id('wake'); const eventId = id('event'); const timestamp = now(); const session = this.getActiveSession();
     if (!session || session.status !== 'open' || session.id !== plan.sessionId) throw Object.assign(new Error('The planned lifespan is no longer open.'), { code: 'autonomous_wake_session_stale' });
     if (!this.sessionHasOrientation(session.id)) throw Object.assign(new Error('Self-directed waking requires a tended Hearth in this lifespan.'), { code: 'autonomous_wake_hearth_required' });
     const turnOrdinal = this.sqlite.prepare('SELECT COUNT(*) AS count FROM wakes WHERE session_id=?').get(session.id).count + 1;
-    const trigger = canonicalize({ kind: 'autonomous_wake_trigger/v1', origin: plan.origin, planId: plan.planId, dueAt: plan.dueAt, intention: plan.intention, seat: plan.seat, seatHash: plan.seatHash });
+    if (!timing || timing.restedAt !== plan.restedAt || timing.dueAt !== plan.dueAt || !Number.isInteger(timing.requestedDurationMs) || !Number.isInteger(timing.elapsedMs) || !Number.isInteger(timing.latenessMs)) throw Object.assign(new Error('Autonomous wake timing is invalid.'), { code: 'autonomous_wake_invalid' });
+    const trigger = canonicalize({ kind: 'autonomous_wake_trigger/v2', origin: plan.origin, planId: plan.planId, lifeId: plan.lifeId, contextGeneration: plan.contextGeneration, planKind: plan.planKind, intention: plan.intention, timing, seat: plan.seat, seatHash: plan.seatHash });
     this.transaction(() => {
       this.sqlite.prepare(`INSERT INTO wakes(id,thread_id,session_id,turn_ordinal,status,provider,requested_model,started_at) VALUES(?,?,?,?,?,?,?,?)`)
         .run(wakeId, this.threadId, session.id, turnOrdinal, 'assembling', provider, model, timestamp);
@@ -394,7 +395,7 @@ export class HubDatabase {
       this.autonomous.recordOrigin({ wakeId, origin: plan.origin, planId: plan.planId, triggerEventId: eventId, seat: plan.seat });
       this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
     });
-    return { wakeId, eventId, sessionId: session.id, turnOrdinal, origin: plan.origin, plan };
+    return { wakeId, eventId, sessionId: session.id, turnOrdinal, origin: plan.origin, plan, timing };
   }
 
   getSessionHistory(sessionId = this.session.id) {
