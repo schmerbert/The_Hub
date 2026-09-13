@@ -318,9 +318,9 @@ function normalizePortfolio(data, request, jurisdictions) {
   if (alias !== request.accountAlias) fail('spotlight_robinhood_account_mismatch', 'Response account does not match the requested jurisdiction.');
   const fields = { account: present(jurisdiction(alias, jurisdictions, '$.response.data.accountAlias')) };
   const numeric = [
-    ['totalValue', 'total_value', 0],
-    ['cash', 'cash', 0],
-    ['buyingPower', 'buying_power', 0],
+    ['totalValue', 'total_value', null],
+    ['cash', 'cash', null],
+    ['buyingPower', 'buying_power', null],
     ['dayChange', 'day_change', null],
     ['dayChangePercent', 'day_change_percent', null],
   ];
@@ -347,7 +347,7 @@ function normalizePositions(data, operation, request, limits) {
     const normalizedSymbol = symbol(entry.symbol, `$.response.data.positions[${index}].symbol`, kind);
     if (request.symbol && normalizedSymbol !== request.symbol) fail('spotlight_robinhood_symbol_mismatch', 'Position symbol does not match the requested symbol.');
     const output = { symbol: normalizedSymbol };
-    for (const [input, key, min] of [['quantity', 'quantity', 0], ['averageCost', 'average_cost', 0], ['marketValue', 'market_value', 0], ['unrealizedPnl', 'unrealized_pnl', null]]) {
+    for (const [input, key, min] of [['quantity', 'quantity', kind === 'equity' ? null : 0], ['averageCost', 'average_cost', 0], ['marketValue', 'market_value', kind === 'equity' ? null : 0], ['unrealizedPnl', 'unrealized_pnl', null]]) {
       if (Object.hasOwn(entry, input)) output[key] = finiteNumber(entry[input], `$.response.data.positions[${index}].${input}`, { nullable: true, min });
     }
     if (Object.hasOwn(entry, 'currency')) output.currency = currency(entry.currency, `$.response.data.positions[${index}].currency`);

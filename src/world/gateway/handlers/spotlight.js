@@ -19,10 +19,12 @@ function invoke(spotlight, name, context) {
       approvalCreated: false,
     });
   }
-  // Gated hand arguments are intentionally not forwarded until a room-owned
-  // adapter, validator, and custody law are adopted together.  This ensures a
-  // withheld call cannot echo hostile or unbounded provider input.
-  return outcome(spotlight.invoke(name, {}, context));
+  // The concrete room service validates the existing schema and owns custody.
+  // The default capped service still ignores arguments and never invokes a wire.
+  const result = spotlight.invoke(name, context.args || {}, {
+    sessionId: context.sessionId, wakeId: context.wakeId, commandId: context.commandId,
+  });
+  return result && typeof result.then === 'function' ? result.then(outcome) : outcome(result);
 }
 
 export const SPOTLIGHT_HANDLERS = Object.freeze({

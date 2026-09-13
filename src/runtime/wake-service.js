@@ -13,6 +13,7 @@ import { runSemanticForestShadow, runAmbientFeatherShadow, buildSemanticRoomSign
 import { FOREST_WALK_TOOL_NAMES } from '../forest/traversal.js';
 import { isSimpleEmbodiedAction } from './reasoning-posture.js';
 import { ProviderPhase, providerCancellation } from './provider-phase.js';
+import { REST_FOR_TOOL, REST_FOR_TOOL_NAME, autonomousToolAllowed } from './autonomous-wakes.js';
 
 export class WakeService {
   constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null, ambientFeatherService = null, forestTraversalService = null, forestReadiness = null }) {
@@ -46,6 +47,7 @@ export class WakeService {
       suppressedDeltaChannels: this.suppressedDeltaChannels,
     });
     this.activeProviderAbortController = null;
+    this.autonomousWakeController = null;
     this.providerPhase = new ProviderPhase({
       config,
       db,
@@ -67,6 +69,8 @@ export class WakeService {
       clearSuppressedRequest: (...args) => this.clearSuppressedRequest(...args),
     });
   }
+
+  setAutonomousWakeController(controller) { this.autonomousWakeController = controller; }
 
   publish(kind, { sessionId, wakeId, phase = null, authority = 'host_receipt', committed = true, payload = {}, source = {} }, fallbackPayload = null) {
     return this.eventPublication.publish(kind, { sessionId, wakeId, phase, authority, committed, payload, source }, fallbackPayload);
@@ -126,12 +130,12 @@ export class WakeService {
     };
   }
 
-  async wake(content, { completionProjection = 'full' } = {}) {
+  async wake(content, { completionProjection = 'full', origin = { kind: 'human_present' } } = {}) {
     if (this.closing) throw { code: 'hub_closing', message: 'The Hub is shutting down and is not accepting new wakes.' };
     if (this.wakeInProgress) throw { code: 'wake_in_progress', message: 'Another wake is already in progress.' };
     this.assertForestReadyForWake();
     this.wakeInProgress = true;
-    const operation = this.performWake(content, { completionProjection });
+    const operation = this.performWake(content, { completionProjection, origin });
     this.activeWakePromise = operation;
     try { return await operation; }
     finally {
@@ -141,16 +145,18 @@ export class WakeService {
     }
   }
 
-  async performWake(content, { completionProjection = 'full' } = {}) {
+  async performWake(content, { completionProjection = 'full', origin = { kind: 'human_present' } } = {}) {
     // Keep the domain boundary intact for direct callers as well as HTTP.
     // This second check closes the bypass where a caller invokes the
     // orchestration method without going through wake().
     this.assertForestReadyForWake();
     const { config, db, provider, forest, spine, world, gateway, attentionMeter } = this;
+    const autonomous = origin?.kind === 'self_directed';
+    if (!autonomous && origin?.kind !== 'human_present') throw { code: 'wake_origin_invalid', message: 'Wake origin is not installed.' };
     const submitted = typeof content === 'string' ? content : '';
     const trimmed = submitted.trim();
-    if (!trimmed) throw { code: 'invalid_message', message: 'Message must contain text.' };
-    if (trimmed.length > config.maxMessageLength) throw { code: 'message_too_large', message: `Message must be ${config.maxMessageLength} characters or fewer.` };
+    if (!autonomous && !trimmed) throw { code: 'invalid_message', message: 'Message must contain text.' };
+    if (!autonomous && trimmed.length > config.maxMessageLength) throw { code: 'message_too_large', message: `Message must be ${config.maxMessageLength} characters or fewer.` };
     const glassTraceVerification = db.verifyGlassTrace({ mismatchLimit: 10 });
     if (!glassTraceVerification.verified) throw { code: 'glass_trace_drift', message: `Glass trace verification found a dangling or altered closure-era path: ${glassTraceVerification.mismatches.map(item => item.code).join(', ')}.` };
     const rootsVerification = db.verifyRoots({ mismatchLimit: 10 });
@@ -158,18 +164,20 @@ export class WakeService {
     const providerName = config.mode === 'fake' ? 'fake' : 'deepseek';
     const firstTurn = !db.sessionHasOrientation();
     const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;
-    const created = db.createSessionWake({ provider: providerName, model: config.model, content: submitted });
+    const created = autonomous
+      ? db.createAutonomousSessionWake({ provider: providerName, model: config.model, plan: origin.plan })
+      : db.createSessionWake({ provider: providerName, model: config.model, content: submitted });
     const triggerEvent = db.getEvent(created.eventId);
     if (!firstTurn) world.ageHearthSettlement?.(created.sessionId);
     this.activeWakeId = created.wakeId;
     this.publish('wake.accepted', {
       sessionId: created.sessionId,
       wakeId: created.wakeId,
-      payload: { status: 'assembling', provider: providerName, requestedModel: config.model },
-      source: { userEventId: created.eventId },
+      payload: { status: 'assembling', provider: providerName, requestedModel: config.model, origin: autonomous ? 'self_directed' : 'human_present' },
+      source: autonomous ? { triggerEventId: created.eventId } : { userEventId: created.eventId },
     });
     let semanticExhale = null;
-    if (forest) {
+    if (forest && !autonomous) {
       try { forest.ingestEvent(db.getEvent(created.eventId), { spineStatus: 'live', predecessorSourceEventId: priorEligible }); }
       catch (error) {
         const failure = { code: 'forest_intake_failed', message: error?.message || 'The Forest could not accept the source event.' };
@@ -181,7 +189,7 @@ export class WakeService {
         return completionProjection === 'compact' ? db.getWakeCompletion(created.wakeId) : db.getWake(created.wakeId);
       }
     }
-    if (forest) {
+    if (forest && !autonomous) {
       // Startup performs the expensive custody proof once. Request-time checks
       // bind that verified head to this connection and the exact admitted tail.
       const intake = typeof forest.intakeStatus === 'function' ? forest.intakeStatus() : { held: 0, unresolved: 0 };
@@ -316,8 +324,9 @@ export class WakeService {
     };
     const runResidentRounds = async (phase = 'response', options = {}) => {
       let afterSimpleAction = options.afterSimpleAction === true;
-      for (let round = 0; round <= config.maxToolRounds; round += 1) {
-        const finalOpportunity = round === config.maxToolRounds;
+      const roundLimit = autonomous ? config.autonomousMaxToolRounds : config.maxToolRounds;
+      for (let round = 0; round <= roundLimit; round += 1) {
+        const finalOpportunity = round === roundLimit;
         const location = world.current(created.sessionId);
         const roomId = location.room_node_id;
         const forestTools = this.forestTraversalService?.tools(created.sessionId, roomId) || [];
@@ -327,27 +336,31 @@ export class WakeService {
           workshopMaxLines: config.workshopMaxLines,
           workshopMaxResults: config.workshopMaxResults,
         });
-        const worldTools = forestActive
+        let worldTools = forestActive
           ? forestState.entranceRegister === 'physical' ? fittedWorldTools.filter(tool => tool.function.name === 'move_through_passage') : []
           : fittedWorldTools;
+        if (autonomous) worldTools = worldTools.filter(tool => autonomousToolAllowed(tool.function.name, { forestToolNames: forestTools.map(tool => tool.function.name) }));
+        const autonomousForestTools = autonomous ? forestTools.filter(tool => autonomousToolAllowed(tool.function.name, { forestToolNames: forestTools.map(tool => tool.function.name) })) : forestTools;
         const fittedProfile = forestActive
-          ? { roomId:'place.forest', activeGroup: 'forest_walk', names: [...worldTools.map(tool => tool.function.name), ...forestTools.map(tool => tool.function.name)], completeCount: worldTools.length + forestTools.length, omittedCount: 0 }
+          ? { roomId:'place.forest', activeGroup: 'forest_walk', names: [...worldTools.map(tool => tool.function.name), ...autonomousForestTools.map(tool => tool.function.name)], completeCount: worldTools.length + autonomousForestTools.length, omittedCount: 0 }
           : (() => {
             const profile = residentToolProfile(world, created.sessionId);
-            return { ...profile, names: [...profile.names, ...forestTools.map(tool => tool.function.name)], completeCount: profile.completeCount + forestTools.length };
+            const names = [...worldTools.map(tool => tool.function.name), ...autonomousForestTools.map(tool => tool.function.name)];
+            return { ...profile, names, completeCount: autonomous ? names.length : profile.completeCount + autonomousForestTools.length, omittedCount: autonomous ? Math.max(profile.completeCount - worldTools.length, 0) : profile.omittedCount };
           })();
         const toolProfile = {
           ...fittedProfile,
-          names: [...fittedProfile.names, RESULT_REOPEN_TOOL_NAME],
-          completeCount: fittedProfile.completeCount + 1,
+          names: [...fittedProfile.names, RESULT_REOPEN_TOOL_NAME, REST_FOR_TOOL_NAME],
+          completeCount: fittedProfile.completeCount + 2,
         };
         const response = await callPhase(phase, db.getSessionHistory(created.sessionId), {
           ...options,
           afterSimpleAction,
-          tools: finalOpportunity ? [] : [...worldTools, ...forestTools, REOPEN_RESULT_TOOL],
+          tools: finalOpportunity ? [] : [...worldTools, ...autonomousForestTools, REOPEN_RESULT_TOOL, REST_FOR_TOOL],
           toolsDisabled: finalOpportunity,
           toolProfile,
-          toolRoundBudget: { used: round, remaining: Math.max(config.maxToolRounds - round, 0), limit: config.maxToolRounds, finalOpportunity },
+          wakeOrigin: autonomous ? origin : null,
+          toolRoundBudget: { used: round, remaining: Math.max(roundLimit - round, 0), limit: roundLimit, finalOpportunity },
         });
         const calls = Array.isArray(response.result?.message?.tool_calls) ? response.result.message.tool_calls : [];
         if (!calls.length) {
@@ -362,7 +375,7 @@ export class WakeService {
             source: { toolCallEventId, returnScrubReceiptId: response.returnScrub.receipt.receiptId },
           });
         }
-        if (round === config.maxToolRounds) {
+        if (round === roundLimit) {
           const limitError = { code: 'world_tool_round_limit', message: 'The bounded resident tool loop refused a tool action after the configured round limit.' };
           for (const call of calls) {
             const action = gateway.refuse({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call, error: limitError });
@@ -385,10 +398,13 @@ export class WakeService {
           });
           try {
             const isForestTool = FOREST_WALK_TOOL_NAMES.has(call.function?.name);
-            action = call.function?.name === RESULT_REOPEN_TOOL_NAME
+            if (autonomous && !autonomousToolAllowed(call.function?.name, { forestToolNames: [...FOREST_WALK_TOOL_NAMES] })) throw Object.assign(new Error('That consequential capability is not available during an autonomous wake.'), { code: 'autonomous_tool_denied' });
+            action = call.function?.name === REST_FOR_TOOL_NAME
+              ? this.autonomousWakeController?.executeRestTool({ sessionId: created.sessionId, wakeId: created.wakeId, call }) || (() => { throw Object.assign(new Error('Autonomous rest scheduling is unavailable.'), { code: 'autonomous_wake_unavailable' }); })()
+              : call.function?.name === RESULT_REOPEN_TOOL_NAME
               ? reopenResult(call, { requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id })
               : isForestTool && this.forestTraversalService
-                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: created.eventId, queryFallback: triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
+                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: autonomous ? priorEligible : created.eventId, queryFallback: autonomous ? origin.plan.intention || 'wander and notice' : triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
               : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
             // Journal custody binds the exact identity return created at the
             // planting boundary. Result Rack may subsequently fit a second,
@@ -397,7 +413,7 @@ export class WakeService {
             if (call.function?.name === 'write_journal' && action.result?.entryId && action.scrub) {
               db.persistHostReturnScrub({ sessionId: created.sessionId, wakeId: created.wakeId, toolName: 'write_journal', hostReturnScrub: action.scrub });
             }
-            if (isForestTool && action && !action.resultRack) {
+            if ((isForestTool || call.function?.name === REST_FOR_TOOL_NAME) && action && !action.resultRack) {
               const custody = gateway.captureResultSafely({
                 sessionId: created.sessionId,
                 wakeId: created.wakeId,
@@ -494,7 +510,7 @@ export class WakeService {
         }, { role: 'assistant', content: null, contentOmitted: true });
         if (forest && response.requestFrame) {
           try {
-            const entry = forest.ingestEvent(db.getEvent(residentEventId), { spineStatus: 'live', predecessorSourceEventId: created.eventId });
+            const entry = forest.ingestEvent(db.getEvent(residentEventId), { spineStatus: 'live', predecessorSourceEventId: autonomous ? priorEligible : created.eventId });
             forest.linkEmission({ entryId: entry.entryId || entry.entry_id, requestRecordId: response.requestFrame.record_id });
           } catch (error) { db.recordHostFailure(created.wakeId, { code: 'forest_intake_failed', message: error?.message || 'The Forest could not accept the resident utterance.' }); }
         }
@@ -514,7 +530,7 @@ export class WakeService {
         }, { role: 'assistant', content: null, contentOmitted: true });
         if (forest && ordinary.requestFrame) {
           try {
-            const entry = forest.ingestEvent(db.getEvent(residentEventId), { spineStatus: 'live', predecessorSourceEventId: created.eventId });
+            const entry = forest.ingestEvent(db.getEvent(residentEventId), { spineStatus: 'live', predecessorSourceEventId: autonomous ? priorEligible : created.eventId });
             forest.linkEmission({ entryId: entry.entryId || entry.entry_id, requestRecordId: ordinary.requestFrame.record_id });
           } catch (error) { db.recordHostFailure(created.wakeId, { code: 'forest_intake_failed', message: error?.message || 'The Forest could not accept the resident utterance.' }); }
         }

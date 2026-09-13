@@ -38,6 +38,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | `stable_glass` | every call; World physics and epistemic boundary | clinical backplate | `src/context/glass-cast.js` |
 | `silver_bullet_holster` | after successful Hearth tending; occupied bullets remain above the fold | continuity | `src/hearth/packet.js` |
 | `crossing_ground` | every call; minimal present footing | experiential | `src/context/resident-presentation.js` |
+| `autonomous_wake_ground` | self-directed return; declares non-human origin, same-Resident continuity, retained seat/intention, generous horizon, and reduced hands | experiential crossing ground | `src/runtime/autonomous-wakes.js`, `src/runtime/provider-phase.js` |
 | `orientation_ground` | Hearth action/return; situated waking plus the bounded retrieval affordance and its epistemic limits | experiential | `src/context/resident-presentation.js` |
 | `hearth_trail_sign` | after ordinary attention moves the exact completed Hearth pair from the living edge; retains packet hash and bounded exact source bearings | continuity | `src/context/tool-pairs.js` |
 | `world_current_ground` | room-aware calls; verified presence plus bounded containment/route horizon | clinical World projection | `src/world/graph.js#presenceMessage`, `src/world/spatial-horizon.js` |
@@ -55,7 +56,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 | Session Scroll messages | living edge; exact visible conversation/action plus reasoning pointer | source-exact | `src/ledger/source.js` |
 | tool schemas and returns | when mounted/called; action grammar and consequences | World action/return | fixture/tool owners |
 | Binder Window inspection return | only when the Resident deliberately inspects `fixture.binder_window`; bounded frozen Binder claims, freshness, completeness, and absences | attributable personal portfolio projection | `src/places/hub/binder-window/adapter.js`, `src/world/gateway/fixture-inspectors.js` |
-| Spotlight shell | only as Builder inspection/topology until a later door revision; balcony, landscape, capped telescope, archive, table, bell, and withheld entrance | verified World and room-installation projection | `src/places/hub/spotlight/`, `src/rooms/spotlight-witness.js` |
+| Spotlight room and read connection | enterable from Center; immutable shell ancestry plus bounded current connection standing and deliberate observation grammar while present | verified World and room-installation projection; process-local read standing retained in the Glass tool-mount receipt; results through ordinary Gateway/Scrub | `src/places/hub/spotlight/presentation.js`, `live-service.js`, `src/rooms/spotlight-witness.js`, `src/runtime/provider-phase.js` |
 
 ## Kindness rules
 

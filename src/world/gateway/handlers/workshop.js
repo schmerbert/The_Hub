@@ -1,4 +1,6 @@
 import { residentToolProfile, toolCatalogEntries } from '../../tools.js';
+import { createLineExtent, mergeLineRanges, missingLineRanges } from '../../../core/truthful-extent.js';
+import { documentReadCoverage } from '../../document-coverage.js';
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 function outcome(result, source = null) { return { result, source, changedRoom: false }; }
@@ -8,6 +10,27 @@ export const WORKSHOP_HANDLERS = Object.freeze({
   workshop_list: ({ workshop, args }) => outcome(workshop.list(args.path || '.')),
   workshop_read: ({ workshop, world, sessionId, wakeId, commandId, args }) => {
     const result = workshop.read(args.path, args.start_line || 1, args.line_count || undefined);
+    const event = world.inspect(sessionId, result.source.path, { wakeId, commandId });
+    return outcome({ ...result, worldEventSequence: event.worldEventSequence, worldEventHash: event.worldEventHash }, { sourceKind: 'workshop_read', source: result.source });
+  },
+  workshop_document_outline: ({ workshop, args }) => {
+    const result = workshop.documentOutline(args.path); const claim = result.documentExtent; delete result.documentExtent;
+    result.extent = createLineExtent({ locator: result.path, revision: result.revision, ...claim });
+    return outcome(result);
+  },
+  workshop_document_read: ({ workshop, world, sessionId, wakeId, commandId, args }) => {
+    if (args.heading !== undefined && (args.start_line !== undefined || args.end_line !== undefined)) fail('workshop_invalid_argument', 'Choose a heading or a line range, not both.');
+    if ((args.start_line === undefined) !== (args.end_line === undefined)) fail('workshop_invalid_argument', 'Document line ranges require both start_line and end_line.');
+    const result = workshop.documentRead(args.path, { heading: args.heading ?? null, startLine: args.start_line ?? null, endLine: args.end_line ?? null });
+    const claim = result.documentExtent; delete result.documentExtent;
+    const covered = mergeLineRanges([...documentReadCoverage(world, { sessionId, path: result.source.path, revision: result.documentRevision }), [result.source.startLine, result.source.endLine]]);
+    const unread = missingLineRanges(covered, result.totalLines);
+    result.extent = createLineExtent({
+      locator: result.source.path, revision: result.documentRevision, requested: claim.requested, examined: claim.examined,
+      presented: claim.presented, missing: claim.missing, standing: claim.standing,
+      continuation: unread.length ? { tool: 'workshop_document_read', arguments: { path: result.source.path, start_line: unread[0][0], end_line: unread[0][1] } } : null,
+      coverage: { covered, unread },
+    });
     const event = world.inspect(sessionId, result.source.path, { wakeId, commandId });
     return outcome({ ...result, worldEventSequence: event.worldEventSequence, worldEventHash: event.worldEventHash }, { sourceKind: 'workshop_read', source: result.source });
   },

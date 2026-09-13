@@ -6,7 +6,7 @@ import { metadataForEvent } from './admission.js';
 import { APPEND_ONLY_TABLES } from './store.js';
 
 export function wildSourceKindForTool(toolName) {
-  if (toolName === 'workshop_read') return 'workshop_read';
+  if (['workshop_read', 'workshop_document_read'].includes(toolName)) return 'workshop_read';
   if (['workshop_search', 'workshop_search_regex'].includes(toolName)) return 'workshop_search';
   return null;
 }
@@ -218,7 +218,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
         if (!requestFrame || requestFrame.wake_id !== action.wake_id || !lifecycle?.dispatched || lifecycle.outcome?.kind !== 'success') throw new Error(`Wild workshop Spine ancestry mismatch for ${actionReceiptId}.`);
         let result;
         try { result = JSON.parse(action.result_json); } catch { throw new Error(`World action result is not valid JSON for ${actionReceiptId}.`); }
-        const expected = action.tool_name === 'workshop_read'
+        const expected = ['workshop_read', 'workshop_document_read'].includes(action.tool_name)
           ? [{ path: result.source?.path, startLine: result.source?.startLine, endLine: result.source?.endLine, text: result.source?.text, hash: result.source?.hash }]
           : (Array.isArray(result.matches) ? result.matches.map(match => ({ path: match.path, startLine: match.line, endLine: match.line, text: match.text, hash: match.hash })) : null);
         if (!expected || result.kind !== action.tool_name || expected.some(item => !item.path || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine) || typeof item.text !== 'string' || item.hash !== sha256(item.text))) throw new Error(`World action source result is not exact for ${actionReceiptId}.`);
@@ -232,12 +232,12 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       }
       if (strictWildBijection && worldPath && existsSync(worldPath)) {
         if (!world) world = new DatabaseSync(worldPath, { readOnly: true });
-        const actions = world.prepare("SELECT * FROM world_action_receipts WHERE outcome='committed' AND tool_name IN ('workshop_read','workshop_search','workshop_search_regex') AND request_record_id IS NOT NULL AND spine_record_id IS NOT NULL ORDER BY created_at,receipt_id").all();
+        const actions = world.prepare("SELECT * FROM world_action_receipts WHERE outcome='committed' AND tool_name IN ('workshop_read','workshop_document_read','workshop_search','workshop_search_regex') AND request_record_id IS NOT NULL AND spine_record_id IS NOT NULL ORDER BY created_at,receipt_id").all();
         const expectedKeys = new Set();
         for (const action of actions) {
           let result;
           try { result = JSON.parse(action.result_json); } catch { throw new Error(`World action result is not valid JSON for ${action.receipt_id}.`); }
-          const expected = action.tool_name === 'workshop_read'
+          const expected = ['workshop_read', 'workshop_document_read'].includes(action.tool_name)
             ? [{ path: result.source?.path, startLine: result.source?.startLine, endLine: result.source?.endLine, text: result.source?.text, hash: result.source?.hash }]
             : (Array.isArray(result.matches) ? result.matches.map(match => ({ path: match.path, startLine: match.line, endLine: match.line, text: match.text, hash: match.hash })) : null);
           if (!expected || result.kind !== action.tool_name || expected.some(item => !item.path || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine) || typeof item.text !== 'string' || item.hash !== sha256(item.text))) throw new Error(`World action source result is not exact for ${action.receipt_id}.`);

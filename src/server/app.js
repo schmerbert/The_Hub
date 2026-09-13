@@ -27,6 +27,8 @@ import { WakeService } from '../runtime/wake-service.js';
 import { HubEventBus } from '../runtime/hub-event-bus.js';
 import { ReadinessProjection } from '../runtime/readiness.js';
 import { createProgressiveForestLifecycle } from '../runtime/progressive-forest-lifecycle.js';
+import { createSpotlightRuntime } from '../runtime/spotlight-lifecycle.js';
+import { AutonomousWakeController } from '../runtime/autonomous-wakes.js';
 import { establishInstalledRoomReceipts } from '../rooms/installation-runtime.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -40,11 +42,11 @@ function json(response, status, value) {
 }
 function typedError(response, status, code, message) { json(response, status, { error: { code, message } }); }
 function statusFor(code) {
-  if (code === 'wake_in_progress' || code === 'sandbox_promotion_stale') return 409;
+  if (code === 'wake_in_progress' || code === 'sandbox_promotion_stale' || code === 'autonomous_wake_hearth_required') return 409;
   if (code?.startsWith('wake_stream_')) return 400;
   if (code === 'sandbox_backend_unavailable' || code === 'sandbox_workspace_not_writable') return 503;
   if (code?.startsWith('sandbox_')) return 400;
-  if (['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json', 'attention_ceiling_exceeded', 'world_invalid_argument', 'world_tool_invalid', 'world_tool_unknown', 'world_wrong_room', 'world_wrong_station', 'world_not_engaged', 'world_station_unknown', 'world_station_unreachable', 'world_fixture_unknown', 'world_fixture_unreachable', 'world_fixture_not_turnable', 'world_wrong_location_or_passage', 'world_passage_closed', 'world_passage_operation_invalid', 'world_passage_operation_refused', 'workshop_path_invalid', 'workshop_path_forbidden', 'workshop_not_found', 'workshop_not_file', 'workshop_not_directory', 'workshop_range', 'workshop_limit', 'workshop_oversized', 'workshop_binary', 'workshop_invalid_argument', 'workshop_patch_missing', 'workshop_patch_ambiguous', 'workshop_patch_stale', 'workshop_recipe_unknown', 'workshop_approval_not_found', 'workshop_approval_not_pending', 'workshop_git_failed', 'workshop_git_unavailable'].includes(code)) return 400;
+  if (['invalid_message', 'message_too_large', 'request_too_large', 'invalid_json', 'attention_ceiling_exceeded', 'autonomous_wake_invalid', 'world_invalid_argument', 'world_tool_invalid', 'world_tool_unknown', 'world_wrong_room', 'world_wrong_station', 'world_not_engaged', 'world_station_unknown', 'world_station_unreachable', 'world_fixture_unknown', 'world_fixture_unreachable', 'world_fixture_not_turnable', 'world_wrong_location_or_passage', 'world_passage_closed', 'world_passage_operation_invalid', 'world_passage_operation_refused', 'workshop_path_invalid', 'workshop_path_forbidden', 'workshop_not_found', 'workshop_not_file', 'workshop_not_directory', 'workshop_range', 'workshop_limit', 'workshop_oversized', 'workshop_binary', 'workshop_invalid_argument', 'workshop_patch_missing', 'workshop_patch_ambiguous', 'workshop_patch_stale', 'workshop_recipe_unknown', 'workshop_approval_not_found', 'workshop_approval_not_pending', 'workshop_git_failed', 'workshop_git_unavailable'].includes(code)) return 400;
   if (['provider_unavailable', 'forest_intake_failed', 'forest_activation_refused', 'forest_verification_pending', 'forest_verification_failed', 'forest_verification_stale', 'forest_activation_failed', 'forest_open_failed', 'forest_unavailable', 'wake_ritual_invalid'].includes(code)) return 503;
   if (code === 'hearth_orientation_invalid' || code?.startsWith('provider_')) return 502;
   return 500;
@@ -86,7 +88,7 @@ function boundedForestReadinessHealth(active, stage) {
   };
 }
 
-export function createHub({ env = process.env, dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, binderWindowSnapshotPath, activateForest, progressiveStartup = false, forest: forestOverride, spine: spineOverride, world: worldOverride, provider: providerOverride, recipeRunner: recipeRunnerOverride, ambientFeatherService: ambientFeatherServiceOverride, forestTraversalService: forestTraversalServiceOverride, forestVerifier: forestVerifierOverride, readiness: readinessOverride } = {}) {
+export function createHub({ env = process.env, dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, binderWindowSnapshotPath, activateForest, progressiveStartup = false, forest: forestOverride, spine: spineOverride, world: worldOverride, provider: providerOverride, recipeRunner: recipeRunnerOverride, ambientFeatherService: ambientFeatherServiceOverride, forestTraversalService: forestTraversalServiceOverride, forestVerifier: forestVerifierOverride, readiness: readinessOverride, spotlightSource: spotlightSourceOverride } = {}) {
   const config = resolveHubConfig(env, { dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, binderWindowSnapshotPath, activateForest, progressiveStartup });
   const progressiveMode = Boolean(config.progressiveStartup && config.forestActive);
   const readiness = readinessOverride || new ReadinessProjection();
@@ -143,7 +145,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     world = worldOverride || new WorldGraphStore(config.worldPath, { topologyVersion: 'spotlight' });
     worldVerified = world.verification({ mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true }).verified;
     if (worldVerified) establishInstalledRoomReceipts(world);
-    results = new ResultRackStore(config.resultPath, { projectionMaxBytes: config.resultProjectionMaxBytes, projectionMaxLines: config.resultProjectionMaxLines });
+    results = new ResultRackStore(config.resultPath, { projectionMaxBytes: config.resultProjectionMaxBytes, projectionMaxLines: config.resultProjectionMaxLines, documentProjectionMaxBytes: config.documentProjectionMaxBytes, documentProjectionMaxLines: config.documentProjectionMaxLines });
     if (worldVerified) {
       world.ensureLifespan(db.session.id);
       if (db.sessionHasOrientation()) world.setHearthSettlement?.(db.session.id, { settled: true });
@@ -153,7 +155,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     if (error?.code === 'wake_ritual_invalid' || error?.code === 'forest_activation_refused' || error?.code === 'room_installation_upgrade_required' || error?.code === 'room_installation_witness_drift' || error?.code === 'room_installation_receipt_invalid') throw error;
     throw { code: 'hub_startup_failed', message: `Hub startup failed: ${error?.message || 'unknown store initialization error'}` };
   }
-  let workshop = null; let sandboxBay = null; let recipeRunner = recipeRunnerOverride || null; let gateway = null;
+  let workshop = null; let sandboxBay = null; let recipeRunner = recipeRunnerOverride || null; let gateway = null; let spotlight = null;
   try {
     const binderWindow = loadBinderWindowSnapshot(config.binderWindowSnapshotPath);
     workshop = new WorkshopAdapter(config.workshopRoot, { maxFiles: config.workshopMaxFiles, maxBytes: config.workshopMaxBytes, maxLines: config.workshopMaxLines, maxResults: config.workshopMaxResults });
@@ -166,9 +168,11 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
       });
       recipeRunner = new SandboxRecipeRunner(config.workshopRoot, { sandboxBay, timeoutMs: config.recipeTimeoutMs });
     }
-    gateway = new WorldActionGateway({ world, workshop, forest: progressiveMode ? null : forest, resultRack: results, recipeRunner, binderWindow, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs, readHearth: sessionId => db.getSessionHearthPacket(sessionId) });
+    spotlight = createSpotlightRuntime({ config, source: spotlightSourceOverride });
+    gateway = new WorldActionGateway({ world, workshop, forest: progressiveMode ? null : forest, resultRack: results, recipeRunner, binderWindow, spotlightService: spotlight, approvalMode: config.approvalMode, recipeTimeoutMs: config.recipeTimeoutMs, readHearth: sessionId => db.getSessionHearthPacket(sessionId) });
     if (world.verification({ mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true }).verified) gateway.reconcileStartup(db.session.id);
   } catch (error) {
+    Promise.resolve(spotlight?.close()).catch(() => {});
     forestTraversalStore?.close(); semanticIndex?.close(); forest?.close(); spine?.close(); world?.close(); results?.close(); db.close();
     throw error;
   }
@@ -199,9 +203,19 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     // Forest-dependent resources.
     forest = null;
   }
+  const autonomousWakes = new AutonomousWakeController({
+    db, world, wakeService,
+    forestTraversal: () => progressiveMode ? forestLifecycle?.forestTraversal : forestTraversalService,
+    ready: () => {
+      const stage = readiness.projection();
+      return stage.conversation.state === 'ready' && (!config.forestActive || stage.forest.state === 'ready');
+    },
+  });
+  wakeService.setAutonomousWakeController(autonomousWakes);
   if (config.forestActive && !progressiveMode) readiness.settle('forest', 'ready', { code: 'forest_verified' });
   if (worldVerified) readiness.settle('conversation', 'ready', { code: 'conversation_ready' });
   else readiness.settle('conversation', 'failed', { code: 'conversation_verification_failed' });
+  autonomousWakes.arm();
   readiness.settleTiming('composition');
   let closing = false;
   let closePromise = null;
@@ -234,7 +248,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
           ok: readinessProjection.shell.state === 'ready' && readinessProjection.conversation.state === 'ready' && (!config.forestActive || (readinessProjection.forest.state === 'ready' && custody.forestIntegrity === 'ok' && custody.forestCaughtUp)), schemaReady: readinessProjection.conversation.state === 'ready',
           readiness: readinessProjection,
           residentMode: config.mode, provider: config.mode === 'fake' ? 'fake' : 'deepseek',
-          model: config.model, liveCredentialsAvailable: Boolean(config.apiKey), currentRoom: { ...projection, forestThreshold: activeForestTraversal?.thresholdMessage(db.session.id, projection.roomId) || null }, engagedFixtureId: projection.engagedFixtureId, engagedStationId: projection.engagedFixtureId, heartbeat: projection.heartbeat || null, mountedTools, residentToolProfile: fittedProfile, forestWalk, attention: wakeService.lastAttention, recipeRuntime: config.mode === 'live' ? 'docker_sandbox' : 'direct_host_test_only', recipeState: gateway.recipes.status(), pendingApprovals: world.listApprovals(db.session.id, { pendingOnly: true }).length, ...custody, wakeInProgress: wakeService.wakeInProgress, activeWakeId: wakeService.activeWakeId,
+          model: config.model, liveCredentialsAvailable: Boolean(config.apiKey), currentRoom: { ...projection, forestThreshold: activeForestTraversal?.thresholdMessage(db.session.id, projection.roomId) || null }, engagedFixtureId: projection.engagedFixtureId, engagedStationId: projection.engagedFixtureId, heartbeat: projection.heartbeat || null, mountedTools, residentToolProfile: fittedProfile, forestWalk, attention: wakeService.lastAttention, autonomousWakes: autonomousWakes.status(db.session.id), recipeRuntime: config.mode === 'live' ? 'docker_sandbox' : 'direct_host_test_only', recipeState: gateway.recipes.status(), pendingApprovals: world.listApprovals(db.session.id, { pendingOnly: true }).length, ...custody, wakeInProgress: wakeService.wakeInProgress, activeWakeId: wakeService.activeWakeId,
         });
       }
       if (request.method === 'GET' && url.pathname === '/api/thread') {
@@ -242,6 +256,14 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
         return json(response, 200, { ...projection, residentMode: config.mode, model: config.model });
       }
       if (request.method === 'GET' && url.pathname === '/api/session') return json(response, 200, { session: db.getActiveSession(), sessions: db.listSessions(), history: db.getSessionHistory(), world: world.projection(db.session.id), residentMode: config.mode, model: config.model });
+      if (request.method === 'GET' && url.pathname === '/api/spotlight/status') return json(response, 200, spotlight.status());
+      if (request.method === 'GET' && url.pathname === '/api/autonomous-wakes') return json(response, 200, autonomousWakes.status(db.session.id));
+      if (request.method === 'POST' && url.pathname === '/api/autonomous-wakes/run') {
+        let incoming; try { incoming = await body(request, config.maxBodyBytes); } catch (error) { return typedError(response, 400, error.code, error.message); }
+        if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming) || Object.keys(incoming).some(key => key !== 'intention') || (incoming.intention !== undefined && (typeof incoming.intention !== 'string' || incoming.intention.length > 1000))) return typedError(response, 400, 'autonomous_wake_invalid', 'Manual autonomous wake accepts only an optional intention of at most 1000 characters.');
+        const plan = autonomousWakes.manual({ sessionId: db.session.id, intention: incoming.intention ?? null });
+        return json(response, 202, { status: 'scheduled', plan });
+      }
       if (request.method === 'GET' && url.pathname === '/api/world') {
         return json(response, 200, projectWorldBuilderInspection(world, db.session.id));
       }
@@ -365,7 +387,9 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     let gatewayClosing;
     try { gatewayClosing = gateway.close('hub_close'); }
     catch (error) { failures.push(error); }
-    const operations = [intakeClosing, wakeClosing, gatewayClosing, progressiveClosing]
+    autonomousWakes.close();
+    const spotlightClosing = spotlight?.close();
+    const operations = [intakeClosing, wakeClosing, gatewayClosing, progressiveClosing, spotlightClosing]
       .filter(operation => operation && typeof operation.then === 'function');
     const closeStores = () => {
       try { eventBus.close(); } catch (error) { failures.push(error); }
@@ -396,7 +420,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     return closePromise;
   }
   return {
-    config, db, provider, spine, world, results, sandboxBay, workshop, gateway, eventBus, wakeService, server, wake, close,
+    config, db, provider, spine, world, results, sandboxBay, workshop, gateway, spotlight, autonomousWakes, eventBus, wakeService, server, wake, close,
     readiness,
     get forest() { return progressiveMode ? forestLifecycle.forest : forest; },
     get forestTraversal() { return progressiveMode ? forestLifecycle.forestTraversal : forestTraversalService; },

@@ -32,6 +32,8 @@ const wires = [
   ['disengage_fixture', 'fixtures'],
   ['workshop_list', 'explore'],
   ['workshop_read', 'explore'],
+  ['workshop_document_outline', 'explore'],
+  ['workshop_document_read', 'explore'],
   ['workshop_search', 'explore'],
   ['workshop_search_regex', 'explore'],
   ['workshop_glob', 'explore'],

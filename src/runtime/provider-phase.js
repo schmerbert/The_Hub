@@ -10,6 +10,8 @@ import { ProvisionalCollector } from './provisional-collector.js';
 import { REOPEN_RESULT_TOOL, recoverablePointerFromHostReceipt, RESULT_REOPEN_TOOL_NAME } from '../context/result-exhale.js';
 import { renderAmbientFeatherPacket, renderDepartedFeatherFootprint } from '../context/semantic-exhale.js';
 import { providerReasoningControls, selectReasoningPosture } from './reasoning-posture.js';
+import { renderSpotlightReadGround } from '../places/hub/spotlight/presentation.js';
+import { renderAutonomousWakeGround } from './autonomous-wakes.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -173,6 +175,8 @@ export class ProviderPhase {
       kind: 'crossing_ground', authority: 'host_receipt', sourceEventId: null,
       message: { role: 'system', content: renderCrossingGround({ phase }) },
     }];
+    const autonomousWakeGround = renderAutonomousWakeGround(options.wakeOrigin);
+    if (autonomousWakeGround) currentGround.push({ kind: 'autonomous_wake_ground', authority: 'host_receipt', sourceEventId: null, wakeTriggerEventId: created.eventId, message: { role: 'system', content: autonomousWakeGround } });
     if (options.orientation) currentGround.push({
       kind: 'orientation_ground', authority: 'host_receipt', sourceEventId: null,
       message: { role: 'system', content: renderOrientationGround() },
@@ -190,6 +194,12 @@ export class ProviderPhase {
     if (options.toolProfile?.omittedCount && !toolsDisabled) {
       currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: renderToolAttentionGround(options.toolProfile) } });
     }
+    const spotlightReadStanding = !options.orientation && !toolsDisabled && !forestProjection?.active && world.current(created.sessionId).room_node_id === 'room.spotlight'
+      ? this.gateway?.spotlight?.status() || null : null;
+    if (spotlightReadStanding) currentGround.push({
+      kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null,
+      message: { role: 'system', content: renderSpotlightReadGround(spotlightReadStanding) },
+    });
     if (options.toolRoundBudget) currentGround.push({
       kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null,
       message: { role: 'system', content: renderToolRoundBudget(options.toolRoundBudget) },
@@ -304,7 +314,7 @@ export class ProviderPhase {
     const groundWitnesses = {
       crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
       world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
-      tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
+      tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), ...(spotlightReadStanding ? { spotlightReadStanding } : {}), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
       attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure']) },
       continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
     };

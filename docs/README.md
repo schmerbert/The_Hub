@@ -9,6 +9,7 @@ Start with [`ORIENTATION.md`](ORIENTATION.md). It is the repository front door: 
 | Understand the Hub and why it exists | [`ORIENTATION.md`](ORIENTATION.md) |
 | Translate House language into clinical machinery | [`GLOSSARY.md`](GLOSSARY.md) |
 | Determine what is implemented today | [`STATUS.md`](STATUS.md) |
+| Connect Spotlight to live read-only Robinhood data | [`../README.md`](../README.md#connect-spotlight-to-live-robinhood-reads), [`specs/SPOTLIGHT_LIVE_READ_V1.md`](specs/SPOTLIGHT_LIVE_READ_V1.md) |
 | Trace material, authority, and installed crossings | [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) |
 | Locate runtime responsibilities in code | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Use the constitutional design vocabulary | [`specs/HOUSE_GRAMMAR_V1.md`](specs/HOUSE_GRAMMAR_V1.md) |

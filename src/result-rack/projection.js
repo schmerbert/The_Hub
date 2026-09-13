@@ -2,6 +2,8 @@ import { canonicalize, sha256, sha256Bytes } from '../core/hash.js';
 
 export const DEFAULT_PROJECTION_BYTES = 12000;
 export const DEFAULT_PROJECTION_LINES = 120;
+export const DEFAULT_DOCUMENT_PROJECTION_BYTES = 65536;
+export const DEFAULT_DOCUMENT_PROJECTION_LINES = 2000;
 export const MIN_PROJECTION_BYTES = 192;
 export const DEFAULT_CAPTURE_BYTES = 8 * 1024 * 1024;
 export const RESULT_JOB_STATUSES = new Set(['queued', 'running', 'settled', 'complete', 'failed', 'cancelled']);
@@ -18,6 +20,7 @@ export const RESULT_PROJECTION_POLICIES = Object.freeze([
   'git_log',
   'git_show',
   'recipe_test',
+  'document_read',
 ]);
 export const RESULT_PROJECTION_VERSION = 'result_projection/v1';
 
@@ -366,5 +369,6 @@ export function projectionPolicyFor(value) {
   if (names.some(name => /git_log$/.test(name))) return 'git_log';
   if (names.some(name => /git_show$/.test(name))) return 'git_show';
   if (names.some(name => /recipe|test/.test(name))) return 'recipe_test';
+  if (names.some(name => /workshop_document_(?:read|outline)$/.test(name))) return 'document_read';
   return 'generic';
 }

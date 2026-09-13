@@ -11,6 +11,7 @@
     "forest:plan": "node src/scripts/forest-plan.js",
     "forest:apply": "node src/scripts/forest-apply.js",
     "forest:verify": "node src/scripts/forest-verify.js",
+    "forest:check": "node src/scripts/forest-check.js",
     "forest:wild:plan": "node src/scripts/forest-wild-plan.js",
     "forest:wild:apply": "node src/scripts/forest-wild-apply.js",
     "forest:intake:plan": "node src/scripts/forest-intake-plan.js",
@@ -18,6 +19,10 @@
     "forest:embeddings:setup": "node src/scripts/forest-embedding-setup.js",
     "forest:traversal:migrate-v3": "node scripts/migrate-forest-traversal-v3.mjs",
     "spine:verify": "node src/scripts/spine-verify.js",
+    "spotlight:connect": "node src/scripts/spotlight-connect.js connect",
+    "spotlight:status": "node src/scripts/spotlight-connect.js status",
+    "spotlight:disconnect": "node src/scripts/spotlight-connect.js disconnect",
+    "spotlight:verify": "node src/scripts/spotlight-verify.js",
     "world:verify": "node src/scripts/world-verify.js",
     "baseline:structure": "node src/scripts/structural-baseline.js",
     "world:migrate-a2": "node src/scripts/world-migrate-a2.js",
@@ -38,7 +43,8 @@
     "electron": "43.2.0"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0"
+    "@huggingface/transformers": "^4.2.0",
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "overrides": {
     "adm-zip": "^0.6.0",

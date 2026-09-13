@@ -60,8 +60,8 @@ Road boundary ---- place.garden ---- opening ---- room.center
 This diagram mixes implemented and proposed relations only to show the intended geography:
 
 - `place.hub`, `room.center`, `room.workshop`, `place.garden`, `place.house`, `place.threshold`, the front door, and the visible Forest/Road boundaries are implemented.
-- Spotlight's production observatory room is implemented beyond the Binder Window: a sheltered balcony, landscape, capped telescope, archive, charting table, and bell. A passive bidirectional threshold connects it to the Center, so the Resident can walk in and back out without triggering a provider request. Provider-neutral Spotlight hands mount only while present, and a credential-free Robinhood adapter defines the exact read-only account/portfolio/position/quote normalization boundary. Every live observation or financial effect remains deterministically withheld until its host-owned transport, custody, strategy, and approval bindings exist. Codex-held Robinhood authentication is not inherited by the standalone Hub. The host deliberately installs no live market channel, credential wire, or executable financial authority. The earlier capsule remains sealed experimental ancestry.
-- Forest and Road boundaries are visible from the Garden but not traversable.
+- Spotlight's production observatory is implemented beyond the Binder Window: a sheltered balcony, landscape, telescope, archive, charting table, and bell. Its passive Center threshold grants presence without requesting data. An optional standalone Robinhood connection supplies deliberate read-only account, portfolio, position and quote observations with durable custody. The current connection standing is presented separately from the preserved capped-shell ancestry. The Hub signs in independently of Codex. Financial execution and automatic refresh remain unavailable; the earlier capsule stays sealed experimental ancestry.
+- The Forest is deliberately traversable when its verified custody and traversal services are active. The Road remains a visible, non-traversable boundary.
 - The House is currently one sparse, undivided occupiable interior. Naming future domestic possibilities does not install them.
 
 `place.hub` is the container for the Center and specialist working rooms. The Center is the current junction. The Workshop is the installed repository-work domain and the first source-coherent room package. Spotlight is the second source-coherent production package and proves that physical entry can remain independent from outside-source and financial authority. Automatic discovery and general installation remain unimplemented.
@@ -85,6 +85,8 @@ human utterance
 
 The [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) owns the complete crossing map and bypass law.
 
+A self-directed return enters the same path with a host-witnessed wake plan in place of a human utterance. It does not pretend a human spoke, reconstruct a second Resident, or move the body home: the Resident wakes at the exact verified World and Forest seat where it chose to rest. Wake origin fits the mounted authority, so autonomous walking can be generous while consequential hands remain absent. A future outside Hearth-origin heartbeat is a different crossing and is not simulated by this one.
+
 ## The central distinctions
 
 - **Source is not Forest.** Source records happenedness; Forest holds material admitted for continuity and linkage.
@@ -104,6 +106,7 @@ See [`GLOSSARY.md`](GLOSSARY.md) for the fuller poetic-to-clinical map.
 The implemented core includes:
 
 - process-lived Resident sessions with a first-wake Hearth orientation;
+- same-lifespan `rest_for` scheduling and reduced-authority autonomous return at the exact retained seat;
 - exact Source, Scrub, Spine, Forest Home/Wild, and Forest Intake custody;
 - immutable five-band Glass casts and bounded provider attention fitting;
 - a persistent event-projected World with Center, Workshop, Hub, Garden, House, and Threshold;
@@ -120,7 +123,7 @@ This is a summary, not a status promise. Read [`STATUS.md`](STATUS.md) before re
 The adopted direction has several connected fronts:
 
 1. **Walkable continuity.** Older exact conversation will waterfall out of immediate Glass into a bounded rolling fold while remaining reachable as exact Forest terrain. Chronology supplies structural trails; semantic systems offer possible directions; the Resident's witnessed choices make paths.
-2. **Specialist working rooms.** Rooms can travel as inert source packages with declared identity, placement request, sockets, affordances, effects, custody, and removal law. Workshop is the first statically installed reference manifest. Spotlight now proves a second lifecycle: an enterable observatory with a passive World threshold, installed fail-closed hands, and an injectable Robinhood read normalizer that cannot perform network or financial effects. Its next stage is a standalone-host transport/auth binding and durable custody; financial hands remain separately gated by strategy and human approval law.
+2. **Specialist working rooms.** Rooms can travel as inert source packages with declared identity, placement request, sockets, affordances, effects, custody, and removal law. Workshop is the first statically installed reference manifest. Spotlight adds an enterable observatory whose optional standalone source connection is distinct from room installation. Deliberate Robinhood reads pass through bounded normalization and durable observation custody; financial hands remain capped pending their separate strategy and approval laws.
 3. **An intentional House.** The House will develop through explicit decisions about threshold, privacy, domestic objects, writing, hospitality, and return. It should not accumulate every useful subsystem.
 4. **Safe outside crossings.** Road, Garden, gates, channels, quarantine, and foreign Forests provide a grammar for encountering outside material without allowing it to name its own authority or destination.
 5. **Sealed sensitive custody.** The adopted security direction requires direct Vault intake, class-aware sealed pointers, bounded sensitive-attention leases, explicit provider disclosure, key lifecycle, and honest destruction before the Hub can claim suitability for sensitive material.

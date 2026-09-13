@@ -17,7 +17,7 @@
     {
       "id": "affordance.repository_explore", "fixtureId": "fixture.workshop_shelves", "effect": "observe", "approvalPolicy": "host_owned",
       "requires": ["socket.repository_root", "socket.result_custody"],
-      "tools": ["workshop_list", "workshop_read", "workshop_search", "workshop_search_regex", "workshop_glob", "workshop_tree", "workshop_stat", "workshop_file_hash"]
+      "tools": ["workshop_list", "workshop_read", "workshop_document_outline", "workshop_document_read", "workshop_search", "workshop_search_regex", "workshop_glob", "workshop_tree", "workshop_stat", "workshop_file_hash"]
     },
     {
       "id": "affordance.repository_workbench", "fixtureId": "fixture.workshop_workbench", "effect": "mutate", "approvalPolicy": "host_owned",

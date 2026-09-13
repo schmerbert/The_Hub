@@ -4,6 +4,8 @@ This document describes the implemented runtime and code ownership. New readers 
 
 Source also owns the forward-only Session Scroll trace epoch. The append-only boundary records the exact inherited head without backfilling it. After that boundary, each Scroll row and its trace manifest are committed atomically; the manifest connects authoritative source, Scrub or intake gate, durable witness, exact Scroll coordinate, and retained disposition. See [`TRACE_EPOCH_V1.md`](specs/TRACE_EPOCH_V1.md).
 
+The autonomous wake companion beside Source owns self-directed schedules, exact-seat witnesses, append-only plan transitions, and forward wake-origin receipts. `AutonomousWakeController` owns timers and duplicate/stale-seat refusal; `WakeService` remains the sole provider crossing and intersects mounted World/Forest tools with the reduced autonomous allowlist before presentation and again before dispatch. This preserves one Resident path while fitting authority by origin. Outside Hearth-origin heartbeat policy is not installed.
+
 Provider streaming has a bounded pre-Scrub pause. Raw fragments remain only in a memory collector, separated by provider request, phase, delta kind, and tool index. The collector coalesces consecutive same-channel fragments, flushes on channel changes and normal phase completion, and discards paused material on failure or cancellation. Only coalesced batches that pass wake-stream credential Scrub enter the hash-linked wake journal and SSE; Corner renders accumulated safe events at most once per animation frame.
 
 New Glass casts are governed by a separate forward-only trace epoch. Five request-ground receipts bind crossing identity, verified World state, the exact Ceiling/Patch Bay schema mount, attention/omission state, and continuity state. A per-item manifest connects these receipts—or an exact Scroll row, Source event, or stable Glass hash—to the provider-presentation Scrub disposition and exact Spine request. The bundle commits atomically and verifies before the next wake.
@@ -28,6 +30,8 @@ Forest utterance admission uses a separate `utterance_identity/v1` policy. It pr
 
 ## Owned modules
 
+Spotlight's optional live read is composed by `src/runtime/spotlight-lifecycle.js`. The standalone transport and encrypted OAuth custody live in `src/connectors/robinhood/`; the portable room owns `live-service.js`, `observation-store.js`, validation and read presentation. Only deliberate `spotlight_observe` performs source reads. The source adapter yields normalized, identifier-free observations; the room store retains an attempt and settlement before Gateway/Result Rack/host-return Scrub presentation. `/api/spotlight/status` exposes connection standing without data fetching. Current read standing is witnessed in the Glass tool-mount receipt and does not alter the historical room-installation receipt. See [Spotlight live read](specs/SPOTLIGHT_LIVE_READ_V1.md).
+
 | Bay | Entry point | Current responsibility |
 | --- | --- | --- |
 | Ledger facade | `src/ledger/source.js` | Operational/source events, shared transactions, and stable public custody contract |
@@ -40,6 +44,7 @@ Forest utterance admission uses a separate `utterance_identity/v1` policy. It pr
 | Startup readiness | `src/runtime/readiness.js`, `src/runtime/progressive-forest-lifecycle.js`, `src/server/app.js`, `src/corner/desktop-host.js` | Process-local shell/conversation/feature readiness, bounded timings, deferred Forest activation, stale-proof refusal, and shutdown cancellation; owns no domain integrity claim |
 | Provider Scrub | `src/scrub/provider-presentation.js`, `src/scrub/provider-return.js` | Subtractive provider projection and exact provider-return selection |
 | Tool-history fitting | `src/context/tool-pairs.js` | Declared old completed tool-exchange omission and source-reference projection |
+| Truthful extent and document reading | `src/core/truthful-extent.js`, `src/places/hub/workshop/documents.js`, `src/world/document-coverage.js` | Validated bounded-result extent, exact outline/whole/section reads, and same-session same-revision coverage derived from action custody |
 | Spine | `src/spine/store.js` | Exact provider request and bounded raw-return custody, including one admitted-body SSE frame appended at termination |
 | Forest | `src/forest/` | Home utterance and Journal planting, Wild admission, custody, traversal, rebuildable semantic projection, backfill, and verification |
 | Forest health projection | `src/forest/health.js` | Domain-owned active/inactive, integrity, catch-up, Wild, and Intake health projection for transport surfaces |
@@ -55,6 +60,7 @@ Forest utterance admission uses a separate `utterance_identity/v1` policy. It pr
 | Workshop room package | `src/places/hub/workshop/index.js` | Canonical `room.workshop` declaration and machinery: repository adapter, path law, Git, recipes, Sandbox Bay, and promotion |
 | Binder Window | `src/places/hub/binder-window/`, `src/world/topology-binder-window.js` | Frozen Binder dashboard validation/projection plus the passive Center fixture's forward World topology extension; capture is explicit and inspection never networks |
 | Spotlight observatory | `src/places/hub/spotlight/`, `src/world/topology-spotlight.js` | Source-coherent balcony shell, capped telescope and fixtures, bounded observation admission, deterministic replay packets, and forward unreachable World extension |
+| Forest crossing check | `src/forest/check.js` | Fast read-only known-route, unresolved-intake, append-only, and frontier census; does not replace full ancestry verification |
 | Workshop discovery traversal | `src/places/hub/workshop/discovery-traversal.js` | Streaming eligible-file walk, declared practical exclusions, examined/skipped counts, and honest truncation boundaries |
 | World Gateway | `src/world/gateway.js`, `src/world/gateway/` | Compatibility facade over the complete handler registry, approval crossings, Result Rack integration, and async result capture |
 | Workshop compatibility doors | `src/world/{workshop,git,recipes,sandbox,sandbox-recipes,promotion}.js`, `src/workshop/path-law.js` | Thin registered re-exports for historical callers; no new behavior belongs here |
@@ -157,7 +163,7 @@ Relevant keys in `src/core/config.js` are:
 
 - A process start closes any open lifespan as `server_restart` and opens a new lifespan. The first turn has orientation and response phases; later turns have ordinary phases.
 - Active session history remains authoritative even when provider presentation omits eligible older completed tool exchanges.
-- Glass fold generation and farther walk-back, Hearth Notes, Forest Exhale, summaries, reset controls, context-limit closure, embeddings, and semantic retrieval are not implemented. Glass anatomy, receipts, exact inheritance, and causal promotion are installed.
+- Broader conversation rolling folds, summaries, reset controls and context-limit closure remain unimplemented. Glass anatomy, receipts, exact inheritance, causal promotion, Home-only ambient semantic Exhale and deliberate Forest walking/retrieval are installed.
 - Docker behavior has focused adapter/backend tests but is intentionally not exercised by the normal suite; operators must supply a working Docker CLI/daemon and a locally available image.
 - User cancellation is not installed. Renderer SSE clients neither backpressure nor cancel provider work. Hub shutdown does cancel the active provider crossing with a bounded custody grace period. Raw SSE custody is appended at termination rather than per received byte chunk.
 - The process bus is bounded and may require resynchronization from the durable journal. Desktop installer/packaging and native GUI/tray smoke verification remain pending.

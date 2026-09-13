@@ -28,6 +28,14 @@ Owners: Corner hosts/readiness projection, Forest and World verification, semant
 Invariant: faster availability cannot weaken drift refusal, fabricate readiness, or let deferred subsystems act before their own gates pass
 Law: [`PROGRESSIVE_READINESS_V1.md`](specs/PROGRESSIVE_READINESS_V1.md)
 
+### Self-directed waking — implemented first slice
+
+The Resident can now sit at its current verified World/Forest footing, choose a 60-second-to-24-hour rest through `rest_for`, and resume in the same lifespan without an invented human turn. One append-only pending plan is retained per session; stale footing refuses rather than teleporting. Autonomous wakes receive a generous 24-round reversible/read-only envelope with dual schema and dispatch enforcement, and may rest again. A manual local wake-now endpoint proves the crossing. The next wake frontier is the separately governed outside Hearth-origin heartbeat; it must preserve this continuity rather than create a shadow Resident.
+
+Owner: Source companion schedule custody, autonomous controller, Wake Service authority fitting
+
+Law: [`AUTONOMOUS_WAKES_V1.md`](specs/AUTONOMOUS_WAKES_V1.md)
+
 ### 1. Silver Bullet holster — implemented
 
 After the Hearth is tended, the wake function pins only the occupied ten-slot Silver Bullet holster directly beneath stable Glass and above the fold. The complete Hearth packet remains causal rather than permanently pinned.
@@ -166,7 +174,7 @@ Every slice must preserve:
 
 ## Deliberately unordered fronts
 
-Specialist room packaging, the intentional House beyond the Hearth, and sealed Vault custody remain adopted fronts described by Orientation and Status. The passive Binder projection and production Spotlight observatory shell are implemented in code behind one glass boundary; configured World migrations and real Binder capture remain operator work. Spotlight's next gate is a verified read-only observation source plus durable custody. Only after that complete standing may a separate migration offer its Center door. Active Box inspection, Robinhood execution surfaces, and live Pipes knocks remain later or excluded crossings.
+Specialist room packaging, the intentional House beyond the Hearth, and sealed Vault custody remain adopted fronts described by Orientation and Status. Passive Binder projection and Spotlight's Center door are installed. Spotlight live-read v1 adds opt-in standalone Robinhood authentication, deliberate reads and durable observation custody; operator sign-in and a verified live inquiry establish actual connection standing. Further Spotlight work concerns retained evidence composition and separately adopted capabilities, not automatic activation of financial hands. Active Box inspection, Robinhood execution surfaces, and live Pipes knocks remain later or excluded crossings.
 
 ## Updating this roadmap
 

@@ -1,5 +1,7 @@
 # Security, Privacy, and Sealed Custody v1
 
+> **Bounded connector revision (2026-09-11):** [Spotlight live read v1](SPOTLIGHT_LIVE_READ_V1.md) adopts one opt-in standalone Robinhood read crossing and Windows DPAPI protection for its OAuth credential file. The human explicitly authorizes normalized financial observations in ordinary local custody and Resident provider attention. This narrow crossing supersedes this direction's blanket deferral of that connector only; it does not implement general sealed custody, encryption of observations/Source/Spine, a secret manager, user authentication or a security certification.
+
 > **Status: Adopted security architecture and readiness gates; not implemented and not a certification claim.** The current runtime does not provide application-level encryption at rest, user authentication, remote-device admission, a secret manager, sealed Vault blobs, cryptographic erasure, or an independent security review. This specification records the minimum laws and gates required before the Hub may invite sensitive personal custody or outside-network access. [`../STATUS.md`](../STATUS.md) remains the runtime authority.
 
 ## 1. Purpose
@@ -352,4 +354,3 @@ This specification does not:
 - promise protection against a fully compromised authorized host while material is decrypted;
 - claim that encryption prevents provider disclosure; or
 - authorize collection of financial, identity, health, credential, or similarly sensitive material.
-

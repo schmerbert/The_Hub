@@ -1,5 +1,7 @@
 # Spotlight Observatory v1
 
+> **Current live-read owner:** [SPOTLIGHT_LIVE_READ_V1.md](SPOTLIGHT_LIVE_READ_V1.md) supersedes the unconditional observation/list/read caps, absent standalone authentication and absent observation custody described in this shell slice. The remaining financial/evidence/replay caps and immutable shell/installation ancestry below still stand. A configured connection and a verified live read are separate facts.
+
 > **Status: Adopted enterable production room, capped-hands, and Robinhood read-adapter contract.** This specification promotes the isolated Spotlight proposition into a source-coherent Hub room behind the Binder Window. It installs the observatory, fixtures, passive Center threshold, complete named hand surface, and a credential-free Robinhood normalization boundary. Traversal grants presence only: every effectful hand remains withheld until its separately verified source, custody, strategy, and approval wires are connected. It installs no brokerage execution, autonomous monitoring, advice, or Robinhood credential handling.
 
 ## 1. Adopted shape

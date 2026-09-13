@@ -3,6 +3,7 @@ import { dirname, extname, relative } from 'node:path';
 import { sha256, sha256Bytes } from './canonical.js';
 import { DEFAULT_EXCLUDED_DIRECTORIES, walkWorkshopFiles } from './discovery-traversal.js';
 import { resolveRepositoryPath } from './path-law.js';
+import { documentOutline, documentRead } from './documents.js';
 
 const DEFAULTS = Object.freeze({
   maxFiles: 100,
@@ -12,6 +13,8 @@ const DEFAULTS = Object.freeze({
   maxTreeDepth: 6,
   maxTreeEntries: 400,
   defaultTreeEntries: 120,
+  maxDocumentBytes: 65536,
+  maxDocumentLines: 2000,
 });
 const ORIENTATION_PATHS = Object.freeze(['AGENTS.md', 'README.md', 'docs/ORIENTATION.md', 'docs/STATUS.md', 'docs/ROADMAP.md']);
 const MANIFEST_PATHS = Object.freeze([
@@ -201,6 +204,12 @@ export class WorkshopAdapter {
     const absolute = resolveRepositoryPath(this.root, path); const { text } = safeText(this.root, absolute, this.limits); const lines = splitSourceLines(text); const start = startLine - 1; const selected = lines.slice(start, start + lineCount); if (!selected.length || start >= lines.length) fail('workshop_range', 'Workshop line range is unavailable.');
     const body = selected.map(line => line.raw).join(''); const totalLines = lines.length; const nextStartLine = start + selected.length < totalLines ? startLine + selected.length : null;
     return { kind: 'workshop_read', source: source(absolute, this.root, startLine, startLine + selected.length - 1, body), lineCount: selected.length, totalLines, nextStartLine, hasMore: nextStartLine !== null, exact: true, lineTerminators: 'preserved' };
+  }
+  documentOutline(path) {
+    return documentOutline(this.root, path, this.limits);
+  }
+  documentRead(path, { heading = null, startLine = null, endLine = null } = {}) {
+    return documentRead(this.root, path, { heading, startLine, endLine }, this.limits);
   }
   overview() {
     const topLevel = [];

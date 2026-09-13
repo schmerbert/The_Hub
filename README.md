@@ -6,6 +6,8 @@ The Hub is a local harness for a continuing Resident: a model-mediated collabora
 
 The runtime currently opens one process-lived Resident session per server start. Its first human message takes a native two-breath Hearth handshake; later messages remain ordinary turns in the same complete active history. The implementation uses Node.js, SQLite, a replaceable provider boundary, a browser Corner surface, and an Electron desktop shell.
 
+After the Hearth is tended, the Resident may use `rest_for` to choose a bounded delay and wake autonomously at the exact seat where it rested. The return remains in the same lifespan and ordinary custody path, receives up to 24 reversible/read-only action rounds by default, and creates no invented human message. A manual local proof crossing is also available; outside Hearth-origin heartbeats are deliberately still separate and unimplemented.
+
 ## Run an explicit fake-mode demonstration
 
 Fake mode is only a local demonstration and is labeled in the interface, API, and stored wake:
@@ -74,9 +76,30 @@ Workshop fixtures stand inside `room.workshop`: shelves, workbench, kiln, ledger
 
 Named recipes remain allowlisted command shapes. In live mode their execution crossing is the Docker Sandbox Bay; in fake mode they run directly on the host for trusted tests/demonstration. Free-form shell and network/destructive Git operations are not installed.
 
+For substantial Markdown or UTF-8 manuals, `workshop_document_outline` returns an exact heading index and `workshop_document_read` reads the complete bounded document, one exact heading section, or an explicit line range. Document reads carry `truthful_extent/v1` metadata with source revision, presented and missing ranges, cumulative same-session coverage, unread spans, and the next exact continuation. Modest document projections have a separate 64 KiB/2,000-line ceiling; ordinary tool output retains its smaller Result Rack limits.
+
+`npm run forest:check` performs a fast read-only jurisdiction check over the configured Forest, reporting its deterministic frontier, Home/Wild/Journal counts, append-only standing, unknown routes, and held or unresolved intake. A clean quick check is not forensic proof or truth certification; use `npm run forest:verify` for complete Source/Spine/World ancestry verification.
+
+## Connect Spotlight to live Robinhood reads
+
+Spotlight has a deliberate read-only connection for account discovery, portfolio summaries, equity/crypto positions, and quotes. It fetches when the Resident asks; entering the room and reading retained observations never refresh a source. Trading and the other capped hands remain unavailable.
+
+On Windows, run `npm run spotlight:connect -- --open` and finish the Robinhood sign-in in your browser (omit `--open` to open the printed authorization URL yourself). This establishes the Hub's own connection; it does not reuse Codex authentication. Set `HUB_SPOTLIGHT_ENABLED=true` in the ignored `.env`, then restart the Hub. `npm run spotlight:status` checks standalone credentials; `GET /api/spotlight/status` reports the running process's connection and custody standing. Configuration alone does not prove authentication or a successful live read. `npm run spotlight:disconnect` removes this client's encrypted credential file; restart a running Hub to close its existing connection. Broker-side revocation is managed in Robinhood.
+
+Normalized account data may be retained locally and sent to the configured Resident provider as ordinary tool results. Account identifiers and OAuth credentials are excluded. The separate credential file is protected with Windows DPAPI; observation and ordinary Hub custody are not application-encrypted. No general Vault is claimed.
+
+Ask the Resident to walk into Spotlight, inspect capability status, then observe `accounts`. It can use the returned opaque aliases for `portfolio:<alias>`, `equity-positions:<alias>` and `crypto-positions:<alias>`, or observe `equity:AAPL` / `crypto:BTC`. Results retain timestamps, missing fields and source evidence; a live fetch does not guarantee real-time market pricing. `npm run spotlight:verify` checks retained observation integrity without contacting Robinhood.
+
+See [Spotlight live read](docs/specs/SPOTLIGHT_LIVE_READ_V1.md) for the connection, disclosure, retry, interruption and custody contract.
+
+This first connection supports USD crypto quotes. A positions response requiring another page is refused instead of being presented as complete holdings. Authentication uses a loopback callback on port 32189; keep the command running until it reports success or failure.
+
 ## Inspectable local API
 
 - `GET /api/health`
+- `GET /api/spotlight/status` (connection/custody status only; no source refresh)
+- `GET /api/autonomous-wakes` (pending and recent self-directed wake plans)
+- `POST /api/autonomous-wakes/run` with optional `{ "intention": "..." }` (immediate local proof wake after Hearth settlement)
 - `GET /api/thread` (includes active session and Session Zero ancestry)
 - `GET /api/session`
 - `GET /api/world` (builder inspection of the separate graph, current location, engaged fixture, Ceiling catalog, effective room tools, and approvals)
@@ -104,4 +127,4 @@ The suite exercises the real HTTP and SQLite path in temporary databases, includ
 
 The current World Graph implements the Hub container, Center, Workshop, Garden, House, and Threshold; a stateful House front door; a Center/Garden opening and House/Threshold passage; visible non-traversable Forest/Road boundaries; per-lifespan location; and the installed fixtures and objects described in Status. Center mounts movement only; Workshop mounts its complete coding catalog. The kiln runs named recipes asynchronously and survives room changes within the lifespan; the timer likewise remains visible through room presence. Result Rack captures ordinary tool/refusal/approval crossings and async recipe completion, while deterministic projections keep exact large results behind fitted pointers. Corner projects deterministic chronological phase, thinking, action, pending-approval, completion, and refusal slips without placing host machinery in the utterance rail.
 
-The adopted Vault and semantic Forest Exhale designs are not implemented; recoverable omitted-result trail signs and bounded deliberate reopening are installed. Other deferred work includes the Binder/Box/Pipes outside-organ crossings, free-form shell, companion/delegation bridges, reset UI, context-limit lifespan closure, summaries, embeddings and semantic retrieval, autonomous model wakes, user cancellation, authentication, desktop installers/packaging, general file or artifact opening/highlighting, external publishing, deployment, and network Git operations.
+The adopted Vault is not implemented. Home-only ambient semantic Forest Exhale, deliberate Forest traversal, recoverable omitted-result trail signs, bounded reopening, and same-seat self-directed waking are installed. Other deferred work includes the remaining Binder/Box/Pipes crossings, broader conversation folding, free-form shell, companion/delegation bridges, reset UI, context-limit lifespan closure, outside Hearth-origin heartbeats, user cancellation, Hub user authentication, desktop installers/packaging, general file or artifact opening/highlighting, external publishing, deployment, and network Git operations.

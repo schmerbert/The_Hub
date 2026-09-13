@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { canonicalize, id, sha256, sha256Bytes } from '../core/hash.js';
 import { RESULT_RACK_SCHEMA } from './schema.js';
 import {
-  DEFAULT_PROJECTION_BYTES, DEFAULT_PROJECTION_LINES, MIN_PROJECTION_BYTES, DEFAULT_CAPTURE_BYTES,
+  DEFAULT_PROJECTION_BYTES, DEFAULT_PROJECTION_LINES, DEFAULT_DOCUMENT_PROJECTION_BYTES, DEFAULT_DOCUMENT_PROJECTION_LINES, MIN_PROJECTION_BYTES, DEFAULT_CAPTURE_BYTES,
   RESULT_JOB_STATUSES, TERMINAL_JOB_STATUSES, JOB_STATUS_TRANSITIONS, POLICY_SET,
   fail, asBytes, validName, canonicalMetadata, lineCount, buildOutputPresentation,
   buildArtifactPresentation, terminalPrefix, fitText, mapPresentationRanges, rawOmittedBytes,
@@ -15,14 +15,18 @@ import {
 const NOW = () => new Date().toISOString();
 
 export class ResultRackStore {
-  constructor(path, { projectionMaxBytes = DEFAULT_PROJECTION_BYTES, projectionMaxLines = DEFAULT_PROJECTION_LINES, captureMaxBytes = DEFAULT_CAPTURE_BYTES } = {}) {
+  constructor(path, { projectionMaxBytes = DEFAULT_PROJECTION_BYTES, projectionMaxLines = DEFAULT_PROJECTION_LINES, documentProjectionMaxBytes = DEFAULT_DOCUMENT_PROJECTION_BYTES, documentProjectionMaxLines = DEFAULT_DOCUMENT_PROJECTION_LINES, captureMaxBytes = DEFAULT_CAPTURE_BYTES } = {}) {
     if (!Number.isInteger(projectionMaxBytes) || projectionMaxBytes < MIN_PROJECTION_BYTES) fail('result_invalid_argument', `projectionMaxBytes must be at least ${MIN_PROJECTION_BYTES}.`);
     if (!Number.isInteger(projectionMaxLines) || projectionMaxLines < 1) fail('result_invalid_argument', 'projectionMaxLines must be a positive integer.');
+    if (!Number.isInteger(documentProjectionMaxBytes) || documentProjectionMaxBytes < projectionMaxBytes) fail('result_invalid_argument', 'documentProjectionMaxBytes must be at least projectionMaxBytes.');
+    if (!Number.isInteger(documentProjectionMaxLines) || documentProjectionMaxLines < projectionMaxLines) fail('result_invalid_argument', 'documentProjectionMaxLines must be at least projectionMaxLines.');
     if (!Number.isInteger(captureMaxBytes) || captureMaxBytes < 1) fail('result_invalid_argument', 'captureMaxBytes must be a positive integer.');
     mkdirSync(dirname(path), { recursive: true });
     this.path = path;
     this.projectionMaxBytes = projectionMaxBytes;
     this.projectionMaxLines = projectionMaxLines;
+    this.documentProjectionMaxBytes = documentProjectionMaxBytes;
+    this.documentProjectionMaxLines = documentProjectionMaxLines;
     this.captureMaxBytes = captureMaxBytes;
     this.sqlite = new DatabaseSync(path);
     this.sqlite.exec('PRAGMA foreign_keys=ON;');
@@ -194,14 +198,17 @@ export class ResultRackStore {
       createdAt: row.created_at,
     };
   }
-  createProjection(jobId, { policy = null, source = { kind: 'output' }, maxBytes = this.projectionMaxBytes, maxLines = this.projectionMaxLines } = {}) {
+  createProjection(jobId, { policy = null, source = { kind: 'output' }, maxBytes = null, maxLines = null } = {}) {
     const job = this.getJob(jobId);
     if (!job) fail('result_job_not_found', 'Result job was not found.');
     if (!TERMINAL_JOB_STATUSES.has(job.status)) fail('result_job_open', 'Result projections require sealed terminal job custody.');
     const resolvedPolicy = policy || projectionPolicyFor(job);
     if (!POLICY_SET.has(resolvedPolicy)) fail('result_projection_policy_unknown', 'Result projection policy is not installed.');
-    if (!Number.isInteger(maxBytes) || maxBytes < MIN_PROJECTION_BYTES || maxBytes > this.projectionMaxBytes) fail('result_projection_limit', 'Projection byte ceiling is invalid.');
-    if (!Number.isInteger(maxLines) || maxLines < 1 || maxLines > this.projectionMaxLines) fail('result_projection_limit', 'Projection line ceiling is invalid.');
+    const byteCeiling = resolvedPolicy === 'document_read' ? this.documentProjectionMaxBytes : this.projectionMaxBytes;
+    const lineCeiling = resolvedPolicy === 'document_read' ? this.documentProjectionMaxLines : this.projectionMaxLines;
+    maxBytes ??= byteCeiling; maxLines ??= lineCeiling;
+    if (!Number.isInteger(maxBytes) || maxBytes < MIN_PROJECTION_BYTES || maxBytes > byteCeiling) fail('result_projection_limit', 'Projection byte ceiling is invalid.');
+    if (!Number.isInteger(maxLines) || maxLines < 1 || maxLines > lineCeiling) fail('result_projection_limit', 'Projection line ceiling is invalid.');
 
     const terminalEvent = this.listJobStatusEvents(jobId).at(-1);
     if (!terminalEvent || terminalEvent.status !== job.status || sha256(canonicalize(terminalEvent.detail)) !== terminalEvent.detailHash) {

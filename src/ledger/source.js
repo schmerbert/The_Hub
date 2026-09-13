@@ -20,6 +20,7 @@ import { ROOTS_SCHEMA, RootsLedger, migrateSemanticShadowFeatherLimit, migrateAt
 import { ScrollTraceLedger } from './scroll-trace.js';
 import { GlassTraceLedger } from './glass-trace.js';
 import { LEDGER_SCHEMA } from './schema.js';
+import { AutonomousWakeLedger } from './autonomous-wakes.js';
 
 function now() { return new Date().toISOString(); }
 function rowToObject(row) { return row ? { ...row } : null; }
@@ -43,6 +44,7 @@ export class HubDatabase {
     this.roots = new RootsLedger(this.sqlite);
     this.scrollTrace = new ScrollTraceLedger(this.sqlite);
     this.glassTrace = new GlassTraceLedger(this.sqlite);
+    this.autonomous = new AutonomousWakeLedger(this.sqlite);
     this.busyTimeoutMs = busyTimeoutMs;
     this.threadId = this.ensureThread();
     this.session = openSession ? this.openSession() : null;
@@ -359,6 +361,7 @@ export class HubDatabase {
         VALUES(?,?,?,?,?,?,?,?)`).run(wakeId, this.threadId, session.id, turnOrdinal, 'assembling', provider, model, timestamp);
       this.sqlite.prepare(`INSERT INTO events(id, thread_id, session_id, wake_id, actor_kind, event_kind, content, authority, provider, model, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(eventId, this.threadId, session.id, wakeId, 'user', 'utterance', content, 'ground', null, null, timestamp);
+      this.autonomous.recordOrigin({ wakeId, origin: 'human_present', triggerEventId: eventId });
       this.sqlite.prepare(`INSERT INTO session_history(id, session_id, wake_id, ordinal, message_json, role, message_kind, source_event_id, content_hash, created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?)`).run(historyId, session.id, wakeId, historyOrdinal, JSON.stringify(message), 'user', 'user', eventId, sha256(content), timestamp);
       this.appendScrollTraceManifest({ historyId, sessionId: session.id, wakeId, ordinal: historyOrdinal, messageKind: 'user', sourceEventId: eventId, scrubReceipt: null });
@@ -374,6 +377,24 @@ export class HubDatabase {
       }
     });
     return { wakeId, eventId, sessionId: session.id, turnOrdinal, context: [{ role: 'system', content: STABLE_GLASS_TEXT }, message] };
+  }
+
+  createAutonomousSessionWake({ provider, model, plan }) {
+    if (!plan || plan.origin !== 'self_directed' || !plan.planId || !plan.seat) throw Object.assign(new Error('Autonomous wake plan is invalid.'), { code: 'autonomous_wake_invalid' });
+    const wakeId = id('wake'); const eventId = id('event'); const timestamp = now(); const session = this.getActiveSession();
+    if (!session || session.status !== 'open' || session.id !== plan.sessionId) throw Object.assign(new Error('The planned lifespan is no longer open.'), { code: 'autonomous_wake_session_stale' });
+    if (!this.sessionHasOrientation(session.id)) throw Object.assign(new Error('Self-directed waking requires a tended Hearth in this lifespan.'), { code: 'autonomous_wake_hearth_required' });
+    const turnOrdinal = this.sqlite.prepare('SELECT COUNT(*) AS count FROM wakes WHERE session_id=?').get(session.id).count + 1;
+    const trigger = canonicalize({ kind: 'autonomous_wake_trigger/v1', origin: plan.origin, planId: plan.planId, dueAt: plan.dueAt, intention: plan.intention, seat: plan.seat, seatHash: plan.seatHash });
+    this.transaction(() => {
+      this.sqlite.prepare(`INSERT INTO wakes(id,thread_id,session_id,turn_ordinal,status,provider,requested_model,started_at) VALUES(?,?,?,?,?,?,?,?)`)
+        .run(wakeId, this.threadId, session.id, turnOrdinal, 'assembling', provider, model, timestamp);
+      this.sqlite.prepare(`INSERT INTO events(id,thread_id,session_id,wake_id,actor_kind,event_kind,content,authority,provider,model,created_at) VALUES(?,?,?,?,?,'state',?,'host_receipt',NULL,NULL,?)`)
+        .run(eventId, this.threadId, session.id, wakeId, 'host', trigger, timestamp);
+      this.autonomous.recordOrigin({ wakeId, origin: plan.origin, planId: plan.planId, triggerEventId: eventId, seat: plan.seat });
+      this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
+    });
+    return { wakeId, eventId, sessionId: session.id, turnOrdinal, origin: plan.origin, plan };
   }
 
   getSessionHistory(sessionId = this.session.id) {
@@ -531,7 +552,7 @@ export class HubDatabase {
     if (!request || !cast || !Array.isArray(sourceRefs) || !presentationReceipt || !groundReceipts) throw Object.assign(new Error('Glass trace inputs are incomplete.'), { code: 'glass_trace_invalid' });
     const omitted = new Map((presentationReceipt.omissions || []).filter(item => item.omitMessage).map(item => [item.sourceIndex, item]));
     let presentedOrdinal = 0;
-    const groundKind = kind => kind === 'crossing_ground' ? 'crossing_ground' : kind === 'world_current_ground' ? 'world_current_ground' : kind === 'tool_current_ground' ? 'tool_mount' : kind === 'attention_current_ground' ? 'attention' : null;
+    const groundKind = kind => ['crossing_ground', 'autonomous_wake_ground'].includes(kind) ? 'crossing_ground' : kind === 'world_current_ground' ? 'world_current_ground' : kind === 'tool_current_ground' ? 'tool_mount' : kind === 'attention_current_ground' ? 'attention' : null;
     const items = sourceRefs.map((ref, sourceIndex) => {
       const omission = omitted.get(sourceIndex);
       if (!omission) presentedOrdinal += 1;
@@ -782,6 +803,7 @@ export class HubDatabase {
       .map(receipt => ({ ...receipt, receipt: JSON.parse(receipt.receiptJson) }));
     normalized.hearth = this.sqlite.prepare(`SELECT tool_call_id AS toolCallId, return_json AS returnJson, return_hash AS returnHash, scroll_markdown AS scrollMarkdown, scroll_hash AS scrollHash,
       action_event_id AS actionEventId, return_event_id AS returnEventId FROM hearth_receipts WHERE wake_id=?`).get(wakeId) || null;
+    normalized.origin = this.autonomous.origin(wakeId);
     normalized.roots = this.roots.inspectWake(wakeId);
     return normalized;
   }

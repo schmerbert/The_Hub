@@ -27,6 +27,22 @@ function response(data, extra = {}) {
   return { observedAt: OBSERVED_AT, data, ...extra };
 }
 
+test('live normalization preserves short equity quantities and account deficits', async () => {
+  const adapter = adapterWith({ operations: {
+    portfolio: () => response({ accountAlias: 'primary', totalValue: -12, cash: -3, buyingPower: -2 }),
+    equity_positions: () => response({ accountAlias: 'primary', positions: [{ symbol: 'AAPL', quantity: -2, marketValue: -350 }] }),
+    crypto_positions: () => response({ accountAlias: 'primary', positions: [{ symbol: 'BTC', quantity: -1 }] }),
+  } });
+  const portfolio = await adapter.observe('portfolio', { accountAlias: 'primary' });
+  assert.equal(portfolio.fields.total_value.value, -12);
+  assert.equal(portfolio.fields.cash.value, -3);
+  assert.equal(portfolio.fields.buying_power.value, -2);
+  const positions = await adapter.observe('equity_positions', { accountAlias: 'primary' });
+  assert.equal(positions.fields.positions.value[0].quantity, -2);
+  assert.equal(positions.fields.positions.value[0].market_value, -350);
+  await assert.rejects(adapter.observe('crypto_positions', { accountAlias: 'primary' }));
+});
+
 test('exposes exactly the bounded Robinhood read allowlist and no mutation surface', () => {
   assert.deepEqual(ROBINHOOD_READ_OPERATION_NAMES, [
     'accounts', 'portfolio', 'equity_positions', 'crypto_positions', 'equity_quote', 'crypto_quote',

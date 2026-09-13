@@ -35,6 +35,9 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Outside data, portfolio Window, and web passage direction | [`OUTSIDE_ORGANS_DIRECTION_V1.md`](OUTSIDE_ORGANS_DIRECTION_V1.md) |
 | Passive Binder Window | [`BINDER_WINDOW_V1.md`](BINDER_WINDOW_V1.md) |
 | Spotlight observatory production shell | [`SPOTLIGHT_OBSERVATORY_V1.md`](SPOTLIGHT_OBSERVATORY_V1.md) |
+| Spotlight standalone Robinhood reads and observation custody | [`SPOTLIGHT_LIVE_READ_V1.md`](SPOTLIGHT_LIVE_READ_V1.md) |
+| Universal truthful extent, Workshop document reading, and incremental Forest crossing checks | [`TRUTHFUL_EXTENT_READING_V1.md`](TRUTHFUL_EXTENT_READING_V1.md) |
+| Self-directed rest, same-seat autonomous return, and reduced autonomous authority | [`AUTONOMOUS_WAKES_V1.md`](AUTONOMOUS_WAKES_V1.md) |
 
 ## Adopted directions with substantial uninstalled remainder
 

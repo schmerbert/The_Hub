@@ -30,3 +30,8 @@ export {
 } from './robinhood.js';
 
 export const SPOTLIGHT_PACKAGE_VERSION = '1.2.0';
+
+// Optional live binding; exporting constructors never installs a connection.
+export { SpotlightObservationStore, SPOTLIGHT_OBSERVATION_STORE_API } from './observation-store.js';
+export { SpotlightLiveReadService, createSpotlightLiveService, SPOTLIGHT_LIVE_READ_API } from './live-service.js';
+export { renderSpotlightReadGround } from './presentation.js';

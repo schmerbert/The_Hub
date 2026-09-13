@@ -31,6 +31,10 @@ Unregistered new compatibility aliases are not permitted.
 | Forest traversal schema v1 | Migration-only ancestry | Empty stores evolve to v2; nonempty v1 journeys refuse automatic migration so their Garden-era dual-presence meaning is not rewritten | Retire only after an adopted ancestry-preserving journey migration | Empty evolution and migration-refusal tests |
 | Forest traversal v2 flat junction geometry | Migration-only ancestry | The first live expedition and earlier tests retain their exact three-slot offers as `legacy_flat/v2`; v3 projection may read them but never recast them | Retire only under an adopted retention policy that explicitly disposes of those expedition records; never by schema cleanup | Explicit v3 migration, store verification, and Forest traversal tests |
 
+## Spotlight optional connection standing
+
+Spotlight live-read v1 preserves the `1.2.0` portable manifest, installed schemas, room text, and room-installation witness exactly. Their optional-unwired socket rows and capped telescope wording describe installation ancestry. `SpotlightLiveService.status()` and the witnessed current tool ground report the process-local bindings that may now enable deliberate observation/list/read. Removal of this presentation seam requires a versioned room/topology migration; changing old bytes is forbidden. Tests: Spotlight live runtime, hands, installation witness, World verification and Glass trace tests. The default capped service remains a supported no-connection implementation, not an activation bypass.
+
 ## Entry template
 
 ```text

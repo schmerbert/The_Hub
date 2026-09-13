@@ -820,7 +820,7 @@ function compareRows(actual, expected, columns, table, mismatches, limit, identi
 const ACTION_EVENT_COMPATIBILITY = Object.freeze({
   move_through_door: ['location.moved/v1'], engage_fixture: ['fixture.engaged/v1'], disengage_fixture: ['fixture.disengaged/v1'],
   move_through_passage: ['location.crossed/v1'], operate_passage: ['passage.operated/v1'], turn_fixture: ['fixture.turned/v1'],
-  workshop_read: ['source.inspected/v1'], workshop_search: ['source.inspected/v1'], workshop_search_regex: ['source.inspected/v1'],
+  workshop_read: ['source.inspected/v1'], workshop_document_read: ['source.inspected/v1'], workshop_search: ['source.inspected/v1'], workshop_search_regex: ['source.inspected/v1'],
   workshop_timer_set: ['timer.set/v1'], workshop_timer_cancel: ['timer.cleared/v1'], workshop_brief_upsert: ['brief.revised/v1'],
   workshop_run_recipe: ['fixture_runtime.replaced/v1'], workshop_recipe_cancel: ['fixture_runtime.replaced/v1'],
   workshop_apply_patch: ['approval.opened/v1', 'approval.applying/v1', 'approval.resolved/v1'], workshop_apply_unified_diff: ['approval.opened/v1', 'approval.applying/v1', 'approval.resolved/v1'],
@@ -847,7 +847,7 @@ function actionEventSemanticsMatch(row, event, args, result) {
   if (row.tool_name === 'turn_fixture') return row.room_node_id === payload.fromLocationId && payload.fixtureId === args?.fixture_id && result?.turnCount === payload.nextTurnCount;
   if (row.tool_name === 'engage_fixture') return payload.fixtureId === args?.fixture_id;
   if (row.tool_name === 'disengage_fixture') return result?.previousFixtureId === payload.fixtureId;
-  if (['workshop_read', 'workshop_search', 'workshop_search_regex'].includes(row.tool_name)) return (result?.source?.path || result?.path || null) === payload.source;
+  if (['workshop_read', 'workshop_document_read', 'workshop_search', 'workshop_search_regex'].includes(row.tool_name)) return (result?.source?.path || result?.path || null) === payload.source;
   if (row.tool_name === 'workshop_timer_set') return payload.seconds === args?.seconds;
   if (row.tool_name === 'workshop_brief_upsert') return payload.objective === args?.objective;
   if (row.tool_name === 'workshop_run_recipe') return payload.state?.status === 'running' && payload.state?.recipe === args?.recipe;
