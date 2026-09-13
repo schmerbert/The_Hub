@@ -405,18 +405,18 @@ export class HubDatabase {
       FROM session_history WHERE session_id=? ORDER BY ordinal`).all(sessionId);
   }
 
-  projectSessionHistoryMessage(row, { activeWakeId = null, materializeActiveToolReasoning = false, materializeMissingAsEmpty = false } = {}) {
+  projectSessionHistoryMessage(row, { materializeProviderReasoning = false, materializeMissingAsEmpty = false } = {}) {
     const message = JSON.parse(row.messageJson);
     if (message?.role !== 'assistant') return message;
     const rooted = this.roots.reasoningForHistory(row.id);
     delete message.reasoning_content;
     delete message.reasoning_ref;
-    if (materializeActiveToolReasoning && row.wakeId === activeWakeId && row.messageKind === 'assistant_tool_call') {
-      // DeepSeek requires the field on continued tool-call messages, but the
-      // exact private deliberation is already retained once in Roots. An empty
-      // carrier preserves protocol continuity without making the Resident
-      // recursively reconsider every prior thought in the active chain.
-      if (rooted || materializeMissingAsEmpty) message.reasoning_content = '';
+    if (materializeProviderReasoning) {
+      // DeepSeek thinking-mode requests that carry tools require the exact
+      // reasoning_content of every retained assistant turn. Roots remains the
+      // sole durable body; this is a temporary, provider-required projection.
+      if (rooted) message.reasoning_content = rooted.text;
+      else if (materializeMissingAsEmpty) message.reasoning_content = '';
     }
     return message;
   }

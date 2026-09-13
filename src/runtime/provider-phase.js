@@ -144,6 +144,7 @@ export class ProviderPhase {
     const toolsDisabled = options.toolsDisabled === true;
     const tools = options.orientation ? [HEARTH_TOOL] : toolsDisabled ? [] : [...(options.tools || [])];
     if (!options.orientation && !toolsDisabled && !tools.some(tool => tool?.function?.name === RESULT_REOPEN_TOOL_NAME)) tools.push(REOPEN_RESULT_TOOL);
+    const requiresReasoningReplay = providerName === 'deepseek' && thinking === 'enabled' && tools.length > 0;
     const continuityMode = options.orientation ? 'pending' : options.causalHearth ? 'causal_hearth' : 'none';
     let omissionPlan = options.orientation
       ? { omissions: [], manifest: [], omittedExchangeCount: 0, omittedMessageCount: 0, disclosure: null }
@@ -234,9 +235,8 @@ export class ProviderPhase {
     const assemble = () => {
       const historyRefs = historyRows.map(row => {
         const message = db.projectSessionHistoryMessage(row, {
-          activeWakeId: created.wakeId,
-          materializeActiveToolReasoning: !options.orientation,
-          materializeMissingAsEmpty: config.mode === 'live',
+          materializeProviderReasoning: requiresReasoningReplay,
+          materializeMissingAsEmpty: requiresReasoningReplay,
         });
         const isCausalHearthReturn = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'tool_result' && typeof message.content === 'string' && message.content.startsWith('# Hearth');
         const isCausalHearthAction = options.causalHearth && row.wakeId === created.wakeId && row.messageKind === 'assistant_tool_call' && message.tool_calls?.some(call => call.function?.name === 'tend_hearth');

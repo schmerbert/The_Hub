@@ -39,7 +39,7 @@ test('v1 first turn stores one user, performs two phases, and later turns stay o
     const carriedHearthAction = response.messages.find(message => message.tool_calls?.some(call => call.function?.name === 'tend_hearth'));
     assert.ok(carriedHearthAction);
     assert.deepEqual(carriedHearthAction.tool_calls, hearthAction.tool_calls);
-    assert.equal(carriedHearthAction.reasoning_content, '');
+    assert.equal(Object.hasOwn(carriedHearthAction, 'reasoning_content'), false);
     const hearthReturn = response.messages.find(message => message.role === 'tool' && message.content === first.hearth.scrollMarkdown);
     assert.ok(hearthReturn);
     assert.match(hearthReturn.content, /^# Hearth/);

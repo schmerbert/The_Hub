@@ -275,6 +275,12 @@ test('DeepSeek request explicitly carries configured thinking mode', async () =>
     assert.ok(assistantWithTools.length >= 1);
     for (const message of assistantWithTools) assert.equal(Object.hasOwn(message, 'reasoning_content'), true);
     assert.equal(assistantWithTools[0].reasoning_content, '');
+
+    assert.equal((await post(second.base, '/api/wakes', 'continue with retained reasoning')).response.status, 200);
+    const continuedResponse = requestBodies.at(-1);
+    assert.ok(continuedResponse.tools.length > 0);
+    const retainedResident = continuedResponse.messages.find(message => message.role === 'assistant' && message.content === rawProviderContent);
+    assert.equal(retainedResident.reasoning_content, 'response-cot');
   } finally { await first.close(); await second.close(); await new Promise(resolve => upstream.close(resolve)); }
 });
 

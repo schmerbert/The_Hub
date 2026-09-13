@@ -35,7 +35,7 @@ test('a new Hearth packet is rooted, non-respirable, and closed into its respons
       }
     }
     const responseCrossing = JSON.parse(wake.phases.find(phase => phase.phase === 'response').requestBody);
-    assert.equal(responseCrossing.messages.some(message => message.reasoning_content === ''), true);
+    assert.equal(responseCrossing.messages.some(message => Object.hasOwn(message, 'reasoning_content')), false);
     assert.equal(responseCrossing.messages.some(message => message.reasoning_content === 'fake orientation reasoning'), false);
     assert.equal(responseCrossing.messages.some(message => Object.hasOwn(message, 'reasoning_ref')), false);
     const later = await hub.wake('reasoning must remain rooted');

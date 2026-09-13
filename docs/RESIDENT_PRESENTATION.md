@@ -72,7 +72,7 @@ No renderer may send directly to the provider. A new kind without an ownership-c
 - Folded or omitted session history remains established as something that occurred in canonical custody, without certifying every proposition inside it. It is outside present attention rather than erased or disproven; do not require the Resident to reconstruct or disown it.
 - Exact prior words are attributable records, never asserted as present memory.
 - A fixture and its function are one experiential thing even when implemented as a provider tool.
-- Provider reasoning is machinery, not continuity. Store it once in Roots; materialize it only for the active tool chain that causally requires it, never as historical personality or memory.
+- Provider reasoning is machinery, not continuity. Store it once in Roots; materialize it only into a DeepSeek thinking-mode request carrying tools when that provider contract requires exact retained reasoning, never as historical personality, Forest material, visible speech, or action authority.
 - Reasoning posture is attributable request-time host policy rather than prose characterization. `light` and `attentive` select exact provider effort without describing the Resident as impaired, superior, hurried, or exhaustive.
 
 ## Glass v4 boundary

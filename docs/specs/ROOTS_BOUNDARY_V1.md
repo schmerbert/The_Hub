@@ -32,9 +32,9 @@ The Hearth receipt, Session Scroll tool-result row, host-return Scrub receipt, r
 
 For a new provider assistant return, provider-return Scrub and Spine retain the exact selected return. If it contains `reasoning_content`, Roots stores that text once and appends causal edges to the producing Spine record, wake, and Session Scroll row. The new Scroll row retains visible speech or tool intent plus a typed `reasoning_ref`; it does not duplicate the reasoning body.
 
-During a continuing tool chain, a provider-required `reasoning_content` field is carried as an empty string. The exact rooted body is not materialized back into Resident attention; action, result, and visible speech carry the causal continuation.
+DeepSeek thinking-mode requests that carry tools require the exact `reasoning_content` from every retained assistant turn, including completed prior turns. The observed autonomous-wake pressure case showed that the former empty same-wake carrier is rejected with HTTP 400. For only this provider-required request shape, the context assembler temporarily dereferences each retained assistant row's Roots pointer and restores its exact reasoning field. A legacy retained assistant row without rooted reasoning receives an empty compatibility field because no body may be invented.
 
-When a same-wake tool chain must continue, the context assembler may dereference only that wake's assistant tool-call pointer and temporarily restore the exact reasoning field. Completed reasoning and every Roots pointer are absent from later provider crossings. Historical inline reasoning is projected out before Glass assembly and remains recoverable through its rooted edge. No reasoning artifact is Forest-eligible or generally Resident-browsable.
+This temporary replay is provider protocol machinery, not Resident continuity: the reasoning body remains absent from Session Scroll speech, Forest, ordinary UI conversation, and every action-authority source. Requests without both DeepSeek thinking and tools continue to project historical reasoning out. Every Roots pointer is removed before provider serialization, and no reasoning artifact is Forest-eligible or generally Resident-browsable.
 
 Sensitivity classification is recorded, but v1 does not define the Vault, encryption, operator authorization, or deletion policy. Those require later law.
 
@@ -42,4 +42,4 @@ Sensitivity classification is recorded, but v1 does not define the Vault, encryp
 
 Before each wake, verification checks boundary and law hashes, append-only triggers, every post-boundary Hearth/root binding, exact packet and Markdown hashes, reasoning content/hash/length bindings, and the response-Glass edge for committed wakes. Drift refuses with `roots_drift`.
 
-Wake inspection exposes rooted artifacts and causal edges read-only. It creates neither a mutation path nor a provider injection path.
+Wake inspection exposes rooted artifacts and causal edges read-only. It creates neither a mutation path nor a general provider-injection path; the bounded DeepSeek thinking-plus-tools projection above is the sole installed dereference.
