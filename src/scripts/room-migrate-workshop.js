@@ -16,6 +16,7 @@ Before --apply, create and verify a recoverable byte-for-byte backup, then pass 
 }
 
 const config = readConfig(process.env);
+const verificationOptions = { mismatchLimit: 50, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true };
 if (!existsSync(config.worldPath)) {
   console.error(JSON.stringify({ worldPath: config.worldPath, status: 'database_missing' }, null, 2));
   process.exitCode = 1;
@@ -23,7 +24,7 @@ if (!existsSync(config.worldPath)) {
   let sqlite;
   try {
     sqlite = new DatabaseSync(config.worldPath, { readOnly: true });
-    const verification = verifyWorldSqlite(sqlite, { mismatchLimit: 50 });
+    const verification = verifyWorldSqlite(sqlite, verificationOptions);
     if (!verification.verified) {
       console.log(JSON.stringify({ worldPath: config.worldPath, status: 'world_unverified', verification }, null, 2));
       process.exitCode = 1;
@@ -45,7 +46,7 @@ if (!existsSync(config.worldPath)) {
 } else {
   let world;
   try {
-    world = new WorldGraphStore(config.worldPath, { topologyVersion:'forest' });
+    world = new WorldGraphStore(config.worldPath, { topologyVersion:'spotlight' });
     const result = migrateWorkshopInstallation(world, { backupConfirmed: true });
     console.log(JSON.stringify({ worldPath: config.worldPath, ...result }, null, 2));
   } catch (error) {

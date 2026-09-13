@@ -207,9 +207,9 @@ export function inspectWorkshopInstallationUpgrade(world, { witness = workshopIn
   }
   if (!receipts.length) return { status: 'missing_original_receipt', witness };
   const priorReceipt = receipts.at(-1);
-  if (revisionEvents.length && !receipts.some(receipt => receipt.receiptId !== priorReceipt.receiptId && receipt.packageVersion === witness.packageVersion && receipt.manifestHash === witness.manifestHash)) {
-    return { status: 'corrupt_or_incomplete_upgrade', priorReceipt, witness, revisionEvents };
-  }
+  const pairedRevision = new Set(receipts.map(receipt => `${receipt.bindings?.revisionEvent?.sequence || ''}:${receipt.bindings?.revisionEvent?.hash || ''}`));
+  const unpairedRevision = revisionEvents.find(event => !pairedRevision.has(`${event.sequence}:${event.event_hash}`));
+  if (unpairedRevision) return { status: 'corrupt_or_incomplete_upgrade', priorReceipt, witness, revisionEvents };
   return { status: 'upgrade_required', priorReceipt, witness, command: WORKSHOP_INSTALLATION_MIGRATION_COMMAND, revisionEvents };
 }
 
@@ -224,7 +224,7 @@ export function migrateWorkshopInstallation(world, {
   if (inspection.status === 'current') return { status: 'current', receipt: inspection.receipt, verification };
   if (inspection.status !== 'upgrade_required') throw Object.assign(new Error(`Workshop installation migration refused because status is ${inspection.status}.`), { code: 'room_installation_migration_refused', inspection });
   const prior = assertValidRoomInstallationReceipt(inspection.priorReceipt);
-  if (prior.roomId !== witness.roomId || prior.packageVersion === witness.packageVersion || prior.manifestHash === witness.manifestHash) throw Object.assign(new Error('Workshop installation migration prior receipt is not an older exact installation.'), { code: 'room_installation_migration_refused', priorReceipt: prior });
+  if (prior.roomId !== witness.roomId || prior.packageVersion === witness.packageVersion || prior.manifestHash === witness.manifestHash || prior.witnessHash === witness.witnessHash) throw Object.assign(new Error('Workshop installation migration prior receipt is not an older exact installation.'), { code: 'room_installation_migration_refused', priorReceipt: prior });
   if (typeof reason !== 'string' || !reason.trim() || !admission || typeof admission !== 'object' || Array.isArray(admission)) throw Object.assign(new Error('Workshop installation migration reason or admission is invalid.'), { code: 'room_installation_migration_invalid' });
   const payload = {
     roomId: witness.roomId,
