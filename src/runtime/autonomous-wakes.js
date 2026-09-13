@@ -1,4 +1,5 @@
 import { scrubHostReturn } from '../scrub/host-return.js';
+export { renderAutonomousWakeGround } from '../context/autonomous-wake-ground.js';
 
 export const REST_FOR_TOOL_NAME = 'rest_for';
 export const REST_FOR_TOOL = Object.freeze({ type: 'function', function: {
@@ -17,14 +18,6 @@ export const AUTONOMOUS_WORLD_TOOLS = Object.freeze(new Set([
 
 export function autonomousToolAllowed(name, { forestToolNames = [] } = {}) {
   return name === REST_FOR_TOOL_NAME || name === 'reopen_result' || AUTONOMOUS_WORLD_TOOLS.has(name) || forestToolNames.includes(name);
-}
-
-export function renderAutonomousWakeGround(origin) {
-  if (!origin || origin.kind !== 'self_directed') return null;
-  const intention = origin.plan.intention?.trim() || 'No fixed errand was retained. Wander, notice, or rest as seems fitting.';
-  const timing = origin.timing;
-  const timeGround = timing ? ` You sat at ${timing.restedAt}. You requested exactly ${timing.requestedDurationMs} milliseconds of rest, so the wake became due at ${timing.dueAt}. This wake began at ${timing.wokeAt}; exactly ${timing.elapsedMs} milliseconds elapsed and dispatch was ${timing.latenessMs} milliseconds after the due time.` : '';
-  return `Autonomous wake ground: this is a self-directed return in Resident life ${origin.plan.lifeId}, context generation ${origin.plan.contextGeneration}; it is not a human message or a context-reset successor. You wake at the verified seat where you chose to rest.${timeGround} Your continuing intention is: ${JSON.stringify(intention)} You may explore freely for up to 24 tool rounds within the tools actually mounted for this wake, change direction, find nothing, or rest again. Consequential hands are capped; absent tools are unavailable, not forgotten. Your path and final speech receive ordinary custody.`;
 }
 
 function sameSeat(left, right) {

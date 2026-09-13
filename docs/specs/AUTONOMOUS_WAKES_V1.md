@@ -48,7 +48,7 @@ Mutation, recipes, Git writes, approvals, durable object-state turning, Journal 
 
 ## Trigger and continuity
 
-An autonomous trigger is a host-receipted state event, never a fabricated user utterance and never automatic Forest terrain. It names origin, plan, due time, loose intention, and witnessed seat. Provider attention receives that trigger as labeled current ground while the same Session Scroll, stable Glass, holster, World presence, active Forest walk, and previous Resident speech remain in their ordinary positions.
+An autonomous trigger is a host-receipted state event, never a fabricated user utterance and never automatic Forest terrain. It names origin, plan, due time, loose intention, and witnessed seat. Provider attention receives that trigger as labeled current ground while the same Session Scroll, stable Glass, holster, World presence, active Forest walk, and previous Resident speech remain in their ordinary positions. Its exact rendered message hash is included in the crossing-ground receipt. The first production wake predates that inclusion; its immutable trace remains admissible only by recomputing the exact message from its bound trigger, timing, plan, and seat receipt.
 
 The resulting terminal response is ordinary Resident-authored canonical speech and may enter Forest under existing laws. Its chronological predecessor is the latest eligible utterance, not the host clock event.
 

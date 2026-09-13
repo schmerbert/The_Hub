@@ -11,7 +11,7 @@ import { REOPEN_RESULT_TOOL, recoverablePointerFromHostReceipt, RESULT_REOPEN_TO
 import { renderAmbientFeatherPacket, renderDepartedFeatherFootprint } from '../context/semantic-exhale.js';
 import { providerReasoningControls, selectReasoningPosture } from './reasoning-posture.js';
 import { renderSpotlightReadGround } from '../places/hub/spotlight/presentation.js';
-import { renderAutonomousWakeGround } from './autonomous-wakes.js';
+import { renderAutonomousWakeGround } from '../context/autonomous-wake-ground.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -312,7 +312,7 @@ export class ProviderPhase {
     const commonWitness = { sessionId: created.sessionId, wakeId: created.wakeId, phase };
     const messageHashesFor = kinds => refs.filter(ref => kinds.includes(ref.kind)).map(ref => sha256(JSON.stringify(ref.message)));
     const groundWitnesses = {
-      crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground']) },
+      crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground', 'autonomous_wake_ground']) },
       world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
       tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), ...(spotlightReadStanding ? { spotlightReadStanding } : {}), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
       attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure']) },

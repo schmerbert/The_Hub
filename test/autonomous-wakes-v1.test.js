@@ -72,6 +72,7 @@ test('manual self-directed wake resumes the same session and seat without invent
     assert.equal(wake.origin.planId, plan.planId);
     assert.equal(wake.events.some(event => event.actorKind === 'user'), false);
     assert.equal(wake.events.some(event => event.actorKind === 'resident' && event.eventKind === 'utterance'), true);
+    assert.equal(f.hub.db.verifyGlassTrace().verified, true);
     assert.deepEqual({ roomId: f.hub.world.projection(f.hub.db.session.id).roomId, engagedFixtureId: f.hub.world.projection(f.hub.db.session.id).engagedFixtureId }, { roomId: before.roomId, engagedFixtureId: before.engagedFixtureId });
 
     const autonomousCall = f.provider.calls.find(call => call.phase === 'ordinary' && call.messages.some(message => String(message.content).includes('Autonomous wake ground:')));

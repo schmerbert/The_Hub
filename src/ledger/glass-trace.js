@@ -1,5 +1,6 @@
 import { canonicalize, id, sha256 } from '../core/hash.js';
 import { STABLE_GLASS_TEXT, STABLE_GLASS_TRANSITIONAL_V2_TEXT, STABLE_GLASS_V1_TEXT, STABLE_GLASS_V2_TEXT, STABLE_GLASS_V3_TEXT } from '../context/glass-cast.js';
+import { renderAutonomousWakeGround } from '../context/autonomous-wake-ground.js';
 
 const GLASS_HASHES_BY_VERSION = new Map([
   [1, new Set([sha256(STABLE_GLASS_V1_TEXT)])],
@@ -28,6 +29,20 @@ function rootedHistoricalTrailSign(sqlite, item, cast) {
       payload?.exposureKind === 'result_trail_sign' &&
       payload?.packet?.messageHash === item.messageHash;
   });
+}
+
+function witnessedHistoricalAutonomousGround(sqlite, item, cast) {
+  if (item.kind !== 'autonomous_wake_ground') return false;
+  const origin = sqlite.prepare(`SELECT r.plan_id AS planId,r.trigger_event_id AS triggerEventId,r.seat_json AS seatJson,r.seat_hash AS seatHash,e.content
+    FROM wake_origin_receipts r JOIN events e ON e.id=r.trigger_event_id
+    WHERE r.wake_id=? AND r.origin='self_directed'`).get(cast.wakeId);
+  if (!origin || sha256(origin.seatJson) !== origin.seatHash) return false;
+  let trigger;
+  try { trigger = JSON.parse(origin.content); } catch { return false; }
+  if (trigger?.kind !== 'autonomous_wake_trigger/v2' || trigger.planId !== origin.planId ||
+    trigger.seatHash !== origin.seatHash || canonicalize(trigger.seat) !== canonicalize(JSON.parse(origin.seatJson))) return false;
+  const content = renderAutonomousWakeGround({ kind: 'self_directed', plan: trigger, timing: trigger.timing });
+  return typeof content === 'string' && item.messageHash === sha256(JSON.stringify({ role: 'system', content }));
 }
 
 export class GlassTraceLedger {
@@ -62,7 +77,7 @@ export class GlassTraceLedger {
       if (!this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger)) add({ code: 'glass_trace_trigger_missing', trigger });
     }
     const boundary = JSON.parse(epoch.preBoundaryHeadJson);
-    const casts = this.sqlite.prepare('SELECT id,provider_request_id AS providerRequestId,receipt_hash AS receiptHash FROM glass_cast_receipts WHERE rowid>? ORDER BY rowid').all(boundary.head?.rowid || 0);
+    const casts = this.sqlite.prepare('SELECT id,wake_id AS wakeId,provider_request_id AS providerRequestId,receipt_hash AS receiptHash FROM glass_cast_receipts WHERE rowid>? ORDER BY rowid').all(boundary.head?.rowid || 0);
     for (const cast of casts) {
       const stored = this.sqlite.prepare('SELECT manifest_json AS manifestJson,manifest_hash AS manifestHash FROM glass_trace_manifests WHERE glass_cast_receipt_id=?').get(cast.id);
       if (!stored) { add({ code: 'glass_trace_manifest_missing', glassCastReceiptId: cast.id }); continue; }
@@ -76,7 +91,8 @@ export class GlassTraceLedger {
         if (item.source?.authority === 'glass_ground_receipt') {
           const ground = this.sqlite.prepare('SELECT receipt_hash AS receiptHash,receipt_json AS receiptJson FROM glass_ground_receipts WHERE id=? AND provider_request_id=?').get(item.source.receiptId, cast.providerRequestId);
           if (!ground || ground.receiptHash !== item.source.receiptHash || sha256(ground.receiptJson) !== ground.receiptHash) add({ code: 'glass_trace_ground_unresolved', sourceOrdinal: item.sourceOrdinal });
-          else if (!JSON.parse(ground.receiptJson).sourceMessageHashes?.includes(item.messageHash) && !rootedHistoricalTrailSign(this.sqlite, item, cast)) add({ code: 'glass_trace_ground_message_mismatch', sourceOrdinal: item.sourceOrdinal });
+          else if (!JSON.parse(ground.receiptJson).sourceMessageHashes?.includes(item.messageHash) &&
+            !rootedHistoricalTrailSign(this.sqlite, item, cast) && !witnessedHistoricalAutonomousGround(this.sqlite, item, cast)) add({ code: 'glass_trace_ground_message_mismatch', sourceOrdinal: item.sourceOrdinal });
         } else if (item.source?.authority === 'Session Scroll') {
           const history = this.sqlite.prepare('SELECT session_id AS sessionId,ordinal,message_json AS messageJson FROM session_history WHERE id=?').get(item.source.historyId);
           if (!history || history.sessionId !== item.source.sessionId || history.ordinal !== item.source.ordinal || sha256(history.messageJson) !== item.source.messageHash) add({ code: 'glass_trace_scroll_unresolved', sourceOrdinal: item.sourceOrdinal });
