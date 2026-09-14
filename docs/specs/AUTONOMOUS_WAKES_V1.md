@@ -1,6 +1,6 @@
 # Autonomous Wakes v1 — Rest, Return, and a Smaller Pair of Hands
 
-> **Status: Adopted first implementation slice, 2026-09-12.** This revision installs self-directed rest and same-seat autonomous return. An outside Hearth-origin heartbeat remains a distinct deferred crossing; it must not be simulated by teleporting the Resident home or launching a second context path.
+> **Status: Adopted first implementation slice, 2026-09-12.** This revision installs self-directed rest and same-seat autonomous return. The later, distinct outside Hearth-origin crossing is owned by [`HEARTH_ORIGIN_WAKES_V1.md`](HEARTH_ORIGIN_WAKES_V1.md); it is not simulated by teleporting the Resident home or launching a second context path.
 
 ## Pressure, classification, and ownership
 
@@ -27,9 +27,9 @@ The bench promise retains `rested_at`, exact requested duration in milliseconds,
 
 One pending rest is permitted per lifespan. Replacing or cancelling it is append-only. A crash leaves the plan pending; startup may claim an overdue plan once. Claim identity makes duplicate timer delivery inert.
 
-### Hearth-origin heartbeat — deferred
+### Hearth-origin heartbeat — separately installed
 
-An outside heartbeat is not a self-directed return. Its future law must decide whether and how the Hearth participates without rewriting World location or pretending the Resident sat there. This slice records that distinction and does not install an hourly schedule, external channel, automatic relocation, or fake human utterance.
+An outside heartbeat is not a self-directed return. [`HEARTH_ORIGIN_WAKES_V1.md`](HEARTH_ORIGIN_WAKES_V1.md) now installs the opt-in host-clock crossing as a fresh lifespan at the Hearth. It does not rewrite this bench law, imply an external channel, or fabricate a human utterance.
 
 ## Freedom and authority
 

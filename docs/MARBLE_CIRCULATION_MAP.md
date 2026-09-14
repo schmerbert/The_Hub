@@ -129,6 +129,7 @@ The provisional display branch is deliberately terminal. Raw provider fragments 
 | Live activity reaches the interface | Append-before-broadcast wake journal | Hash-linked wake event | Corner display |
 | A room becomes standing anatomy | Host admission + World installation event + verified witness | Append-only installation receipt joining manifest, bindings, witness, and exact World event | Installed World/Ceiling/Gateway/custody surfaces |
 | Resident chooses to rest and return | `rest_for` + autonomous wake scheduler | Append-only plan/event chain, exact seat hash, and wake-origin receipt | Same Wake Service/Glass/Scrub/Spine path with reduced autonomous tools and no fabricated user turn |
+| Ordinary host clock begins a fresh life | Opt-in Hearth wake controller + fresh-session gate | Host state event and append-only timing/origin receipt | House Hearth ritual, then the same reduced autonomous Wake Service path; no human or outside-source claim |
 
 ## Authority stores are not interchangeable
 

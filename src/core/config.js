@@ -30,7 +30,9 @@ export function readConfig(env = process.env) {
   const attentionRefuseBytes = integer(env, 'HUB_ATTENTION_REFUSE_BYTES', 120000, { min: 1 });
   const retainedToolPairs = integer(env, 'HUB_RETAINED_TOOL_PAIRS', 2);
   const providerMaxReturnBytes = integer(env, 'HUB_PROVIDER_MAX_RETURN_BYTES', 8 * 1024 * 1024, { min: 1 });
+  const hearthWakeIntervalSeconds = integer(env, 'HUB_HEARTH_WAKE_INTERVAL_SECONDS', 0, { min: 0, max: 604800 });
   if (attentionRefuseBytes <= attentionWarnBytes) throw new Error('Attention thresholds require 0 <= HUB_ATTENTION_WARN_BYTES < HUB_ATTENTION_REFUSE_BYTES');
+  if (hearthWakeIntervalSeconds !== 0 && hearthWakeIntervalSeconds < 60) throw new Error('HUB_HEARTH_WAKE_INTERVAL_SECONDS must be 0 or an integer from 60 to 604800');
   return immutable({
     mode,
     baseUrl: (env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, ''),
@@ -63,6 +65,7 @@ export function readConfig(env = process.env) {
     maxBodyBytes: integer(env, 'HUB_MAX_BODY_BYTES', 10000, { min: 1 }),
     maxToolRounds: integer(env, 'HUB_MAX_TOOL_ROUNDS', 8, { min: 1 }),
     autonomousMaxToolRounds: integer(env, 'HUB_AUTONOMOUS_MAX_TOOL_ROUNDS', 24, { min: 1, max: 64 }),
+    hearthWakeIntervalSeconds,
     workshopMaxFiles: integer(env, 'HUB_WORKSHOP_MAX_FILES', 100, { min: 1 }),
     workshopMaxBytes: integer(env, 'HUB_WORKSHOP_MAX_BYTES', 120000, { min: 1 }),
     workshopMaxLines: integer(env, 'HUB_WORKSHOP_MAX_LINES', 160, { min: 1 }),

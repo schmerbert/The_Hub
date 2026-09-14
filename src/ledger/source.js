@@ -138,6 +138,11 @@ export class HubDatabase {
     });
   }
 
+  beginHearthLifespan() {
+    this.session = this.openSession();
+    return this.session;
+  }
+
   migrateCustodyFailureColumns() {
     const columns = this.sqlite.prepare('PRAGMA table_info(wakes)').all().map(column => column.name);
     if (!columns.includes('custody_failure_code')) this.sqlite.exec('ALTER TABLE wakes ADD COLUMN custody_failure_code TEXT');
@@ -396,6 +401,22 @@ export class HubDatabase {
       this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
     });
     return { wakeId, eventId, sessionId: session.id, turnOrdinal, origin: plan.origin, plan, timing };
+  }
+
+  createHearthOriginWake({ provider, model, timing }) {
+    if (!timing || !Number.isInteger(timing.intervalMs) || timing.intervalMs < 0 || !Number.isInteger(timing.latenessMs) || timing.latenessMs < 0) throw Object.assign(new Error('Hearth wake timing is invalid.'), { code: 'autonomous_wake_invalid' });
+    const wakeId = id('wake'); const eventId = id('event'); const timestamp = now(); const session = this.getActiveSession();
+    if (!session || session.status !== 'open' || session.id !== this.session.id || this.sessionHasOrientation(session.id)) throw Object.assign(new Error('A Hearth-origin wake requires a fresh untended lifespan.'), { code: 'hearth_wake_lifespan_invalid' });
+    const trigger = canonicalize({ kind: 'hearth_origin_wake_trigger/v1', timing });
+    this.transaction(() => {
+      this.sqlite.prepare(`INSERT INTO wakes(id,thread_id,session_id,turn_ordinal,status,provider,requested_model,started_at) VALUES(?,?,?,?,?,?,?,?)`)
+        .run(wakeId, this.threadId, session.id, 1, 'assembling', provider, model, timestamp);
+      this.sqlite.prepare(`INSERT INTO events(id,thread_id,session_id,wake_id,actor_kind,event_kind,content,authority,provider,model,created_at) VALUES(?,?,?,?,?,'state',?,'host_receipt',NULL,NULL,?)`)
+        .run(eventId, this.threadId, session.id, wakeId, 'host', trigger, timestamp);
+      this.autonomous.recordHearthOrigin({ wakeId, triggerEventId: eventId, ...timing });
+      this.sqlite.prepare('UPDATE sessions SET wake_status=? WHERE id=?').run('orienting', session.id);
+    });
+    return { wakeId, eventId, sessionId: session.id, turnOrdinal: 1, origin: 'hearth_origin', timing };
   }
 
   getSessionHistory(sessionId = this.session.id) {

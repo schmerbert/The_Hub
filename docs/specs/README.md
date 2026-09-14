@@ -38,6 +38,7 @@ Begin with [`../ORIENTATION.md`](../ORIENTATION.md). It explains the Marble and 
 | Spotlight standalone Robinhood reads and observation custody | [`SPOTLIGHT_LIVE_READ_V1.md`](SPOTLIGHT_LIVE_READ_V1.md) |
 | Universal truthful extent, Workshop document reading, and incremental Forest crossing checks | [`TRUTHFUL_EXTENT_READING_V1.md`](TRUTHFUL_EXTENT_READING_V1.md) |
 | Self-directed rest, same-seat autonomous return, and reduced autonomous authority | [`AUTONOMOUS_WAKES_V1.md`](AUTONOMOUS_WAKES_V1.md) |
+| Opt-in ordinary Hearth-origin schedule and fresh-lifespan waking | [`HEARTH_ORIGIN_WAKES_V1.md`](HEARTH_ORIGIN_WAKES_V1.md) |
 
 ## Adopted directions with substantial uninstalled remainder
 

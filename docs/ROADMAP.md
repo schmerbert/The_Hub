@@ -30,11 +30,15 @@ Law: [`PROGRESSIVE_READINESS_V1.md`](specs/PROGRESSIVE_READINESS_V1.md)
 
 ### Self-directed waking — implemented first slice
 
-The Resident can now sit at its current verified World/Forest footing, choose a 60-second-to-24-hour rest through `rest_for`, and resume in the same lifespan without an invented human turn. One append-only pending plan is retained per session; stale footing refuses rather than teleporting. Autonomous wakes receive a generous 24-round reversible/read-only envelope with dual schema and dispatch enforcement, and may rest again. A manual local wake-now endpoint proves the crossing. The next wake frontier is the separately governed outside Hearth-origin heartbeat; it must preserve this continuity rather than create a shadow Resident.
+The Resident can now sit at its current verified World/Forest footing, choose a 60-second-to-24-hour rest through `rest_for`, and resume in the same lifespan without an invented human turn. One append-only pending plan is retained per session; stale footing refuses rather than teleporting. Autonomous wakes receive a generous 24-round reversible/read-only envelope with dual schema and dispatch enforcement, and may rest again. A manual local wake-now endpoint proves the crossing.
+
+The separate ordinary clock is also installed opt-in and off by default. A due tick yields to a pending bench promise, opens a fresh lifespan at the Hearth, receives attributable continuity through the ordinary ritual, and walks with the same reduced authority. It carries no live outside feed or automatic errand.
 
 Owner: Source companion schedule custody, autonomous controller, Wake Service authority fitting
 
 Law: [`AUTONOMOUS_WAKES_V1.md`](specs/AUTONOMOUS_WAKES_V1.md)
+
+Ordinary-clock law: [`HEARTH_ORIGIN_WAKES_V1.md`](specs/HEARTH_ORIGIN_WAKES_V1.md)
 
 ### 1. Silver Bullet holster — implemented
 

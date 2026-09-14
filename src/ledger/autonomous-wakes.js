@@ -20,12 +20,20 @@ CREATE TABLE IF NOT EXISTS wake_origin_receipts (
   plan_id TEXT REFERENCES autonomous_wake_plans(plan_id), trigger_event_id TEXT NOT NULL REFERENCES events(id),
   seat_json TEXT, seat_hash TEXT, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS hearth_wake_receipts (
+  wake_id TEXT PRIMARY KEY REFERENCES wakes(id), trigger_event_id TEXT NOT NULL REFERENCES events(id),
+  scheduled_at TEXT NOT NULL, due_at TEXT NOT NULL, woke_at TEXT NOT NULL,
+  interval_ms INTEGER NOT NULL CHECK(interval_ms>=0), lateness_ms INTEGER NOT NULL CHECK(lateness_ms>=0),
+  created_at TEXT NOT NULL
+);
 CREATE TRIGGER IF NOT EXISTS autonomous_wake_plans_append_only_update BEFORE UPDATE ON autonomous_wake_plans BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS autonomous_wake_plans_append_only_delete BEFORE DELETE ON autonomous_wake_plans BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS autonomous_wake_events_append_only_update BEFORE UPDATE ON autonomous_wake_events BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS autonomous_wake_events_append_only_delete BEFORE DELETE ON autonomous_wake_events BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS wake_origin_receipts_append_only_update BEFORE UPDATE ON wake_origin_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 CREATE TRIGGER IF NOT EXISTS wake_origin_receipts_append_only_delete BEFORE DELETE ON wake_origin_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS hearth_wake_receipts_append_only_update BEFORE UPDATE ON hearth_wake_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
+CREATE TRIGGER IF NOT EXISTS hearth_wake_receipts_append_only_delete BEFORE DELETE ON hearth_wake_receipts BEGIN SELECT RAISE(ABORT, 'append-only table'); END;
 `;
 
 function now() { return new Date().toISOString(); }
@@ -92,13 +100,19 @@ export class AutonomousWakeLedger {
     this.sqlite.prepare(`INSERT INTO wake_origin_receipts(wake_id,origin,plan_id,trigger_event_id,seat_json,seat_hash,created_at) VALUES(?,?,?,?,?,?,?)`)
       .run(wakeId, origin, planId, triggerEventId, seatJson, seatJson ? sha256(seatJson) : null, now());
   }
+  recordHearthOrigin({ wakeId, triggerEventId, scheduledAt, dueAt, wokeAt, intervalMs, latenessMs }) {
+    this.sqlite.prepare(`INSERT INTO hearth_wake_receipts(wake_id,trigger_event_id,scheduled_at,due_at,woke_at,interval_ms,lateness_ms,created_at) VALUES(?,?,?,?,?,?,?,?)`)
+      .run(wakeId, triggerEventId, scheduledAt, dueAt, wokeAt, intervalMs, latenessMs, now());
+  }
   origin(wakeId) {
     const row = this.sqlite.prepare('SELECT * FROM wake_origin_receipts WHERE wake_id=?').get(wakeId);
-    return row ? { wakeId: row.wake_id, origin: row.origin, planId: row.plan_id || null, triggerEventId: row.trigger_event_id, seat: parse(row.seat_json), seatHash: row.seat_hash || null, createdAt: row.created_at } : null;
+    if (row) return { wakeId: row.wake_id, origin: row.origin, planId: row.plan_id || null, triggerEventId: row.trigger_event_id, seat: parse(row.seat_json), seatHash: row.seat_hash || null, createdAt: row.created_at };
+    const hearth = this.sqlite.prepare('SELECT * FROM hearth_wake_receipts WHERE wake_id=?').get(wakeId);
+    return hearth ? { wakeId: hearth.wake_id, origin: 'hearth_origin', triggerEventId: hearth.trigger_event_id, scheduledAt: hearth.scheduled_at, dueAt: hearth.due_at, wokeAt: hearth.woke_at, intervalMs: hearth.interval_ms, latenessMs: hearth.lateness_ms, createdAt: hearth.created_at } : null;
   }
   verify() {
     const mismatches = [];
-    for (const table of ['autonomous_wake_plans','autonomous_wake_events','wake_origin_receipts']) for (const action of ['update','delete']) {
+    for (const table of ['autonomous_wake_plans','autonomous_wake_events','wake_origin_receipts','hearth_wake_receipts']) for (const action of ['update','delete']) {
       if (!this.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(`${table}_append_only_${action}`)) mismatches.push({ code: 'autonomous_wake_trigger_missing', table, action });
     }
     for (const row of this.sqlite.prepare('SELECT plan_id,seat_json,seat_hash FROM autonomous_wake_plans').all()) if (sha256(row.seat_json) !== row.seat_hash) mismatches.push({ code: 'autonomous_wake_seat_hash_mismatch', planId: row.plan_id });

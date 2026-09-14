@@ -85,7 +85,7 @@ human utterance
 
 The [`MARBLE_CIRCULATION_MAP.md`](MARBLE_CIRCULATION_MAP.md) owns the complete crossing map and bypass law.
 
-A self-directed return enters the same path with a host-witnessed wake plan in place of a human utterance. It does not pretend a human spoke, reconstruct a second Resident, or move the body home: the Resident wakes at the exact verified World and Forest seat where it chose to rest. Wake origin fits the mounted authority, so autonomous walking can be generous while consequential hands remain absent. A future outside Hearth-origin heartbeat is a different crossing and is not simulated by this one.
+A self-directed return enters the same path with a host-witnessed wake plan in place of a human utterance. It does not pretend a human spoke, reconstruct a second Resident, or move the body home: the Resident wakes at the exact verified World and Forest seat where it chose to rest. Wake origin fits the mounted authority, so autonomous walking can be generous while consequential hands remain absent. A separately governed, opt-in ordinary clock can instead begin a fresh lifespan at the Hearth; it yields to a pending bench promise and carries no outside feed or fabricated human summons.
 
 ## The central distinctions
 

@@ -151,7 +151,7 @@ export class WakeService {
     // orchestration method without going through wake().
     this.assertForestReadyForWake();
     const { config, db, provider, forest, spine, world, gateway, attentionMeter } = this;
-    const autonomous = origin?.kind === 'self_directed';
+    const autonomous = origin?.kind === 'self_directed' || origin?.kind === 'hearth_origin';
     if (!autonomous && origin?.kind !== 'human_present') throw { code: 'wake_origin_invalid', message: 'Wake origin is not installed.' };
     const submitted = typeof content === 'string' ? content : '';
     const trimmed = submitted.trim();
@@ -165,7 +165,9 @@ export class WakeService {
     const firstTurn = !db.sessionHasOrientation();
     const priorEligible = db.listEligibleUtteranceEvents().at(-1)?.id || null;
     const created = autonomous
-      ? db.createAutonomousSessionWake({ provider: providerName, model: config.model, plan: origin.plan, timing: origin.timing })
+      ? origin.kind === 'hearth_origin'
+        ? db.createHearthOriginWake({ provider: providerName, model: config.model, timing: origin.timing })
+        : db.createAutonomousSessionWake({ provider: providerName, model: config.model, plan: origin.plan, timing: origin.timing })
       : db.createSessionWake({ provider: providerName, model: config.model, content: submitted });
     const triggerEvent = db.getEvent(created.eventId);
     if (!firstTurn) world.ageHearthSettlement?.(created.sessionId);
@@ -173,7 +175,7 @@ export class WakeService {
     this.publish('wake.accepted', {
       sessionId: created.sessionId,
       wakeId: created.wakeId,
-      payload: { status: 'assembling', provider: providerName, requestedModel: config.model, origin: autonomous ? 'self_directed' : 'human_present' },
+      payload: { status: 'assembling', provider: providerName, requestedModel: config.model, origin: autonomous ? origin.kind : 'human_present' },
       source: autonomous ? { triggerEventId: created.eventId } : { userEventId: created.eventId },
     });
     let semanticExhale = null;
@@ -404,7 +406,7 @@ export class WakeService {
               : call.function?.name === RESULT_REOPEN_TOOL_NAME
               ? reopenResult(call, { requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id })
               : isForestTool && this.forestTraversalService
-                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: autonomous ? priorEligible : created.eventId, queryFallback: autonomous ? origin.plan.intention || 'wander and notice' : triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
+                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: autonomous ? priorEligible : created.eventId, queryFallback: autonomous ? origin.plan?.intention || 'wander and notice' : triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
               : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
             // Journal custody binds the exact identity return created at the
             // planting boundary. Result Rack may subsequently fit a second,

@@ -1,4 +1,8 @@
 export function renderAutonomousWakeGround(origin) {
+  if (origin?.kind === 'hearth_origin') {
+    const timing = origin.timing;
+    return `Hearth-origin wake ground: no human message summoned this wake, and it is not a same-life bench return. A fresh Resident lifespan began at the Hearth because the host's opt-in ordinary wake clock became due. The clock was scheduled at ${timing.scheduledAt} for ${timing.dueAt}; this wake began at ${timing.wokeAt}, ${timing.latenessMs} milliseconds after its due time. Tend the Hearth, receive attributable continuity, then notice what genuinely pulls. You may walk freely within the reduced tools mounted for this wake. If nothing calls for attention, quiet, a brief account, or choosing to rest are complete outcomes. Consequential hands and live outside observation are capped; absent tools are unavailable, not forgotten.`;
+  }
   if (!origin || origin.kind !== 'self_directed') return null;
   const intention = origin.plan.intention?.trim() || 'No fixed errand was retained. Wander, notice, or rest as seems fitting.';
   const timing = origin.timing;

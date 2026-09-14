@@ -38,6 +38,7 @@ test('every numeric runtime setting rejects malformed and out-of-range input', (
     ['HUB_RECIPE_TIMEOUT_MS', '0'], ['HUB_RESULT_PROJECTION_MAX_BYTES', '191'],
     ['HUB_RESULT_PROJECTION_MAX_LINES', '0'], ['HUB_RETAINED_TOOL_PAIRS', '-1'],
     ['HUB_PROVIDER_MAX_RETURN_BYTES', '0'],
+    ['HUB_HEARTH_WAKE_INTERVAL_SECONDS', '1'], ['HUB_HEARTH_WAKE_INTERVAL_SECONDS', '604801'],
     ['HUB_SQLITE_BUSY_TIMEOUT_MS', '0'], ['HUB_SQLITE_BUSY_TIMEOUT_MS', '60001'],
   ];
   for (const [name, value] of cases) {
@@ -45,6 +46,8 @@ test('every numeric runtime setting rejects malformed and out-of-range input', (
   }
   assert.equal(readConfig({ HUB_RESIDENT_MODE: 'fake', HUB_PORT: '0' }).port, 0);
   assert.equal(readConfig({ HUB_RESIDENT_MODE: 'fake', HUB_RETAINED_TOOL_PAIRS: '0' }).retainedToolPairs, 0);
+  assert.equal(readConfig({ HUB_RESIDENT_MODE: 'fake' }).hearthWakeIntervalSeconds, 0);
+  assert.equal(readConfig({ HUB_RESIDENT_MODE: 'fake', HUB_HEARTH_WAKE_INTERVAL_SECONDS: '3600' }).hearthWakeIntervalSeconds, 3600);
   assert.equal(readConfig({ HUB_RESIDENT_MODE: 'fake' }).sqliteBusyTimeoutMs, 5000);
 });
 
