@@ -145,6 +145,10 @@ The same disposable movement scenario fell from 2.59 seconds to 0.77 seconds tot
 
 Per-round observation of current location, Forest footing, mounted World schemas, autonomous reduction, final-opportunity closure, and the exact tool-round budget moved to `src/runtime/tool-continuation.js`. `WakeService` still owns the public wake loop, action execution, custody, publication, and terminal response. The extracted fitter is called afresh after every completed tool phase, so a Resident-authored movement continues to mount the destination room only on the following provider continuation. No tool, authority, round limit, provider phase, event, receipt, or presentation shape changed.
 
+### Tool-continuation lifecycle seam — 2026-09-14
+
+Tool-call journal custody plus ready/running/completed/refused publication, approval publication, card settlement, and the existing physical Forest-return notification now live beside round fitting in `src/runtime/tool-continuation.js`. `WakeService` retains action selection and execution, Result Rack capture, bounded-round refusal, and the public wake loop. The extraction preserves event ordering and every event, receipt, payload, and return shape; it introduces no movement authority or automatic transition.
+
 ## 6. Structural acceptance
 
 For every extraction:

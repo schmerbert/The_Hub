@@ -13,7 +13,7 @@ import { FOREST_WALK_TOOL_NAMES } from '../forest/traversal.js';
 import { isSimpleEmbodiedAction } from './reasoning-posture.js';
 import { ProviderPhase, providerCancellation } from './provider-phase.js';
 import { REST_FOR_TOOL_NAME, autonomousToolAllowed } from './autonomous-wakes.js';
-import { fitToolContinuationRound } from './tool-continuation.js';
+import { fitToolContinuationRound, publishToolCallsReady, publishToolStarted, settleToolAction } from './tool-continuation.js';
 
 export class WakeService {
   constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null, ambientFeatherService = null, forestTraversalService = null, forestReadiness = null }) {
@@ -344,14 +344,11 @@ export class WakeService {
           if (!response.result || typeof response.result.content !== 'string' || !response.result.content.trim()) throw { code: 'provider_empty_content', message: 'The resident provider returned no content.' };
           return response;
         }
-        const toolCallEventId = db.recordToolCall({ wakeId: created.wakeId, sessionId: created.sessionId, message: response.result.message, returnScrub: response.returnScrub });
-        for (const call of calls) {
-          this.publish('tool_call.ready', {
-            sessionId: created.sessionId, wakeId: created.wakeId, phase,
-            payload: this.toolCardPayload(call.id || null, call.function?.name || 'unknown', 'ready', { providerRequestId: response.requestId }),
-            source: { toolCallEventId, returnScrubReceiptId: response.returnScrub.receipt.receiptId },
-          });
-        }
+        const toolCallEventId = publishToolCallsReady({
+          calls, response, created, phase, db,
+          publish: (...args) => this.publish(...args),
+          toolCardPayload: (...args) => this.toolCardPayload(...args),
+        });
         if (round === roundLimit) {
           const limitError = { code: 'world_tool_round_limit', message: 'The bounded resident tool loop refused a tool action after the configured round limit.' };
           for (const call of calls) {
@@ -368,10 +365,10 @@ export class WakeService {
         }
         for (const call of calls) {
           let action;
-          this.publish('tool.started', {
-            sessionId: created.sessionId, wakeId: created.wakeId, phase,
-            payload: this.toolCardPayload(call.id || null, call.function?.name || 'unknown', 'running', { providerRequestId: response.requestId }),
-            source: { toolCallEventId, providerRequestId: response.requestId },
+          publishToolStarted({
+            call, response, toolCallEventId, created, phase,
+            publish: (...args) => this.publish(...args),
+            toolCardPayload: (...args) => this.toolCardPayload(...args),
           });
           try {
             const isForestTool = FOREST_WALK_TOOL_NAMES.has(call.function?.name);
@@ -425,23 +422,13 @@ export class WakeService {
             }
           }
           catch (error) { action = gateway.refuse({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call, error }); }
-          const toolName = action.name || call.function?.name || 'unknown';
-          const hostEventId = db.recordToolResult({ wakeId: created.wakeId, sessionId: created.sessionId, toolName, result: action.result, hostReturnScrub: action.scrub });
-          if (toolName === 'move_through_passage' && action.result?.toLocationId === 'place.garden') this.forestTraversalService?.completePhysicalReturn({ sessionId:created.sessionId,wakeId:created.wakeId,toolCallId:call.id || toolName,toPlaceId:action.result.toLocationId });
-          const refused = action.result?.ok === false;
-          this.publish(refused ? 'tool.refused' : 'tool.completed', {
-            sessionId: created.sessionId, wakeId: created.wakeId, phase,
-            payload: this.toolCardPayload(call.id || null, toolName, refused ? 'refused' : 'completed', { status: action.result?.status || (refused ? 'refused' : 'completed') }),
-            source: { hostEventId, actionReceiptId: action.actionReceipt?.receiptId || null, hostReturnReceiptId: action.scrub?.receipt?.receiptId || null },
+          settleToolAction({
+            call, action, created, phase, db,
+            publish: (...args) => this.publish(...args),
+            publishCards: (...args) => this.publishCards(...args),
+            toolCardPayload: (...args) => this.toolCardPayload(...args),
+            forestTraversalService: this.forestTraversalService,
           });
-          if (action.result?.status === 'pending_approval') {
-            this.publish('approval.pending', {
-              sessionId: created.sessionId, wakeId: created.wakeId, phase,
-              payload: { approvalId: action.result.approvalId, toolCallId: call.id || null, toolName },
-              source: { hostEventId, actionReceiptId: action.actionReceipt?.receiptId || null, approvalReceiptId: action.approvalReceipt?.receiptId || null },
-            });
-          }
-          this.publishCards(created, phase, call, action, hostEventId);
         }
         afterSimpleAction = calls.length > 0 && calls.every(call => isSimpleEmbodiedAction(call.function?.name));
       }

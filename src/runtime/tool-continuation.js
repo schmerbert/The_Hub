@@ -69,3 +69,80 @@ export function fitToolContinuationRound({
     },
   };
 }
+
+export function publishToolCallsReady({ calls, response, created, phase, db, publish, toolCardPayload }) {
+  const toolCallEventId = db.recordToolCall({
+    wakeId: created.wakeId,
+    sessionId: created.sessionId,
+    message: response.result.message,
+    returnScrub: response.returnScrub,
+  });
+  for (const call of calls) {
+    publish('tool_call.ready', {
+      sessionId: created.sessionId,
+      wakeId: created.wakeId,
+      phase,
+      payload: toolCardPayload(call.id || null, call.function?.name || 'unknown', 'ready', { providerRequestId: response.requestId }),
+      source: { toolCallEventId, returnScrubReceiptId: response.returnScrub.receipt.receiptId },
+    });
+  }
+  return toolCallEventId;
+}
+
+export function publishToolStarted({ call, response, toolCallEventId, created, phase, publish, toolCardPayload }) {
+  publish('tool.started', {
+    sessionId: created.sessionId,
+    wakeId: created.wakeId,
+    phase,
+    payload: toolCardPayload(call.id || null, call.function?.name || 'unknown', 'running', { providerRequestId: response.requestId }),
+    source: { toolCallEventId, providerRequestId: response.requestId },
+  });
+}
+
+export function settleToolAction({ call, action, created, phase, db, publish, publishCards, toolCardPayload, forestTraversalService = null }) {
+  const toolName = action.name || call.function?.name || 'unknown';
+  const hostEventId = db.recordToolResult({
+    wakeId: created.wakeId,
+    sessionId: created.sessionId,
+    toolName,
+    result: action.result,
+    hostReturnScrub: action.scrub,
+  });
+  if (toolName === 'move_through_passage' && action.result?.toLocationId === 'place.garden') {
+    forestTraversalService?.completePhysicalReturn({
+      sessionId: created.sessionId,
+      wakeId: created.wakeId,
+      toolCallId: call.id || toolName,
+      toPlaceId: action.result.toLocationId,
+    });
+  }
+  const refused = action.result?.ok === false;
+  publish(refused ? 'tool.refused' : 'tool.completed', {
+    sessionId: created.sessionId,
+    wakeId: created.wakeId,
+    phase,
+    payload: toolCardPayload(call.id || null, toolName, refused ? 'refused' : 'completed', {
+      status: action.result?.status || (refused ? 'refused' : 'completed'),
+    }),
+    source: {
+      hostEventId,
+      actionReceiptId: action.actionReceipt?.receiptId || null,
+      hostReturnReceiptId: action.scrub?.receipt?.receiptId || null,
+    },
+  });
+  if (action.result?.status === 'pending_approval') {
+    publish('approval.pending', {
+      sessionId: created.sessionId,
+      wakeId: created.wakeId,
+      phase,
+      payload: { approvalId: action.result.approvalId, toolCallId: call.id || null, toolName },
+      source: {
+        hostEventId,
+        actionReceiptId: action.actionReceipt?.receiptId || null,
+        approvalReceiptId: action.approvalReceipt?.receiptId || null,
+      },
+    });
+  }
+  publishCards(created, phase, call, action, hostEventId);
+  return { toolName, hostEventId, refused };
+}
