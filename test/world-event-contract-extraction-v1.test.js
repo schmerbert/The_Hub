@@ -5,6 +5,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { sha256 } from '../src/core/hash.js';
 import * as facade from '../src/world/events.js';
 import * as contract from '../src/world/event-contract.js';
+import * as journal from '../src/world/event-journal.js';
+import * as reducer from '../src/world/event-reducer.js';
+import * as verifier from '../src/world/event-verifier.js';
 
 const MOVED_EXPORTS = [
   'WORLD_PROJECTOR_VERSION', 'WORLD_EVENT_GENESIS_HASH', 'WORLD_EVENT_KINDS',
@@ -77,6 +80,20 @@ test('World event facade preserves its public export set and contract identities
   assert.deepEqual(Object.keys(facade).sort(), [...PUBLIC_EXPORTS].sort());
   for (const name of MOVED_EXPORTS) assert.strictEqual(facade[name], contract[name], `${name} must remain the facade binding`);
   for (const name of ['WORLD_EVENT_KINDS', 'WORLD_INTEGRITY_TRIGGER_SQL', 'WORLD_A2_PROJECTION_TABLE_SQL', 'WORLD_PROJECTION_TABLE_SQL', 'WORLD_CUSTODY_TABLE_SQL', 'NODE_COLUMNS', 'EDGE_COLUMNS', 'LOCATION_COLUMNS', 'FIXTURE_RUNTIME_COLUMNS', 'TIMER_COLUMNS', 'BRIEF_COLUMNS', 'APPROVAL_COLUMNS', 'ACTION_RECEIPT_COLUMNS', 'APPROVAL_RECEIPT_COLUMNS', 'PASSAGE_COLUMNS', 'OBJECT_STATE_COLUMNS']) assertDeepFrozen(contract[name], name);
+});
+
+test('World event facade preserves journal and projection operation identities', () => {
+  for (const name of Object.keys(journal)) assert.strictEqual(facade[name], journal[name], `${name} must remain the facade binding`);
+});
+
+test('World event facade preserves reducer and verifier operation identities', async () => {
+  for (const name of Object.keys(reducer)) assert.strictEqual(facade[name], reducer[name], `${name} must remain the facade binding`);
+  for (const name of Object.keys(verifier)) assert.strictEqual(facade[name], verifier[name], `${name} must remain the facade binding`);
+
+  const reducerSource = await readFile(new URL('../src/world/event-reducer.js', import.meta.url), 'utf8');
+  const verifierSource = await readFile(new URL('../src/world/event-verifier.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(reducerSource, /\b(?:DatabaseSync|verifyWorldSqlite|readWorldProjection)\b/);
+  assert.match(verifierSource, /from ['"]\.\/event-reducer\.js['"]/);
 });
 
 test('World event contract retains exact installed SQL bytes', () => {

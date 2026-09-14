@@ -121,6 +121,20 @@ The first mechanical pass installed bounded owners without changing public facad
 
 The comparable post-extraction baseline retained 3984-byte health and 344-byte wake payloads, four `verification()` calls, 104 `assertVerified()` calls, one Glass Trace verification, one Roots verification, and the health-only 2/20 World call shape. Timing remained in the same diagnostic band (575.64 ms composition, 9.48 ms binding, 186.74 ms health, and 1206.3 ms wake). No verification checkpoint or cached-success optimization has been installed; the 104-call ordinary-wake shape remains the principal measured performance pressure for the next design gate.
 
+### World separation and movement-wake characterization — 2026-09-14
+
+A second behavior-preserving checkpoint established two narrower World seams while retaining the existing public facades:
+
+- canonical event creation, hashing, journal insertion, projection reads, and custody-row hashing moved to `src/world/event-journal.js`, with `src/world/events.js` retaining identical public export bindings; and
+- topology-upgrade inspection plus the A2, B1, Hearth, Forest, Binder Window, Spotlight, and Spotlight-door migration protocols moved to `src/world/topology-version-migrations.js`, while `WorldGraphStore` retains its public migration methods; and
+- the pure deterministic reducer moved to `src/world/event-reducer.js`, forensic replay and verification moved to `src/world/event-verifier.js`, and `src/world/events.js` became the stable public compatibility facade.
+
+`npm run baseline:movement-wake` now exercises a disposable real HTTP/provider/tool-continuation path in which the Resident opens the House door, crosses into the Garden, receives the refreshed World presentation, and finishes the same wake. It reports phase timings plus timed World verification, projection, and movement calls. This is measurement only: it adds no checkpoint, cache, movement authority, or runtime behavior.
+
+The initial integrated run recorded a 5.3 ms passage mutation inside a 719.36 ms interval from the returned movement tool call to the first continuation delta. That interval included 66 `assertVerified()` calls totaling 474.29 ms and five projections totaling 416.94 ms. Timings are diagnostic and overlap because projections invoke verification; the call shape, not summed wall time, is the stable pressure signal.
+
+Test discovery now runs through `src/scripts/run-tests.js`. It includes only `*.test.js` files, defaults full and runtime coverage to bounded concurrency two, and exposes truthful `architecture`, `runtime`, `experiments`, and `serial` lanes. This changes no runtime behavior or test assertion; it prevents support modules from being reported as tests and provides a deterministic serial diagnostic path for contention-sensitive failures.
+
 ## 6. Structural acceptance
 
 For every extraction:

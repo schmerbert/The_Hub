@@ -68,8 +68,8 @@ test('domain stores never import presentation, transport, or composition roots',
 test('large modules have explicit cohesion standing instead of silently growing', async () => {
   const standing = new Map([
     ['src/ledger/source.js', 'stable shared-transaction facade; trace, Roots, stream, and schema owners already extracted'],
-    ['src/world/graph.js', 'universal World transaction and migration facade; place behavior is prohibited here'],
-    ['src/world/events.js', 'closed deterministic reducer, replay, and forensic verifier for universal World law'],
+    ['src/world/graph.js', 'stable World operations facade; versioned migration and event mechanics are extracted behind unchanged methods'],
+    ['src/world/event-reducer.js', 'one closed deterministic reducer for universal World law; splitting its event cases would obscure replay order'],
     ['src/runtime/wake-service.js', 'wake choreography; provider crossing extracts only with the adopted return-trace contract'],
     ['src/forest/store.js', 'exact Forest custody facade; Home chronology access remains joined to entry integrity and append-only edge ownership'],
   ]);
