@@ -3,17 +3,17 @@ import { buildGlassWakeInheritance } from '../context/glass-cast.js';
 import { scrubHostReturn } from '../scrub/host-return.js';
 import { hearthReturnHash, validateOrientationResult } from '../hearth/handshake.js';
 import { renderHearthPacket } from '../hearth/packet.js';
-import { residentToolProfile, schemasForResidentSession } from '../world/tools.js';
 import { AttentionMeter } from '../context/attention-meter.js';
 import { WakeEventPublication } from './wake-event-publication.js';
 import {
-  REOPEN_RESULT_TOOL, RESULT_REOPEN_TOOL_NAME, parseReopenResultArguments,
+  RESULT_REOPEN_TOOL_NAME, parseReopenResultArguments,
 } from '../context/result-exhale.js';
 import { runSemanticForestShadow, runAmbientFeatherShadow, buildSemanticRoomSignals } from '../context/semantic-exhale.js';
 import { FOREST_WALK_TOOL_NAMES } from '../forest/traversal.js';
 import { isSimpleEmbodiedAction } from './reasoning-posture.js';
 import { ProviderPhase, providerCancellation } from './provider-phase.js';
-import { REST_FOR_TOOL, REST_FOR_TOOL_NAME, autonomousToolAllowed } from './autonomous-wakes.js';
+import { REST_FOR_TOOL_NAME, autonomousToolAllowed } from './autonomous-wakes.js';
+import { fitToolContinuationRound } from './tool-continuation.js';
 
 export class WakeService {
   constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null, ambientFeatherService = null, forestTraversalService = null, forestReadiness = null }) {
@@ -328,41 +328,16 @@ export class WakeService {
       let afterSimpleAction = options.afterSimpleAction === true;
       const roundLimit = autonomous ? config.autonomousMaxToolRounds : config.maxToolRounds;
       for (let round = 0; round <= roundLimit; round += 1) {
-        const finalOpportunity = round === roundLimit;
-        const location = world.current(created.sessionId);
-        const roomId = location.room_node_id;
-        const forestTools = this.forestTraversalService?.tools(created.sessionId, roomId) || [];
-        const forestState = this.forestTraversalService?.projection(created.sessionId) || { active:false };
-        const forestActive = forestState.active === true;
-        const fittedWorldTools = schemasForResidentSession(world, created.sessionId, {
-          workshopMaxLines: config.workshopMaxLines,
-          workshopMaxResults: config.workshopMaxResults,
-        });
-        let worldTools = forestActive
-          ? forestState.entranceRegister === 'physical' ? fittedWorldTools.filter(tool => tool.function.name === 'move_through_passage') : []
-          : fittedWorldTools;
-        if (autonomous) worldTools = worldTools.filter(tool => autonomousToolAllowed(tool.function.name, { forestToolNames: forestTools.map(tool => tool.function.name) }));
-        const autonomousForestTools = autonomous ? forestTools.filter(tool => autonomousToolAllowed(tool.function.name, { forestToolNames: forestTools.map(tool => tool.function.name) })) : forestTools;
-        const fittedProfile = forestActive
-          ? { roomId:'place.forest', activeGroup: 'forest_walk', names: [...worldTools.map(tool => tool.function.name), ...autonomousForestTools.map(tool => tool.function.name)], completeCount: worldTools.length + autonomousForestTools.length, omittedCount: 0 }
-          : (() => {
-            const profile = residentToolProfile(world, created.sessionId);
-            const names = [...worldTools.map(tool => tool.function.name), ...autonomousForestTools.map(tool => tool.function.name)];
-            return { ...profile, names, completeCount: autonomous ? names.length : profile.completeCount + autonomousForestTools.length, omittedCount: autonomous ? Math.max(profile.completeCount - worldTools.length, 0) : profile.omittedCount };
-          })();
-        const toolProfile = {
-          ...fittedProfile,
-          names: [...fittedProfile.names, RESULT_REOPEN_TOOL_NAME, REST_FOR_TOOL_NAME],
-          completeCount: fittedProfile.completeCount + 2,
-        };
+        const fitted = fitToolContinuationRound({ world, sessionId: created.sessionId, config, forestTraversalService: this.forestTraversalService, autonomous, round, roundLimit });
+        const { finalOpportunity, location, roomId, toolProfile, tools, toolRoundBudget } = fitted;
         const response = await callPhase(phase, db.getSessionHistory(created.sessionId), {
           ...options,
           afterSimpleAction,
-          tools: finalOpportunity ? [] : [...worldTools, ...autonomousForestTools, REOPEN_RESULT_TOOL, REST_FOR_TOOL],
+          tools,
           toolsDisabled: finalOpportunity,
           toolProfile,
           wakeOrigin: autonomous ? origin : null,
-          toolRoundBudget: { used: round, remaining: Math.max(roundLimit - round, 0), limit: roundLimit, finalOpportunity },
+          toolRoundBudget,
         });
         const calls = Array.isArray(response.result?.message?.tool_calls) ? response.result.message.tool_calls : [];
         if (!calls.length) {

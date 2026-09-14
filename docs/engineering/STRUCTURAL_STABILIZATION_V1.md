@@ -141,6 +141,10 @@ World projection now runs inside one synchronous SQLite read transaction. A full
 
 The same disposable movement scenario fell from 2.59 seconds to 0.77 seconds total. The movement-tool-call-to-continuation-first-delta interval fell from 671 ms to 208 ms, while the exact passage mutation remained in the same diagnostic band at 3.56 ms. The public `assertVerified()` call shape remains visible, but nested calls return the active read-scope witness instead of replaying the complete World journal. Focused drift, rollback, movement, streaming, and tool-round tests remained exact.
 
+### Tool-continuation fitting seam — 2026-09-14
+
+Per-round observation of current location, Forest footing, mounted World schemas, autonomous reduction, final-opportunity closure, and the exact tool-round budget moved to `src/runtime/tool-continuation.js`. `WakeService` still owns the public wake loop, action execution, custody, publication, and terminal response. The extracted fitter is called afresh after every completed tool phase, so a Resident-authored movement continues to mount the destination room only on the following provider continuation. No tool, authority, round limit, provider phase, event, receipt, or presentation shape changed.
+
 ## 6. Structural acceptance
 
 For every extraction:
