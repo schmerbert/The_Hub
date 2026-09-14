@@ -135,6 +135,12 @@ The initial integrated run recorded a 5.3 ms passage mutation inside a 719.36 ms
 
 Test discovery now runs through `src/scripts/run-tests.js`. It includes only `*.test.js` files, defaults full and runtime coverage to bounded concurrency two, and exposes truthful `architecture`, `runtime`, `experiments`, and `serial` lanes. This changes no runtime behavior or test assertion; it prevents support modules from being reported as tests and provides a deterministic serial diagnostic path for contention-sensitive failures.
 
+### Verified projection read scope — 2026-09-14
+
+World projection now runs inside one synchronous SQLite read transaction. A full World proof opens the scope; nested projection getters treat that proof as deferred only until the projection completes, and the transaction then closes. An absent lifespan is established through the existing mutation path before the read scope begins. No proof is retained across projections, requests, provider phases, process restarts, or committed mutations, so this is an implementation-level collapse of redundant nested proofs rather than the authenticated persistent checkpoint contemplated in section 7.
+
+The same disposable movement scenario fell from 2.59 seconds to 0.77 seconds total. The movement-tool-call-to-continuation-first-delta interval fell from 671 ms to 208 ms, while the exact passage mutation remained in the same diagnostic band at 3.56 ms. The public `assertVerified()` call shape remains visible, but nested calls return the active read-scope witness instead of replaying the complete World journal. Focused drift, rollback, movement, streaming, and tool-round tests remained exact.
+
 ## 6. Structural acceptance
 
 For every extraction:

@@ -77,6 +77,7 @@ export class WorldGraphStore {
     this.topologyVersion = topologyVersion;
     this.transactionDepth = 0;
     this.transactionNeedsVerification = false;
+    this.verifiedReadDepth = 0;
     // Lifespan-scoped presentation state. Exact Hearth custody remains in the
     // Ledger; this map only lets the current World show the settled affordance.
     this.hearthSettlements = new Map();
@@ -252,7 +253,21 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     return Math.max(row?.revision || 0, projectionRevision || 0);
   }
   verification(options = {}) { return verifyWorldSqlite(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight', ...options }); }
-  assertVerified() { return this.transactionDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' }); }
+  assertVerified() { return this.transactionDepth > 0 || this.verifiedReadDepth > 0 ? { verified: true, deferred: true } : assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' }); }
+  #withVerifiedRead(fn) {
+    if (this.transactionDepth > 0 || this.verifiedReadDepth > 0) return fn();
+    this.sqlite.exec('BEGIN DEFERRED');
+    try {
+      assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' });
+      this.verifiedReadDepth += 1;
+      const result = fn();
+      this.sqlite.exec('COMMIT');
+      return result;
+    } catch (error) {
+      try { this.sqlite.exec('ROLLBACK'); } catch {}
+      throw error;
+    } finally { this.verifiedReadDepth = 0; }
+  }
   _withTopologyProjectionWrites(fn) {
     for (const trigger of ['world_nodes_append_only_update', 'world_nodes_append_only_delete', 'world_edges_append_only_update', 'world_edges_append_only_delete']) this.sqlite.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
     try { return fn(); }
@@ -646,6 +661,8 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     };
   }
   projection(sessionId) {
+    if (!this.sqlite.prepare('SELECT 1 AS ok FROM world_locations WHERE session_id=?').get(sessionId)) this.ensureLifespan(sessionId);
+    return this.#withVerifiedRead(() => {
     const location = this.current(sessionId); const room = this.node(location.room_node_id);
     const pendingApprovals = this.listApprovals(sessionId, { pendingOnly: true }).length;
     const hearthSettlement = this.hearthSettlement(sessionId);
@@ -693,6 +710,7 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
       mountProfile: mountProfile(room.id),
       spatialHorizon: spatialHorizon({ currentRoomId: room.id, nodes: horizonNodes, edges: horizonEdges }),
     };
+    });
   }
   availableTools(sessionId) {
     return mountedToolNames(this.current(sessionId).room_node_id);
