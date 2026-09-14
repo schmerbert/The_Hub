@@ -43,6 +43,7 @@ Cards are deterministic projections. Tool/action cards cite action and host-retu
 - A non-negative `?after=` cursor takes precedence over `Last-Event-ID`. Duplicate or old sequences are ignored by the client reducer.
 - The process bus keeps a bounded replay buffer. If the requested cursor is older than the buffer or ahead of its latest sequence, it emits the non-durable `resync_required` control rather than pretending replay was complete.
 - `GET /api/events/history?after=<sequence>&limit=<1..1000>` reads the durable journal and is the recovery authority across buffer gaps and process restarts.
+- `POST /api/wakes?delivery=accepted` validates and durably admits one wake, appends `wake.accepted`, and returns HTTP 202 with its session id, wake id, and accepted-event sequence without making the client connection own execution lifetime. The existing form without `delivery=accepted` remains a blocking compatibility path for callers that require the terminal wake projection.
 - Subscriber failures are isolated. Unsubscribe, renderer close, or network disconnect affects only that client and never cancels the wake.
 - Corner uses one same-origin EventSource when available. Its reducer advances only across contiguous durable sequences. On a disclosed or observed gap, Corner closes that source, pages history from the last contiguous sequence until it reaches `latestSequence`, rejects incomplete/non-progressing recovery, and reconnects with the recovered `after` cursor. It retains persisted health/slip polling and timed retry as fallback and refreshes canonical thread state after terminal events.
 
@@ -51,6 +52,8 @@ The bounded process bus is delivery convenience, not custody. Clients must recon
 ## 5. UI law
 
 Corner may display optimistic exact user text while submission is pending, safe provisional provider thinking/draft, tool-call name/index progress, and receipt-derived action/approval/result cards. Provisional tool arguments are withheld. All text is rendered inertly. Provisional draft clears on terminal commit/failure and never appears as canonical conversation. The utterance rail is refreshed from committed thread records.
+
+Corner uses admitted delivery and treats the durable event stream as terminal authority. The composer remains locked for the complete active wake: responsiveness of navigation, inspection, rendering, and delivery does not grant a second message or queue. Stream failure retains the persisted health/slip fallback, which releases the composer only after the host reports no active wake and canonical state is refreshed.
 
 The current surface does not promise general file/artifact opening, editor navigation, or source highlighting. Exact Result Rack pointers are custody references, not an installed opener.
 
@@ -61,7 +64,14 @@ The current surface does not promise general file/artifact opening, editor navig
 - Spine raw-return custody is appended at stream termination rather than per network chunk and is bounded by the configured capture ceiling.
 - Process-buffer overflow requires journal resynchronization.
 - Polling remains a deliberate fallback rather than being removed.
+- Session attachment across remote devices, device identity, pairing, authorization, and non-loopback transport remain uninstalled. The admitted-delivery boundary removes renderer lifetime from wake execution but does not itself authorize another device.
 
-## 7. Hostile and regression matrix
+## 7. Admitted-delivery revision — 2026-09-14
+
+The original Corner awaited the terminal response of `POST /api/wakes` even though Wake Stream already supplied durable live and terminal evidence. In practice, that coupled renderer busy-state cleanup to a long HTTP request and made the window feel blocked after send. The protected invariants were durable admission before acknowledgment, one active wake at a time, exact Source/Spine/action custody, and provisional material remaining noncanonical—not ownership by one request connection.
+
+The revised protocol adds an opt-in admitted response after the user event, wake row, and `wake.accepted` envelope exist. Execution continues under `WakeService`; terminal success or failure still arrives through the same append-before-broadcast journal. Corner keeps its composer closed until terminal reconciliation, while unrelated view behavior remains independent. Duplicate submission during the active wake still fails with `wake_in_progress`. The blocking response remains compatible for direct and older HTTP callers, and no store or migration changes.
+
+## 8. Hostile and regression matrix
 
 The implemented tests require: Unicode-equivalent assembly across byte boundaries; deterministic fragmented tool calls; refusal of malformed/truncated/conflicting streams; exact admitted-body Spine custody before independent Scrub admission; bounded oversized custody; interrupted and shutdown-aborted partial custody; append-before-broadcast and append-only hash chaining; within- and cross-fragment credential suppression without changing final custody; omission of provisional tool arguments; bounded replay, named-event dispatch, dedupe, non-durable resync control, paged contiguous journal recovery, listener isolation, and restart history; SSE cursor validation and same-origin headers; renderer disconnect without cancellation; receipt-before-card ordering; provisional authority flags; terminal message ordering; late-callback gating; safe DOM rendering; and polling fallback.

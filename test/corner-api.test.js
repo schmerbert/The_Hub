@@ -59,7 +59,7 @@ test('Corner API preserves same-origin endpoint paths and request shapes', async
     ['/api/wakes/wake%2Fslips/slips', 'GET'],
     ['/api/events/history?after=12&limit=1000', 'GET'],
     ['/api/approvals/approval%2Fone%3Ftwo/decide', 'POST'],
-    ['/api/wakes?projection=compact', 'POST'],
+    ['/api/wakes?projection=compact&delivery=accepted', 'POST'],
   ]);
   assert.deepEqual(calls[7].options.headers, { 'content-type': 'application/json' });
   assert.deepEqual(JSON.parse(calls[7].options.body), { decision: 'confirm' });

@@ -86,6 +86,7 @@ let unregisterLiveEvents = null;
 let liveRecoveryTimer = null;
 let liveUnloading = false;
 let liveRenderFrame = null;
+let submittedWakeId = null;
 const openThinkingDisclosures = new Set();
 
 function node(tag, className, content) {
@@ -766,7 +767,17 @@ async function pollSlips() {
   slipPollBusy = true;
   try {
     const health = await getHealth();
-    if (!health.activeWakeId) return;
+    if (!health.activeWakeId) {
+      if (submittedWakeId) {
+        const completedWakeId = submittedWakeId;
+        await retainWakeSlips(completedWakeId).catch(() => {});
+        await refresh().catch(() => {});
+        liveState = clearLiveWake(liveState, completedWakeId);
+        renderLive();
+        releaseWakeUi();
+      }
+      return;
+    }
     const projected = await getWakeSlips(health.activeWakeId);
     renderSlips(gap, projected.slips || []);
   } catch {}
@@ -784,6 +795,16 @@ function stopSlipPoll() {
   slipPoll = null;
 }
 
+function releaseWakeUi() {
+  stopSlipPoll();
+  gap.replaceChildren();
+  busy = false;
+  submittedWakeId = null;
+  if (latestHealth) syncComposer(latestHealth);
+  else { input.disabled = false; sendButton.disabled = false; }
+  if (!input.disabled) input.focus({ preventScroll: true });
+}
+
 async function retainWakeSlips(wakeId) {
   if (!wakeId) return;
   const projected = await getWakeSlips(wakeId);
@@ -799,8 +820,7 @@ function reconcileWakeOnce(wakeId, terminalKind = 'wake.completed') {
     await refresh().catch(() => {});
     liveState = clearLiveWake(liveState, wakeId);
     renderLive();
-    stopSlipPoll();
-    gap.replaceChildren();
+    releaseWakeUi();
     setState(terminalKind === 'wake.failed' ? 'failed' : 'committed');
   })();
   terminalReconciliations.set(wakeId, reconciliation);
@@ -906,9 +926,20 @@ async function submitWake(event) {
   busy = true; input.disabled = true; sendButton.disabled = true; setState('assembling');
   setTimeout(() => { if (busy) setState('orienting'); }, 0);
   startSlipPoll();
+  let handedToStream = false;
   try {
     const wake = await submitWakeRequest(submitted);
     input.value = '';
+    if (wake.accepted && wake.status === 'accepted' && wake.wakeId) {
+      submittedWakeId = wake.wakeId;
+      const terminalReconciliation = terminalReconciliations.get(wake.wakeId);
+      if (terminalReconciliation) await terminalReconciliation;
+      else {
+        handedToStream = true;
+        setState(projectLiveState(liveState).status);
+      }
+      return;
+    }
     if (!liveState.optimisticUser?.wakeId) liveState = clearOptimisticUser(liveState);
     if (wake.__failedWake || wake.status === 'failed') {
       setState('failed');
@@ -937,12 +968,7 @@ async function submitWake(event) {
     liveState = clearLiveWake(clearOptimisticUser(liveState));
     renderLive();
   } finally {
-    stopSlipPoll();
-    gap.replaceChildren();
-    busy = false;
-    if (latestHealth) syncComposer(latestHealth);
-    else { input.disabled = false; sendButton.disabled = false; }
-    if (!input.disabled) input.focus({ preventScroll: true });
+    if (!handedToStream) releaseWakeUi();
   }
 }
 

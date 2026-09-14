@@ -54,7 +54,7 @@ export function getEventHistory(afterSequence, limit) {
 }
 
 export function submitWake(content) {
-  return request('/api/wakes?projection=compact', {
+  return request('/api/wakes?projection=compact&delivery=accepted', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ content }),

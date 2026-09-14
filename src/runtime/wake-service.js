@@ -130,19 +130,50 @@ export class WakeService {
     };
   }
 
-  async wake(content, { completionProjection = 'full', origin = { kind: 'human_present' } } = {}) {
+  beginWake(content, { completionProjection = 'full', origin = { kind: 'human_present' } } = {}, { deferExecution = false } = {}) {
     if (this.closing) throw { code: 'hub_closing', message: 'The Hub is shutting down and is not accepting new wakes.' };
     if (this.wakeInProgress) throw { code: 'wake_in_progress', message: 'Another wake is already in progress.' };
     this.assertForestReadyForWake();
     this.wakeInProgress = true;
-    const operation = this.performWake(content, { completionProjection, origin });
-    this.activeWakePromise = operation;
-    try { return await operation; }
-    finally {
-      if (this.activeWakePromise === operation) this.activeWakePromise = null;
+    let prepared;
+    try { prepared = this.prepareWake(content, { origin }); }
+    catch (error) {
       this.wakeInProgress = false;
       this.activeWakeId = null;
+      throw error;
     }
+    const execute = () => this.settleAdmittedWake(prepared, { completionProjection });
+    const operation = deferExecution
+      ? new Promise((resolve, reject) => setImmediate(() => Promise.resolve(execute()).then(resolve, reject)))
+      : Promise.resolve(execute());
+    let tracked;
+    tracked = operation.finally(() => {
+      if (this.activeWakePromise === tracked) this.activeWakePromise = null;
+      this.wakeInProgress = false;
+      this.activeWakeId = null;
+    });
+    this.activeWakePromise = tracked;
+    return { prepared, operation: tracked };
+  }
+
+  async wake(content, options = {}) {
+    return this.beginWake(content, options).operation;
+  }
+
+  startWake(content, options = {}) {
+    const { prepared, operation } = this.beginWake(content, options, { deferExecution: true });
+    // The durable stream owns terminal delivery for admitted HTTP callers.
+    // Retain a rejection observer so a disconnected renderer cannot create an
+    // unhandled process rejection; settleAdmittedWake still journals any
+    // unexpected post-admission failure before this promise settles.
+    operation.catch(() => {});
+    return {
+      accepted: true,
+      status: 'accepted',
+      wakeId: prepared.created.wakeId,
+      sessionId: prepared.created.sessionId,
+      eventSequence: prepared.acceptedEvent?.sequence || null,
+    };
   }
 
   async performWake(content, { completionProjection = 'full', origin = { kind: 'human_present' } } = {}) {
@@ -150,6 +181,11 @@ export class WakeService {
     // This second check closes the bypass where a caller invokes the
     // orchestration method without going through wake().
     this.assertForestReadyForWake();
+    const prepared = this.prepareWake(content, { origin });
+    return this.settleAdmittedWake(prepared, { completionProjection });
+  }
+
+  prepareWake(content, { origin = { kind: 'human_present' } } = {}) {
     const { config, db, provider, forest, spine, world, gateway, attentionMeter } = this;
     const autonomous = origin?.kind === 'self_directed' || origin?.kind === 'hearth_origin';
     if (!autonomous && origin?.kind !== 'human_present') throw { code: 'wake_origin_invalid', message: 'Wake origin is not installed.' };
@@ -172,12 +208,38 @@ export class WakeService {
     const triggerEvent = db.getEvent(created.eventId);
     if (!firstTurn) world.ageHearthSettlement?.(created.sessionId);
     this.activeWakeId = created.wakeId;
-    this.publish('wake.accepted', {
+    const acceptedEvent = this.publish('wake.accepted', {
       sessionId: created.sessionId,
       wakeId: created.wakeId,
       payload: { status: 'assembling', provider: providerName, requestedModel: config.model, origin: autonomous ? origin.kind : 'human_present' },
       source: autonomous ? { triggerEventId: created.eventId } : { userEventId: created.eventId },
     });
+    return { config, db, provider, forest, spine, world, gateway, attentionMeter, autonomous, submitted, firstTurn, priorEligible, created, triggerEvent, origin, providerName, acceptedEvent };
+  }
+
+  async settleAdmittedWake(prepared, { completionProjection = 'full' } = {}) {
+    const { db, created } = prepared;
+    try {
+      if (this.closing) throw { code: 'hub_closing', message: 'The Hub began shutting down after this wake was admitted.' };
+      return await this.performAdmittedWake(prepared, { completionProjection });
+    } catch (error) {
+      const current = db.getWakeCompletion(created.wakeId);
+      if (!['committed', 'failed'].includes(current?.status)) {
+        const failure = { code: error?.code || 'provider_error', message: error?.message || 'The resident provider failed.' };
+        const failureEventId = db.failSessionWake(created.wakeId, failure);
+        this.publish('wake.failed', {
+          sessionId: created.sessionId,
+          wakeId: created.wakeId,
+          payload: failure,
+          source: { failureEventId },
+        });
+      }
+      return completionProjection === 'compact' ? db.getWakeCompletion(created.wakeId) : db.getWake(created.wakeId);
+    }
+  }
+
+  async performAdmittedWake(prepared, { completionProjection = 'full' } = {}) {
+    const { config, db, provider, forest, spine, world, gateway, attentionMeter, autonomous, firstTurn, priorEligible, created, triggerEvent, origin, providerName } = prepared;
     let semanticExhale = null;
     if (forest && !autonomous) {
       try { forest.ingestEvent(db.getEvent(created.eventId), { spineStatus: 'live', predecessorSourceEventId: priorEligible }); }

@@ -225,7 +225,10 @@ test('Corner opens one same-origin EventSource and renders events through textCo
   assert.match(app, /liveState\.connection === 'open'/);
   assert.match(app, /retainWakeSlips/);
   assert.match(app, /terminalReconciliations\.get\(wakeId\)/);
-  assert.match(api, /\/api\/wakes\?projection=compact/);
+  assert.match(api, /\/api\/wakes\?projection=compact&delivery=accepted/);
+  assert.match(app, /wake\.accepted && wake\.status === 'accepted'/);
+  assert.match(app, /if \(!handedToStream\) releaseWakeUi\(\)/);
+  assert.match(app, /releaseWakeUi\(\);\s*setState\(terminalKind/);
   assert.match(app, /clearLiveWake/);
   assert.match(app, /renderThread\(thread\)/);
   assert.match(app, /captureConversationScroll\(conversationScroller\)/);

@@ -120,6 +120,61 @@ test('SSE exposes persisted provisional deltas before blocking POST resolves and
   } finally { gate.resolve(); await f.close(); }
 });
 
+test('admitted delivery returns durable wake identity before execution settles and still refuses a second wake', async () => {
+  const gate = deferred();
+  const f = await fixture(new DelayedFirstFakeProvider(gate));
+  const abort = new AbortController();
+  try {
+    const stream = await fetch(`${f.base}/api/events?after=0`, { signal: abort.signal });
+    const reader = stream.body.getReader();
+    const response = await fetch(`${f.base}/api/wakes?projection=compact&delivery=accepted`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'Admit this wake without tethering the client.' }),
+    });
+    assert.equal(response.status, 202);
+    const admission = await response.json();
+    assert.equal(admission.accepted, true);
+    assert.equal(admission.status, 'accepted');
+    assert.match(admission.wakeId, /^wake_/);
+    assert.equal(admission.sessionId, f.hub.db.session.id);
+    assert.ok(Number.isInteger(admission.eventSequence));
+    assert.equal(f.hub.wakeService.wakeInProgress, true);
+    assert.equal(f.hub.wakeService.activeWakeId, admission.wakeId);
+    assert.ok(['assembling', 'calling_provider'].includes(f.hub.db.getWake(admission.wakeId).status));
+
+    const duplicate = await fetch(`${f.base}/api/wakes?delivery=accepted`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'Do not queue this.' }),
+    });
+    assert.equal(duplicate.status, 409);
+    assert.equal((await duplicate.json()).error.code, 'wake_in_progress');
+
+    gate.resolve();
+    const terminal = await readUntil(reader, event => event.type === 'wake.completed');
+    assert.equal(terminal.data.wakeId, admission.wakeId);
+    assert.equal(f.hub.db.getWake(admission.wakeId).status, 'committed');
+  } finally { gate.resolve(); abort.abort(); await f.close(); }
+});
+
+test('detached execution journals an unexpected post-admission failure and releases the active-wake gate', async () => {
+  const f = await fixture();
+  const abort = new AbortController();
+  try {
+    f.hub.wakeService.performAdmittedWake = async () => { throw Object.assign(new Error('detached failure'), { code: 'detached_test_failure' }); };
+    const stream = await fetch(`${f.base}/api/events?after=0`, { signal: abort.signal });
+    const reader = stream.body.getReader();
+    const response = await fetch(`${f.base}/api/wakes?delivery=accepted`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'Retain this admitted failure.' }),
+    });
+    assert.equal(response.status, 202);
+    const admission = await response.json();
+    const terminal = await readUntil(reader, event => event.type === 'wake.failed');
+    assert.equal(terminal.data.wakeId, admission.wakeId);
+    assert.equal(terminal.data.payload.code, 'detached_test_failure');
+    for (let attempt = 0; attempt < 20 && f.hub.wakeService.wakeInProgress; attempt += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(f.hub.wakeService.wakeInProgress, false);
+    assert.equal(f.hub.db.getWake(admission.wakeId).status, 'failed');
+  } finally { abort.abort(); await f.close(); }
+});
+
 test('SSE reconnect is cursor-deduped, query cursor wins, and invalid recovery cursors fail closed', async () => {
   const f = await fixture();
   try {

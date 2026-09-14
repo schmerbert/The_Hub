@@ -360,6 +360,10 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
         let incoming; try { incoming = await body(request, config.maxBodyBytes); } catch (error) { return typedError(response, 400, error.code, error.message); }
         if (!Object.hasOwn(incoming, 'content')) return typedError(response, 400, 'invalid_message', 'Message must contain text.');
         const completionProjection = url.searchParams.get('projection') === 'compact' ? 'compact' : 'full';
+        if (url.searchParams.get('delivery') === 'accepted') {
+          const admission = wakeService.startWake(incoming.content, { completionProjection });
+          return json(response, 202, { ...admission, residentMode: config.mode });
+        }
         const record = await wake(incoming.content, { completionProjection });
         const responseStatus = record.status === 'committed' && !record.custodyFailureCode ? 200 : statusFor(record.failureCode || record.custodyFailureCode || 'provider_error');
         return json(response, responseStatus, { ...record, residentMode: config.mode });
