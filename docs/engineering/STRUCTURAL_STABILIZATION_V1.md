@@ -149,6 +149,12 @@ Per-round observation of current location, Forest footing, mounted World schemas
 
 Tool-call journal custody plus ready/running/completed/refused publication, approval publication, card settlement, and the existing physical Forest-return notification now live beside round fitting in `src/runtime/tool-continuation.js`. `WakeService` retains action selection and execution, Result Rack capture, bounded-round refusal, and the public wake loop. The extraction preserves event ordering and every event, receipt, payload, and return shape; it introduces no movement authority or automatic transition.
 
+### Verified provider-ground snapshot — 2026-09-14
+
+One provider phase now obtains its location, complete World projection, rendered presence, and journal witness inside one synchronous verified World read scope. Those exact values supply both Resident ground and the Glass Trace witness; they are not independently recomputed later in the same synchronous preparation. The scope closes before provider dispatch and retains no proof across requests, provider latency, process restarts, or World mutations. This is not a cached-success or ancestry-checkpoint protocol.
+
+The comparable disposable ordinary-wake run recorded 50 public `assertVerified()` calls, down from the original 104-call shape, with one Glass Trace and one Roots verification unchanged. It completed in 250.71 ms in that diagnostic run. The movement scenario completed in 645.44 ms, with 183.24 ms from the returned movement tool call to the continuation's first delta. These timings remain environment-sensitive; the reduced call shape and exact witness reuse are the stable result.
+
 ## 6. Structural acceptance
 
 For every extraction:

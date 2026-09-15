@@ -258,9 +258,9 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     if (this.transactionDepth > 0 || this.verifiedReadDepth > 0) return fn();
     this.sqlite.exec('BEGIN DEFERRED');
     try {
-      assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' });
+      const verification = assertWorldVerified(this.sqlite, { requireHearth: this.topologyVersion !== 'b1', requireForest: ['forest', 'binder_window', 'spotlight'].includes(this.topologyVersion), requireBinderWindow: ['binder_window', 'spotlight'].includes(this.topologyVersion), requireSpotlight: this.topologyVersion === 'spotlight', requireSpotlightDoor: this.topologyVersion === 'spotlight' });
       this.verifiedReadDepth += 1;
-      const result = fn();
+      const result = fn(verification);
       this.sqlite.exec('COMMIT');
       return result;
     } catch (error) {
@@ -717,6 +717,9 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
   }
   presenceMessage(sessionId) {
     const projection = this.projection(sessionId);
+    return this.#presenceMessageForProjection(projection);
+  }
+  #presenceMessageForProjection(projection) {
     const exits = projection.exits.length ? projection.exits.map(exit => `${exit.label} (${exit.doorId})`).join(', ') : 'none';
     const fixtures = projection.fixtures.length
       ? projection.fixtures.map(item => {
@@ -753,6 +756,18 @@ ${WORLD_INTEGRITY_TRIGGER_SQL.world_nodes_append_only_delete}
     const roomText = projection.roomId === 'room.workshop' ? WORKSHOP_PRESENCE_TEXT : projection.text;
     const horizon = projection.spatialHorizon ? ` Spatial horizon: ${projection.spatialHorizon}` : '';
     return `Current World ground for this phase. Current location: ${projection.roomId}. ${roomText} Nearby fixtures and objects: ${fixtures}. Focusable fixtures: ${engageable}. Working focus: ${engaged}. Direct room exits: ${exits}. Stateful passages: ${passages}. Boundaries: ${boundaries}.${horizon}${workshopHonesty}${patched}${pending}${beat}${hearthAffordance}`;
+  }
+  presentationGround(sessionId) {
+    if (!this.sqlite.prepare('SELECT 1 AS ok FROM world_locations WHERE session_id=?').get(sessionId)) this.ensureLifespan(sessionId);
+    return this.#withVerifiedRead(verification => {
+      const projection = this.projection(sessionId);
+      return {
+        verification,
+        projection,
+        presenceMessage: this.#presenceMessageForProjection(projection),
+        roomId: projection.roomId,
+      };
+    });
   }
   move({ sessionId, wakeId, commandId = null, doorId, actor = commandId ? 'resident_tool' : 'world_internal' }) {
     if (typeof doorId !== 'string' || !doorId) throw Object.assign(new Error('A door identity is required.'), { code: 'world_invalid_argument' });

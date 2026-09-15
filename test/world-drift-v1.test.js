@@ -65,9 +65,21 @@ test('hash, version, aggregate revision, and projection tampering fail closed', 
     assert.ok(verification.mismatches.some(item => item.code === 'event_schema_version_unknown'));
     assert.ok(verification.mismatches.some(item => item.code === 'aggregate_revision_gap'));
     assert.ok(verification.mismatches.some(item => item.code === 'payload_hash_mismatch'));
-    for (const operation of [() => f.world.projection('life'), () => f.world.presenceMessage('life'), () => f.world.availableTools('life'), () => f.world.move({ sessionId: 'life', doorId: 'door.workshop' })]) {
+    for (const operation of [() => f.world.projection('life'), () => f.world.presenceMessage('life'), () => f.world.presentationGround('life'), () => f.world.availableTools('life'), () => f.world.move({ sessionId: 'life', doorId: 'door.workshop' })]) {
       assert.throws(operation, error => error.code === 'world_projection_drift' && error.verification.mismatches.length <= 50);
     }
+  } finally { await f.close(); }
+});
+
+test('provider presentation ground binds one verified projection and its rendered presence', async () => {
+  const f = await fixture();
+  try {
+    f.world.ensureLifespan('life');
+    const ground = f.world.presentationGround('life');
+    assert.equal(ground.verification.verified, true);
+    assert.ok(ground.verification.journalHead);
+    assert.equal(ground.roomId, ground.projection.roomId);
+    assert.equal(ground.presenceMessage, f.world.presenceMessage('life'));
   } finally { await f.close(); }
 });
 

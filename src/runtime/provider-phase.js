@@ -127,7 +127,8 @@ export class ProviderPhase {
   }) {
     const { config, db, provider, spine, world, attentionMeter } = this;
     if (this.isClosing()) throw providerCancellation();
-    const currentLocation = world.current(created.sessionId);
+    const worldGround = world.presentationGround(created.sessionId);
+    const currentLocation = { room_node_id: worldGround.roomId };
     const currentForestWalk = forestTraversalService?.projection(created.sessionId);
     const posture = selectReasoningPosture({
       roomId: currentLocation.room_node_id,
@@ -187,15 +188,15 @@ export class ProviderPhase {
       message: { role: 'system', content: renderOrientationGround({ completed: true }) },
     });
     const forestProjection = forestTraversalService?.projection(created.sessionId);
-    if (options.roomPresence !== false && !forestProjection?.active) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: world.presenceMessage(created.sessionId) } });
-    const forestThreshold = forestTraversalService?.thresholdMessage(created.sessionId, world.current(created.sessionId).room_node_id);
+    if (options.roomPresence !== false && !forestProjection?.active) currentGround.push({ kind: 'world_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: worldGround.presenceMessage } });
+    const forestThreshold = forestTraversalService?.thresholdMessage(created.sessionId, worldGround.roomId);
     if (forestThreshold) currentGround.push({ kind: 'forest_threshold_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: forestThreshold } });
     const forestPresence = forestTraversalService?.presenceMessage(created.sessionId);
     if (forestPresence) currentGround.push({ kind: 'forest_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: forestPresence } });
     if (options.toolProfile?.omittedCount && !toolsDisabled) {
       currentGround.push({ kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: renderToolAttentionGround(options.toolProfile) } });
     }
-    const spotlightReadStanding = !options.orientation && !toolsDisabled && !forestProjection?.active && world.current(created.sessionId).room_node_id === 'room.spotlight'
+    const spotlightReadStanding = !options.orientation && !toolsDisabled && !forestProjection?.active && worldGround.roomId === 'room.spotlight'
       ? this.gateway?.spotlight?.status() || null : null;
     if (spotlightReadStanding) currentGround.push({
       kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null,
@@ -305,15 +306,15 @@ export class ProviderPhase {
     const requestFrame = spine?.prepareRequest({ requestBody: requestBodyString, threadId: wakeRecord.threadId, wakeId: wakeRecord.id, provider: wakeRecord.provider, model: config.model, authorizationPresent: config.mode === 'live' && Boolean(config.apiKey), requestPhase: phase });
     if (!requestFrame) throw { code: 'glass_cast_invalid', message: 'Glass Casting requires an exact Spine request frame.' };
     const requestId = db.recordProviderRequest({ sessionId: created.sessionId, wakeId: created.wakeId, phase, requestBody: requestBodyString, messageSources: presentedRefs, spineRecordId: requestFrame?.record_id, attention });
-    const worldVerification = world.verification({ mismatchLimit: 1, requireHearth: true, requireForest: true, requireBinderWindow: true, requireSpotlight: true });
+    const worldVerification = worldGround.verification;
     if (!worldVerification.verified || !worldVerification.journalHead) throw { code: 'glass_trace_invalid', message: 'Glass World ground requires a verified World journal head.' };
-    const worldProjection = world.projection(created.sessionId);
+    const worldProjection = worldGround.projection;
     const toolSchemas = tools || [];
     const commonWitness = { sessionId: created.sessionId, wakeId: created.wakeId, phase };
     const messageHashesFor = kinds => refs.filter(ref => kinds.includes(ref.kind)).map(ref => sha256(JSON.stringify(ref.message)));
     const groundWitnesses = {
       crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground', 'autonomous_wake_ground']) },
-      world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(world.presenceMessage(created.sessionId)), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
+      world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(worldGround.presenceMessage), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
       tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), ...(spotlightReadStanding ? { spotlightReadStanding } : {}), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
       attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure']) },
       continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
