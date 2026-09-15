@@ -59,7 +59,7 @@ test('room installation manifest contracts remain inert and cannot discover or a
 });
 
 test('domain stores never import presentation, transport, or composition roots', async () => {
-  for (const owner of ['ledger','forest','spine','result-rack']) for (const path of await filesUnder(resolve(SRC, owner))) {
+  for (const owner of ['ledger','forest','spine','integrity','result-rack']) for (const path of await filesUnder(resolve(SRC, owner))) {
     const source = await readFile(path, 'utf8');
     assert.doesNotMatch(source, /from ['"].*(server|corner|public)\//, relative(ROOT, path));
   }
@@ -72,6 +72,7 @@ test('large modules have explicit cohesion standing instead of silently growing'
     ['src/world/event-reducer.js', 'one closed deterministic reducer for universal World law; splitting its event cases would obscure replay order'],
     ['src/runtime/wake-service.js', 'wake choreography; provider crossing extracts only with the adopted return-trace contract'],
     ['src/forest/store.js', 'exact Forest custody facade; Home chronology access remains joined to entry integrity and append-only edge ownership'],
+    ['src/spine/verified-index.js', 'one closed Spine checkpoint proof covering frame validation, lifecycle reconstruction, compact indexing, and suffix continuation'],
   ]);
   const unaccounted = [];
   for (const path of await filesUnder(SRC)) {

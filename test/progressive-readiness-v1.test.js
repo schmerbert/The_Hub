@@ -70,6 +70,19 @@ test('readiness projection settles once and exposes bounded monotonic timing', (
   assert.equal(JSON.stringify(projected).includes('path'), false);
 });
 
+test('a ready feature can be revoked by a later integrity disagreement', () => {
+  let now = 10;
+  const readiness = new ReadinessProjection({ clock: () => now, timestamp: () => `t${now}` });
+  readiness.begin('forest');
+  readiness.settle('forest', 'ready', { code: 'forest_checkpoint_verified' });
+  now = 18;
+  readiness.revoke('forest', { code: 'forest_background_audit_failed' });
+  const forest = readiness.stage('forest');
+  assert.equal(forest.state, 'failed');
+  assert.equal(forest.code, 'forest_background_audit_failed');
+  assert.equal(forest.elapsedMs, 8);
+});
+
 test('progressive health withholds Forest until strict verification settles', async () => {
   const gate = deferred();
   const f = await fixture(() => gate.promise);
@@ -166,4 +179,28 @@ test('shutdown cancels pending verification without late activation', async () =
   await closing;
   assert.notEqual(f.hub.readiness.projection().forest.state, 'ready');
   await rm(f.dir, { recursive: true, force: true });
+});
+
+test('checkpoint readiness is revoked when an unchanged background audit disagrees', async () => {
+  let calls = 0;
+  const f = await fixture(() => {
+    calls += 1;
+    if (calls === 1) return Promise.resolve({
+      ok: true, entryCount: 0, wildCount: 0, eligibleWildCount: 0,
+      intakeOfferCount: 0, intakeHeldCount: 0, intakeUnresolvedCount: 0,
+      checkpoint: { mode: 'checkpoint_unchanged' },
+    });
+    return Promise.reject(Object.assign(new Error('background mismatch detail'), { code: 'forest_verification_failed' }));
+  });
+  try {
+    await f.hub.forestVerificationPromise;
+    await f.hub.forestBackgroundAuditPromise;
+    const health = await fetch(`${f.base}/api/health`).then(response => response.json());
+    assert.equal(health.readiness.forest.state, 'failed');
+    assert.equal(health.readiness.forest.code, 'forest_background_audit_failed');
+    assert.equal(JSON.stringify(health).includes('background mismatch detail'), false);
+    assert.equal(f.hub.forest, null);
+    assert.equal(f.hub.gateway.forest, null);
+    assert.equal(f.hub.wakeService.forest, null);
+  } finally { await f.close(); }
 });

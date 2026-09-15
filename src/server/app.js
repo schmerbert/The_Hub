@@ -89,8 +89,8 @@ function boundedForestReadinessHealth(active, stage) {
   };
 }
 
-export function createHub({ env = process.env, dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, binderWindowSnapshotPath, activateForest, progressiveStartup = false, forest: forestOverride, spine: spineOverride, world: worldOverride, provider: providerOverride, recipeRunner: recipeRunnerOverride, ambientFeatherService: ambientFeatherServiceOverride, forestTraversalService: forestTraversalServiceOverride, forestVerifier: forestVerifierOverride, readiness: readinessOverride, spotlightSource: spotlightSourceOverride } = {}) {
-  const config = resolveHubConfig(env, { dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, binderWindowSnapshotPath, activateForest, progressiveStartup });
+export function createHub({ env = process.env, dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, verifiedAncestryPath, binderWindowSnapshotPath, activateForest, progressiveStartup = false, forest: forestOverride, spine: spineOverride, world: worldOverride, provider: providerOverride, recipeRunner: recipeRunnerOverride, ambientFeatherService: ambientFeatherServiceOverride, forestTraversalService: forestTraversalServiceOverride, forestVerifier: forestVerifierOverride, readiness: readinessOverride, spotlightSource: spotlightSourceOverride } = {}) {
+  const config = resolveHubConfig(env, { dbPath, forestPath, forestTraversalPath, spinePath, worldPath, resultPath, verifiedAncestryPath, binderWindowSnapshotPath, activateForest, progressiveStartup });
   const progressiveMode = Boolean(config.progressiveStartup && config.forestActive);
   const readiness = readinessOverride || new ReadinessProjection();
   readiness.begin('shell');
@@ -195,6 +195,7 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
         operationalPath: config.dbPath,
         spinePath: spineLedgerExists(config.spinePath) ? config.spinePath : undefined,
         worldPath: existsSync(config.worldPath) ? config.worldPath : undefined,
+        checkpointPath: config.verifiedAncestryPath,
       },
       forestVerifier: forestVerifierOverride,
       ambientFeatherServiceOverride,
@@ -447,5 +448,6 @@ export function createHub({ env = process.env, dbPath, forestPath, forestTravers
     get forestTraversal() { return progressiveMode ? forestLifecycle.forestTraversal : forestTraversalService; },
     get forestVerification() { return progressiveMode ? forestLifecycle.forestVerification : forestVerification; },
     get forestVerificationPromise() { return progressiveMode ? forestLifecycle.verificationPromise : null; },
+    get forestBackgroundAuditPromise() { return progressiveMode ? forestLifecycle.backgroundAuditPromise : null; },
   };
 }

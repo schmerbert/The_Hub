@@ -1,9 +1,26 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { performance } from 'node:perf_hooks';
 import { canonicalize, sha256 } from '../core/hash.js';
 import { readSpineLedgerFrames, spineLedgerExists } from '../spine/store.js';
+import { spineForestView } from '../spine/verified-index.js';
 import { metadataForEvent } from './admission.js';
 import { APPEND_ONLY_TABLES } from './store.js';
+
+const MAX_METRIC = 0x7fffffff;
+
+function boundedMetric(value) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(MAX_METRIC, Math.floor(value));
+}
+
+function elapsedMs(startedAt) {
+  return Number(Math.max(0, performance.now() - startedAt).toFixed(3));
+}
+
+function spineByteCount(frames, field) {
+  return boundedMetric(frames.reduce((total, frame) => total + (Number.isInteger(frame[field]) && frame[field] > 0 ? frame[field] : 0), 0));
+}
 
 export function wildSourceKindForTool(toolName) {
   if (['workshop_read', 'workshop_document_read'].includes(toolName)) return 'workshop_read';
@@ -11,7 +28,14 @@ export function wildSourceKindForTool(toolName) {
   return null;
 }
 
-export function verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection = true, strictWildBijection = true } = {}) {
+export function verifyForest({ forestPath, operationalPath, spinePath, worldPath, strictBijection = true, strictWildBijection = true, spineProof = null } = {}) {
+  const verificationStartedAt = performance.now();
+  const phases = {};
+  let phaseStartedAt = verificationStartedAt;
+  const finishPhase = (name, counters = {}) => {
+    phases[name] = { elapsedMs: elapsedMs(phaseStartedAt), ...Object.fromEntries(Object.entries(counters).map(([key, value]) => [key, boundedMetric(value)])) };
+    phaseStartedAt = performance.now();
+  };
   if (!forestPath || !existsSync(forestPath)) throw new Error('Forest database is missing.');
   const forest = new DatabaseSync(forestPath, { readOnly: true });
   const op = new DatabaseSync(operationalPath, { readOnly: true });
@@ -22,6 +46,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
     for (const table of required) for (const action of ['update', 'delete']) if (!forest.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name=?").get(`${table}_append_only_${action}`)) throw new Error(`Forest append-only trigger is missing for ${table}.`);
     const metadata = forest.prepare('SELECT schema_name, schema_version FROM forest_metadata WHERE metadata_id=1').get();
     if (!metadata || metadata.schema_name !== 'forest' || metadata.schema_version !== 1) throw new Error('Forest schema version is not v1.');
+    finishPhase('schema', { tableCount: required.length, triggerCount: required.length * 2 });
 
     const allOperational = op.prepare(`SELECT e.id, e.thread_id AS threadId, e.wake_id AS wakeId,
       e.actor_kind AS actorKind, e.event_kind AS eventKind, e.content, e.authority, e.provider, e.model,
@@ -51,6 +76,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       if (!receipt || receipt.receipt_id !== entry.scrub_receipt_id || receipt.policy_name !== 'utterance_identity' || receipt.policy_version !== 'v1' || receipt.input_hash !== receipt.output_hash || receipt.input_byte_length !== receipt.output_byte_length || receipt.operations_json !== '[]' || receipt.changed !== 0 || receipt.input_hash !== entry.body_hash) throw new Error(`Forest scrub receipt mismatch for ${entry.source_event_id}.`);
     }
     for (const receipt of receipts) if (!entryBySource.has(receipt.source_event_id)) throw new Error('Forest contains an orphan scrub receipt.');
+    finishPhase('source', { operationalRowCount: allOperational.length, eligibleRowCount: eligible.length, entryCount: entries.length, receiptCount: receipts.length });
 
     const edges = forest.prepare('SELECT * FROM forest_edges').all();
     for (const edge of edges) if (edge.edge_type !== 'responds_to' || !entryIds.has(edge.from_entry_id) || !entryIds.has(edge.to_entry_id)) throw new Error('Forest edge reference is invalid.');
@@ -67,12 +93,14 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       }
     }
     if (strictBijection && edges.length !== Math.max(0, eligible.length - eventThreads.size)) throw new Error('Forest responds_to edge count is invalid.');
+    finishPhase('topology', { edgeCount: edges.length, threadCount: eventThreads.size });
 
-    const spineFrames = spinePath && spineLedgerExists(spinePath) ? readSpineLedgerFrames(spinePath) : [];
-    const preparedFrames = spineFrames.filter(frame => frame.frame_type === 'request_prepared');
+    const spineFrames = spineProof ? [] : spinePath && spineLedgerExists(spinePath) ? readSpineLedgerFrames(spinePath) : [];
+    const checkpointSpine = spineProof ? spineForestView(spineProof) : null;
+    const preparedFrames = checkpointSpine?.preparedFrames || spineFrames.filter(frame => frame.frame_type === 'request_prepared');
     const preparedById = new Map(preparedFrames.map(frame => [frame.record_id, frame]));
-    const lifecycleByRequest = new Map(preparedFrames.map(frame => [frame.record_id, { dispatched: false, outcome: null }]));
-    for (const frame of spineFrames) {
+    const lifecycleByRequest = checkpointSpine?.lifecycleByRequest || new Map(preparedFrames.map(frame => [frame.record_id, { dispatched: false, outcome: null }]));
+    if (!checkpointSpine) for (const frame of spineFrames) {
       if (frame.frame_type === 'dispatch_attempted') lifecycleByRequest.get(frame.request_record_id).dispatched = true;
       if (frame.frame_type === 'provider_outcome') lifecycleByRequest.get(frame.request_record_id).outcome = frame.outcome;
     }
@@ -81,16 +109,26 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
     if ((presentationRows.length || emissionRows.length) && !preparedFrames.length) throw new Error('Forest links require a verified Spine.');
     const presentationsByRequest = new Map();
     for (const link of presentationRows) { if (!entryIds.has(link.entry_id) || !preparedById.has(link.request_record_id)) throw new Error('Presentation link reference is invalid.'); if (!presentationsByRequest.has(link.request_record_id)) presentationsByRequest.set(link.request_record_id, []); presentationsByRequest.get(link.request_record_id).push(link); }
+    // Materialize the Source-side verification projection once. Re-preparing and
+    // executing these lookups per Spine request made startup scale quadratically
+    // with a mature request ledger.
+    const wakesById = new Map(op.prepare('SELECT id, thread_id AS threadId, provider, requested_model AS requestedModel FROM wakes').all().map(row => [row.id, row]));
+    const threadIds = new Set(op.prepare('SELECT id FROM threads').all().map(row => row.id));
+    const providerRequestsBySpineId = new Map(op.prepare('SELECT spine_record_id AS spineRecordId, phase, message_sources_json AS messageSources, response_message_json AS responseMessage FROM provider_requests WHERE spine_record_id IS NOT NULL').all().map(row => [row.spineRecordId, row]));
+    const contextByWake = new Map();
+    for (const item of op.prepare('SELECT wake_id AS wakeId, ordinal, item_kind AS itemKind, actor_role AS actorRole, content, source_event_id AS sourceEventId, included, content_hash AS contentHash FROM wake_context_items ORDER BY wake_id, ordinal').all()) {
+      if (!contextByWake.has(item.wakeId)) contextByWake.set(item.wakeId, []);
+      contextByWake.get(item.wakeId).push({ ...item, included: Boolean(item.included) });
+    }
     for (const frame of preparedFrames) {
-      const wake = op.prepare('SELECT id, thread_id AS threadId, provider, requested_model AS requestedModel FROM wakes WHERE id=?').get(frame.wake_id);
+      const wake = wakesById.get(frame.wake_id);
       if (!wake) throw new Error('Spine request references an unknown wake.');
-      const thread = op.prepare('SELECT id FROM threads WHERE id=?').get(frame.thread_id);
-      if (!thread || frame.thread_id !== wake.threadId || frame.provider !== wake.provider || frame.model !== wake.requestedModel) throw new Error(`Spine request custody does not match wake ${frame.wake_id}.`);
+      if (!threadIds.has(frame.thread_id) || frame.thread_id !== wake.threadId || frame.provider !== wake.provider || frame.model !== wake.requestedModel) throw new Error(`Spine request custody does not match wake ${frame.wake_id}.`);
       let request;
       try { request = JSON.parse(frame.request_body); } catch { throw new Error('Spine request body is not valid JSON.'); }
       if (request.model !== wake.requestedModel) throw new Error(`Spine request JSON model does not match wake ${frame.wake_id}.`);
       if (frame.request_phase) {
-        const providerRequest = op.prepare('SELECT phase, message_sources_json AS messageSources FROM provider_requests WHERE spine_record_id=?').get(frame.record_id);
+        const providerRequest = providerRequestsBySpineId.get(frame.record_id);
         if (!providerRequest || providerRequest.phase !== frame.request_phase) throw new Error(`Spine phase custody is missing for request ${frame.record_id}.`);
         const refs = JSON.parse(providerRequest.messageSources);
         if (!Array.isArray(request.messages) || request.messages.length !== refs.length) throw new Error(`Spine request messages do not match provider phase ${frame.request_phase}.`);
@@ -113,7 +151,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
         if (links.some(link => !expected.some(item => entryBySource.get(item.sourceEventId)?.entry_id === link.entry_id))) throw new Error(`Presentation link set has extras for request ${frame.record_id}.`);
         continue;
       }
-      const context = op.prepare(`SELECT ordinal, item_kind AS itemKind, actor_role AS actorRole, content, source_event_id AS sourceEventId, included, content_hash AS contentHash FROM wake_context_items WHERE wake_id=? ORDER BY ordinal`).all(frame.wake_id).map(item => ({ ...item, included: Boolean(item.included) }));
+      const context = contextByWake.get(frame.wake_id) || [];
       const included = context.filter(item => item.included);
       if (!Array.isArray(request.messages) || request.messages.length !== included.length) throw new Error(`Spine request messages do not match wake ${frame.wake_id}.`);
       for (let index = 0; index < included.length; index++) if (request.messages[index]?.role !== included[index].actorRole || request.messages[index]?.content !== included[index].content) throw new Error(`Spine request message mismatch for wake ${frame.wake_id}.`);
@@ -134,10 +172,17 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       }
       if (links.some(link => !expected.some(({ item }) => entryBySource.get(item.sourceEventId)?.entry_id === link.entry_id))) throw new Error(`Presentation link set has extras for request ${frame.record_id}.`);
     }
+    finishPhase('spine', {
+      frameCount: spineProof?.frameCount || spineFrames.length,
+      preparedFrameCount: preparedFrames.length,
+      requestBodyBytes: spineByteCount(preparedFrames, 'body_byte_length'),
+      rawReturnBytes: spineProof?.rawReturnBytes || spineByteCount(spineFrames.filter(frame => frame.frame_type === 'raw_return'), 'body_byte_length'),
+      presentationLinkCount: presentationRows.length,
+    });
 
     const responseToolRoundByRequest = new Map();
     for (const frame of preparedFrames) {
-      const requestRow = op.prepare('SELECT response_message_json AS responseMessage FROM provider_requests WHERE spine_record_id=?').get(frame.record_id);
+      const requestRow = providerRequestsBySpineId.get(frame.record_id);
       let responseMessage = null; try { responseMessage = requestRow?.responseMessage ? JSON.parse(requestRow.responseMessage) : null; } catch { throw new Error(`Provider response message is not valid JSON for request ${frame.record_id}.`); }
       responseToolRoundByRequest.set(frame.record_id, Array.isArray(responseMessage?.tool_calls) && responseMessage.tool_calls.length > 0);
     }
@@ -188,6 +233,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       }
       if (lifecycle.outcome && lifecycle.outcome.kind !== 'success' && residents.length) throw new Error(`Failed provider outcome has a resident emission for wake ${frame.wake_id}.`);
     }
+    finishPhase('emissions', { emissionLinkCount: emissionRows.length, residentWakeCount: residentsByWake.size, requestCount: preparedFrames.length });
     const wildTable = forest.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wild_entries'").get();
     let wildCount = 0;
     let eligibleWildCount = null;
@@ -251,6 +297,7 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
       }
       wildCount = wild.length;
     }
+    finishPhase('wild', { wildEntryCount: wildCount, eligibleWildCount: eligibleWildCount || 0 });
     const offers = forest.prepare('SELECT * FROM forest_intake_offers ORDER BY offer_id').all();
     const decisions = forest.prepare('SELECT * FROM forest_intake_decisions ORDER BY offer_id,revision').all();
     const offersById = new Map(offers.map(offer => [offer.offer_id, offer]));
@@ -324,6 +371,15 @@ export function verifyForest({ forestPath, operationalPath, spinePath, worldPath
     }
     const intakeHeldCount = [...latestByOffer.values()].filter(decision => decision.state === 'held').length;
     const intakeUnresolvedCount = offers.filter(offer => !latestByOffer.has(offer.offer_id)).length;
-    return { ok: true, entryCount: entries.length, journalCount: journalEntries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length, wildCount, eligibleWildCount, intakeOfferCount: offers.length, intakeHeldCount, intakeUnresolvedCount };
+    finishPhase('intake', { offerCount: offers.length, decisionCount: decisions.length, journalEntryCount: journalEntries.length, journalCustodyCount: journalCustody.length });
+    return {
+      ok: true, entryCount: entries.length, journalCount: journalEntries.length, eligibleOperationalCount: eligible.length, excludedFakeCount, missingSourceCount: missingSourceIds.length, edgeCount: edges.length, presentationCount: presentationRows.length, emissionCount: emissionRows.length, wildCount, eligibleWildCount, intakeOfferCount: offers.length, intakeHeldCount, intakeUnresolvedCount,
+      instrumentation: {
+        domain: 'forest', mode: 'full', elapsedMs: elapsedMs(verificationStartedAt), phases,
+        counters: {
+          operationalRowCount: boundedMetric(allOperational.length), eligibleRowCount: boundedMetric(eligible.length), entryCount: boundedMetric(entries.length), edgeCount: boundedMetric(edges.length), spineFrameCount: boundedMetric(spineProof?.frameCount || spineFrames.length), spinePreparedFrameCount: boundedMetric(preparedFrames.length), spineRequestBodyBytes: spineByteCount(preparedFrames, 'body_byte_length'), spineRawReturnBytes: boundedMetric(spineProof?.rawReturnBytes || spineByteCount(spineFrames.filter(frame => frame.frame_type === 'raw_return'), 'body_byte_length')), journalEntryCount: boundedMetric(journalEntries.length), journalCustodyCount: boundedMetric(journalCustody.length), intakeOfferCount: boundedMetric(offers.length), intakeDecisionCount: boundedMetric(decisions.length),
+        },
+      },
+    };
   } finally { world?.close(); forest.close(); op.close(); }
 }

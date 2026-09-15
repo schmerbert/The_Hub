@@ -28,7 +28,7 @@ export function verifyForestAsync(options, { signal = null } = {}) {
       settled = true;
       cleanup();
       if (message?.status === 'verified') resolve(message.verification);
-      else reject(Object.assign(new Error(message?.error?.message || 'Forest verification worker failed.'), { code: 'forest_verification_failed', name: message?.error?.name || 'Error' }));
+      else reject(Object.assign(new Error(message?.error?.message || 'Forest verification worker failed.'), { code: message?.error?.code || 'forest_verification_failed', name: message?.error?.name || 'Error' }));
     });
     worker.once('error', error => {
       if (settled) return;

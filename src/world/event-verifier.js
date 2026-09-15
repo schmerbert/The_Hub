@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { performance } from 'node:perf_hooks';
 import { canonicalize, sha256 } from '../core/hash.js';
 import {
   WORLD_PROJECTOR_VERSION, WORLD_EVENT_GENESIS_HASH, WORLD_EVENT_KINDS,
@@ -13,6 +14,25 @@ import {
   readWorldPhysicalProjection, readWorldProjection,
 } from './event-journal.js';
 import { emptyWorldState, reduceWorldEvent } from './event-reducer.js';
+
+const MAX_METRIC = 0x7fffffff;
+
+function boundedMetric(value) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(MAX_METRIC, Math.floor(value));
+}
+
+function elapsedMs(startedAt) {
+  return Number(Math.max(0, performance.now() - startedAt).toFixed(3));
+}
+
+function projectionRowCount(projection) {
+  return boundedMetric(Object.values(projection || {}).filter(Array.isArray).reduce((total, rows) => total + rows.length, 0));
+}
+
+function eventByteCount(events, field) {
+  return boundedMetric(events.reduce((total, event) => total + Buffer.byteLength(String(event[field] || ''), 'utf8'), 0));
+}
 
 function tableExists(sqlite, name) { return Boolean(sqlite.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?").get(name)); }
 function boundedDiagnostic(value, depth = 0) {
@@ -143,9 +163,17 @@ function verifyCustody(sqlite, events, state, mismatches, limit) {
       if (linkedApprovals.length !== 1) addMismatch(mismatches, limit, { code: linkedApprovals.length ? 'command_event_approval_receipt_duplicate' : 'command_event_approval_receipt_missing', sequence: event.sequence, eventKind: event.event_kind, count: linkedApprovals.length });
     }
   }
+  return { actionReceiptCount: actionRows.length, approvalReceiptCount: approvalRows.length };
 }
 
 export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', requireHearth = true, requireForest = false, requireBinderWindow = false, requireSpotlight = false, requireSpotlightDoor = false } = {}) {
+  const verificationStartedAt = performance.now();
+  const phases = {};
+  let phaseStartedAt = verificationStartedAt;
+  const finishPhase = (name, counters = {}) => {
+    phases[name] = { elapsedMs: elapsedMs(phaseStartedAt), ...Object.fromEntries(Object.entries(counters).map(([key, value]) => [key, boundedMetric(value)])) };
+    phaseStartedAt = performance.now();
+  };
   if (scope === 'b1' && requireForest && tableExists(sqlite, 'world_event_journal')) {
     let forest = null;
     try { forest = sqlite.prepare("SELECT sequence FROM world_event_journal WHERE event_kind='topology.forest_installed/v1' LIMIT 1").get(); } catch {}
@@ -227,10 +255,11 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
     const actual = normalizeTableSql(row?.sql); const expected = normalizeTableSql(expectedDefinition);
     if (actual !== expected) addMismatch(mismatches, mismatchLimit, { code: 'schema_definition_invalid', table, expectedSha256: sha256(expected), actualSha256: sha256(actual) });
   }
-  for (const [trigger, expectedDefinition] of Object.entries(WORLD_INTEGRITY_TRIGGER_SQL).filter(([trigger]) => {
+  const triggerDefinitions = Object.entries(WORLD_INTEGRITY_TRIGGER_SQL).filter(([trigger]) => {
     if (scope !== 'b1' && trigger.startsWith('world_passages_')) return false;
     return ['a2', 'b1'].includes(scope) || !trigger.includes('_receipts_');
-  })) {
+  });
+  for (const [trigger, expectedDefinition] of triggerDefinitions) {
     const row = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?").get(trigger);
     if (!row) addMismatch(mismatches, mismatchLimit, { code: trigger.startsWith('world_event_journal_') ? 'journal_trigger_missing' : 'projection_trigger_missing', trigger });
     else {
@@ -238,6 +267,7 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
       if (actual !== expected) addMismatch(mismatches, mismatchLimit, { code: 'trigger_definition_invalid', trigger, expectedSha256: sha256(expected), actualSha256: sha256(actual) });
     }
   }
+  finishPhase('schema', { tableCount: requiredTables.length, triggerCount: triggerDefinitions.length });
   const events = sqlite.prepare('SELECT * FROM world_event_journal ORDER BY sequence').all();
   const rootKinds = new Set(['topology.installed/v1', 'legacy_snapshot.imported/v1']);
   if (!events.length) addMismatch(mismatches, mismatchLimit, { code: 'journal_root_missing' });
@@ -286,6 +316,7 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
     } catch (error) { addMismatch(mismatches, mismatchLimit, { code: 'replay_error', sequence: event.sequence, message: error.message }); }
     previousHash = event.event_hash;
   }
+  finishPhase('journal', { eventCount: events.length, aggregateCount: aggregateRevisions.size, payloadBytes: eventByteCount(events, 'payload_json'), causationBytes: eventByteCount(events, 'causation_json') });
   let actual = emptyWorldState();
   try { actual = scope === 'b1' ? readWorldProjection(sqlite) : scope === 'a2' ? readWorldA2Projection(sqlite) : { ...emptyWorldState(), ...readWorldPhysicalProjection(sqlite) }; }
   catch (error) { addMismatch(mismatches, mismatchLimit, { code: 'projection_schema_invalid', message: error.message }); }
@@ -297,11 +328,18 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
     compareRows(actual.timers, state.timers, TIMER_COLUMNS, 'world_timers', mismatches, mismatchLimit);
     compareRows(actual.briefs, state.briefs, BRIEF_COLUMNS, 'world_work_briefs', mismatches, mismatchLimit, ['session_id', 'revision']);
     compareRows(actual.approvals, state.approvals, APPROVAL_COLUMNS, 'world_approvals', mismatches, mismatchLimit);
-    const custodySchemasValid = Object.entries(WORLD_CUSTODY_TABLE_SQL).every(([table, expected]) => normalizeTableSql(sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)?.sql) === normalizeTableSql(expected));
-    if (custodySchemasValid) verifyCustody(sqlite, events, state, mismatches, mismatchLimit);
   }
+  finishPhase('projection', { actualRowCount: projectionRowCount(actual), expectedRowCount: projectionRowCount(state) });
+  let custodyMetrics = { actionReceiptCount: 0, approvalReceiptCount: 0 };
+  if (['a2', 'b1'].includes(scope)) {
+    const custodySchemasValid = Object.entries(WORLD_CUSTODY_TABLE_SQL).every(([table, expected]) => normalizeTableSql(sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)?.sql) === normalizeTableSql(expected));
+    if (custodySchemasValid) custodyMetrics = verifyCustody(sqlite, events, state, mismatches, mismatchLimit);
+  }
+  finishPhase('custody', custodyMetrics);
+  let extensionEventCount = 0;
   if (scope === 'b1') {
     const extensionEvents = events.filter(event => event.event_kind === 'topology.extended/v1');
+    extensionEventCount = extensionEvents.length;
     if (extensionEvents.length !== 1) addMismatch(mismatches, mismatchLimit, { code: extensionEvents.length ? 'b1_extension_duplicate' : 'b1_extension_missing', count: extensionEvents.length });
     compareRows(actual.passages, state.passages, PASSAGE_COLUMNS, 'world_passages', mismatches, mismatchLimit);
     compareRows(actual.objectStates, state.objectStates, OBJECT_STATE_COLUMNS, 'world_object_states', mismatches, mismatchLimit);
@@ -318,11 +356,20 @@ export function verifyWorldSqlite(sqlite, { mismatchLimit = 50, scope = 'b1', re
       if (spotlightDoorEvents.length !== 1) addMismatch(mismatches, mismatchLimit, { code: spotlightDoorEvents.length ? 'spotlight_door_extension_duplicate' : 'spotlight_door_extension_missing', count: spotlightDoorEvents.length });
     }
   }
+  finishPhase('topology', { extensionEventCount });
   const head = events.at(-1) || null;
   return {
     verified: mismatches.length === 0, eventCount: events.length,
     journalHead: head ? { sequence: head.sequence, eventId: boundedDiagnostic(head.event_id), eventHash: boundedDiagnostic(head.event_hash), occurredAt: boundedDiagnostic(head.occurred_at) } : null,
     projectorVersion: scope === 'a1' ? 1 : scope === 'a2' ? 2 : WORLD_PROJECTOR_VERSION, mismatches,
+    ...(mismatches.length === 0 ? {
+      instrumentation: {
+        domain: 'world', mode: 'full', elapsedMs: elapsedMs(verificationStartedAt), phases,
+        counters: {
+          eventCount: boundedMetric(events.length), journalPayloadBytes: eventByteCount(events, 'payload_json'), journalCausationBytes: eventByteCount(events, 'causation_json'), projectionRowCount: projectionRowCount(actual), custodyRowCount: boundedMetric(custodyMetrics.actionReceiptCount + custodyMetrics.approvalReceiptCount),
+        },
+      },
+    } : {}),
   };
 }
 

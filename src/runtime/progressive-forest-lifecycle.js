@@ -47,6 +47,8 @@ export class ProgressiveForestLifecycle {
     this.forestVerificationAbortController = null;
     this.forestVerificationPromise = null;
     this.forestActivationPromise = null;
+    this.backgroundAuditAbortController = null;
+    this.backgroundAuditPromise = null;
     this.startupGeneration = 1;
     this.forestSourceSnapshot = null;
     this.forestDataVersionSnapshot = null;
@@ -157,13 +159,36 @@ export class ProgressiveForestLifecycle {
       this.wakeService.ambientFeatherService = nextAmbient;
       this.wakeService.forestTraversalService = nextTraversal;
       this.gateway.forest = candidate;
-      this.readiness.settle('forest', 'ready', { code: 'forest_verified' });
+      this.readiness.settle('forest', 'ready', {
+        code: verification?.checkpoint?.mode?.startsWith('checkpoint_')
+          ? 'forest_checkpoint_verified'
+          : 'forest_verified',
+      });
     } catch {
       nextTraversalStore?.close();
       nextIndex?.close();
       this.closeProgressiveForest();
       this.readiness.settle('forest', 'failed', { code: 'forest_activation_failed' });
     }
+  }
+
+  startBackgroundAudit(generation) {
+    if (this.closing || generation !== this.startupGeneration || !this.readiness.is('forest', 'ready') || this.backgroundAuditPromise) return null;
+    const sourceSnapshot = this.currentSourceSnapshot();
+    const forestDataVersion = typeof this._forest?.dataVersion === 'function' ? this._forest.dataVersion() : null;
+    this.backgroundAuditAbortController = new AbortController();
+    this.backgroundAuditPromise = Promise.resolve(this.forestVerifier(
+      { ...this.forestVerificationOptions, forceFull: true },
+      { signal: this.backgroundAuditAbortController.signal },
+    )).then(verification => {
+      if (!verification?.ok) throw Object.assign(new Error('Forest background audit failed.'), { code: 'forest_background_audit_failed' });
+    }).catch(error => {
+      if (this.closing || generation !== this.startupGeneration || error?.code === 'forest_verification_cancelled') return;
+      const sourceUnchanged = this.currentSourceSnapshot() === sourceSnapshot;
+      const forestUnchanged = (typeof this._forest?.dataVersion === 'function' ? this._forest.dataVersion() : null) === forestDataVersion;
+      if (sourceUnchanged && forestUnchanged) this.revoke('forest_background_audit_failed');
+    });
+    return this.backgroundAuditPromise;
   }
 
   start() {
@@ -181,7 +206,10 @@ export class ProgressiveForestLifecycle {
     this.forestDataVersionSnapshot = typeof this._forest.dataVersion === 'function' ? this._forest.dataVersion() : null;
     try {
       this.forestVerificationPromise = Promise.resolve(this.forestVerifier(this.forestVerificationOptions, { signal: this.forestVerificationAbortController.signal }))
-        .then(verification => this.activate(verification, generation))
+        .then(async verification => {
+          await this.activate(verification, generation);
+          if (verification?.checkpoint?.mode?.startsWith('checkpoint_')) this.startBackgroundAudit(generation);
+        })
         .catch(() => {
           if (this.closing || generation !== this.startupGeneration) return;
           void this.activate(null, generation);
@@ -200,7 +228,15 @@ export class ProgressiveForestLifecycle {
     this.closing = true;
     this.startupGeneration += 1;
     this.forestVerificationAbortController?.abort();
-    return this.forestActivationPromise || this.forestVerificationPromise;
+    this.backgroundAuditAbortController?.abort();
+    return Promise.allSettled([this.forestActivationPromise || this.forestVerificationPromise, this.backgroundAuditPromise].filter(Boolean));
+  }
+
+  revoke(code = 'forest_background_audit_failed') {
+    if (this.closing || !this.readiness.is('forest', 'ready')) return false;
+    this.closeProgressiveForest();
+    this.readiness.revoke('forest', { code });
+    return true;
   }
 
   /** Close lifecycle-owned stores after pending verification/activation settles. */

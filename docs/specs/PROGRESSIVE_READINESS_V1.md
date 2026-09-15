@@ -56,17 +56,9 @@ There is no unverified grace period. A wake is not admitted while an active Fore
 
 ## 5. Verification checkpoints
 
-Incremental immutable-prefix verification is deferred until a separately reviewed checkpoint format can prove all of the following:
+[`VERIFIED_ANCESTRY_V1.md`](VERIFIED_ANCESTRY_V1.md) adopts the measured checkpoint revision. A compatible hash-bound checkpoint plus an exact suffix proof may satisfy startup Forest readiness while the authoritative complete proof runs in the background. Disagreement revokes Forest readiness and closes its dependent capabilities. A missing, stale, incompatible, incomplete, or drifting checkpoint falls back to the full blocking proof.
 
-- checkpoint authenticity and exact store identity;
-- the verified prefix boundary and terminal hash;
-- code/schema/verifier-version compatibility;
-- suffix continuity from the checkpoint boundary;
-- projection agreement for the complete current state;
-- invalidation after replacement, truncation, mutation, or verifier change; and
-- a background full audit whose disagreement revokes feature readiness.
-
-File timestamps, sizes, SQLite change counters, or a cached prior success are not sufficient authority. V1 records stage timings so a later checkpoint revision is driven by measured pressure rather than assumption.
+File timestamps, sizes, SQLite change counters, or a cached prior success remain insufficient authority. The checkpoint binds exact domain and dependency frontiers, verifier/schema versions, projection agreement, and append-only ancestry under the explicitly bounded local threat model.
 
 ## 6. Corner presentation
 

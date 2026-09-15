@@ -54,6 +54,16 @@ export class ReadinessProjection {
     return this.stage(stage);
   }
 
+  revoke(stage, { code = null } = {}) {
+    if (!STAGES.includes(stage)) throw new TypeError(`Unknown readiness stage: ${stage}`);
+    const prior = this.stages.get(stage);
+    if (!prior || prior.state !== 'ready') return this.stage(stage);
+    const settledMono = this.clock();
+    const settledAt = this.timestamp();
+    this.stages.set(stage, { ...prior, state: 'failed', code: stableCode(stage, 'failed', code), settledAt, settledMono });
+    return this.stage(stage);
+  }
+
   beginTiming(name) {
     if (typeof name !== 'string' || !name || name.length > 64) throw new TypeError('Readiness timing name is invalid.');
     if (!this.timings.has(name)) this.timings.set(name, { startedMono: this.clock(), elapsedMs: null });
