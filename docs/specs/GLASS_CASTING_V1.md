@@ -1,6 +1,6 @@
 # Glass Casting v1 — A Stable View Across the Crossing
 
-> **Status: Implemented anatomy, receipts, and exact inheritance port; generation still deferred.** The runtime validates the five-band anatomy, projects the resulting ordered messages and declared omissions through provider-presentation Scrub, witnesses the exact crossing in the Spine, and persists stripped append-only cast manifests. The capped rolling fold, semantic selection, and farther walk-back remain unimplemented; their adopted downstream shape is now specified by [`FOREST_PATHS_ROLLING_FOLD_V1.md`](FOREST_PATHS_ROLLING_FOLD_V1.md).
+> **Status: Implemented anatomy, receipts, exact inheritance port, and deterministic ordinary-dialogue fold.** The runtime validates the five-band anatomy, waterfalls eligible older complete Human/Resident pairs at byte watermarks, projects the resulting ordered messages and declared omissions through provider-presentation Scrub, witnesses the exact crossing in the Spine, and persists append-only source-bound cast manifests. Generated semantic fold prose, hierarchical recapping, and farther walk-back remain unimplemented; their adopted downstream shape is specified by [`FOREST_PATHS_ROLLING_FOLD_V1.md`](FOREST_PATHS_ROLLING_FOLD_V1.md).
 
 [`HOUSE_HEARTH_WAKE_V1.md`](HOUSE_HEARTH_WAKE_V1.md) is an adopted, unimplemented revision to first-wake continuity presentation: minimal Glass physics remains passive, while the Ember header, Silver Bullets, and exact prior-session continuity arrive through the active Hearth return. Until that revision is implemented, this v1 document and runtime remain current.
 
@@ -62,6 +62,8 @@ This band marks the boundary of earlier material represented by the cast: what p
 Version 1 receipts the existing recency inheritance boundary where the current deterministic input can prove it: candidate count, selected count, complete earlier-utterance omission count, oldest selected source identity, and any omitted-prefix length used for an exact suffix. Unknown boundaries are labeled unknown; they are never inferred. Resident-facing prior-horizon text may state only that earlier attributable material remains in custody. Version 1 does not walk farther backward through Source, retrieve Forest material, or synthesize a horizon narrative.
 
 ### 2.4 Capped rolling fold
+
+The installed first generator is deterministic and source-bound. It retains a configurable recent exact tail and replaces only older complete ordinary Human/Resident pairs with bounded exact excerpts labeled as host-derived record. Every fold item receipts its covered Scroll/Source coordinates and hashes; it grants no truth, memory, or action authority. Generated semantic synthesis and fold walk-back remain deferred.
 
 This band is reserved for a bounded, versioned representation of material between the prior horizon and the living edge. It has a hard presentation budget and must always disclose its generator, inputs, exclusions, and source coverage behind the wall.
 
@@ -132,7 +134,7 @@ Casting must fail before provider dispatch when:
 - Every provider phase has exactly one five-band receipt in the required order.
 - Continuity anchors contain the exact clinical host wake anchor followed by the deterministic, source-exact inherited recency atoms when prior material exists; they contain no Longshore blessing, semantic selection, or generated text.
 - Prior horizon receipts match the known existing candidate/selection/omission boundary and label unknown values honestly.
-- Capped rolling fold is explicitly deferred and empty.
+- The capped rolling fold is either explicitly deferred and empty below high water or present with a bounded source-linked receipt after lawful waterfall.
 - The living edge contains exact admitted request material and preserves causal provider/tool structure.
 - The Glass validator accepts the complete cast, then provider-presentation Scrub validates its exact ordered message projection and declared omissions before dispatch.
 - The receipt's rendered bytes/hash match the exact request witnessed by the Spine.

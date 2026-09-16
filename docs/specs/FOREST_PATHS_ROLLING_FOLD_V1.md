@@ -1,6 +1,6 @@
 # Forest Paths and Rolling Fold v1
 
-> **Status: Adopted design; directional walking v3 implemented.** The Hub installs `place.forest`, physical and projected entrances, framed semantic/chronological junctions, persistent chosen semantic edges and wear, exact leaf reading, backtracking, lawful physical leaving, and warm-tether return. It does not yet install nesting-doll containment, rolling folds, the Faun, recursive frames, context-limit rollover, or Write/Leave synthesis. Current runtime truth remains in [`../STATUS.md`](../STATUS.md).
+> **Status: Adopted design; directional walking v3 and ordinary-dialogue rolling fold implemented.** The Hub installs `place.forest`, physical and projected entrances, framed semantic/chronological junctions, persistent chosen semantic edges and wear, exact leaf reading, backtracking, lawful physical leaving, warm-tether return, and a deterministic source-bound waterfall for older complete ordinary exchanges. It does not yet install nesting-doll containment, generated semantic fold prose, fold walk-back, the Faun, recursive frames, or Write/Leave synthesis. Current runtime truth remains in [`../STATUS.md`](../STATUS.md).
 
 > **Active revision pressure:** live use showed that entering Forest attention while World continued to say the Resident remained in the Garden made the threshold contradictory and collapsed substrate, place, and projection. The retained invariant is exact dual authority: `forest.resident` owns terrain while World owns spatial presence. The revised mechanism installs `place.forest`, which projects `forest.resident`, and preserves B1 as ancestry rather than rewriting its formerly closed boundary.
 
@@ -276,6 +276,8 @@ The capped rolling fold is a bounded derived view of the fallen path. Each immut
 
 The prior-horizon band states that fuller attributable terrain remains in custody and supplies the walk-back handle. A poor fold may be superseded by a later fold; neither the old fold nor its sources are rewritten.
 
+The installed first generator is `ordinary_dialogue_rolling_fold_v1`. At the configured byte high-water mark it removes the oldest eligible complete adjacent Human/Resident pairs until the complete projected crossing reaches the low-water target or eligible pairs are exhausted. The newest configured pairs, the current incomplete Human turn, tool exchanges, and non-dialogue ground remain exact. Each removed pair becomes a compact host-derived record containing bounded exact excerpts plus hashes and Source/Scroll coordinates behind the wall. This is deterministic orientation, not Resident-authored semantic synthesis. Canonical Source, Session Scroll, Forest entries, and response relations remain unchanged. If non-foldable material still exceeds the hard attention ceiling, dispatch continues to refuse.
+
 Every provider-visible fold or omission disclosure distinguishes three epistemic states: material presently held in the cast; established session history that is folded and remains in canonical custody but is not presently held; and material whose status is unknown. Established means the historical utterance or consequence occurred, not that every proposition inside it is certified true. Folded material is outside present attention rather than erased or disproven. The Resident is not asked to reconstruct or disown it; it may name the seam plainly and walk back only through an installed crossing.
 
 Walking back expands by scale:
@@ -320,7 +322,7 @@ The Faun may not author the Resident's path, choose a branch, silently summarize
 
 ## 10. Implementation boundary and acceptance
 
-Nothing in this specification is currently installed. Before implementation status changes, tests must prove at least:
+Directional walking and the first ordinary-dialogue waterfall are installed. Generated semantic folds, hierarchical fold recapping, deliberate fold walk-back, containment dolls, recursive Forest framing, and the Faun remain deferred. Before those boundaries change, tests must prove at least:
 
 1. Exact Source and Forest utterance custody remains unchanged through waterfall and traversal.
 2. Conversation predecessor/successor and response relations are exact and never embedding-derived.

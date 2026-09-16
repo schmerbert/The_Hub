@@ -185,6 +185,7 @@ function messageItem(ref, extra = {}) {
     sourceStartUtf16: Number.isInteger(ref.sourceStartUtf16) ? ref.sourceStartUtf16 : null,
     sourceEndUtf16: Number.isInteger(ref.sourceEndUtf16) ? ref.sourceEndUtf16 : null,
     presentationTransform: ref.presentationTransform || 'identity',
+    ...(ref.fold ? { fold: structuredClone(ref.fold) } : {}),
     message: structuredClone(ref.message),
     messageUtf8Bytes: byteReceipt.utf8Bytes,
     messageSha256: byteReceipt.sha256,
@@ -243,9 +244,10 @@ function holsterRef(holster) {
   };
 }
 
-export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = [], inheritance = null, continuityMode = 'direct', priorHorizon = null, silverBulletHolster = null } = {}) {
+export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = [], inheritance = null, continuityMode = 'direct', priorHorizon = null, silverBulletHolster = null, rollingFoldRefs = [], rollingFoldReceipt = null } = {}) {
   if (!['orientation', 'response', 'ordinary'].includes(phase)) throw glassError('Glass cast phase is invalid.');
   if (!Array.isArray(livingEdgeRefs) || !Array.isArray(livingEdgeOmissions)) throw glassError('Glass living edge and omissions must be arrays.');
+  if (!Array.isArray(rollingFoldRefs)) throw glassError('Glass rolling fold references must be an array.');
   if (!['pending', 'causal_hearth', 'direct', 'none'].includes(continuityMode)) throw glassError('Glass continuity mode is invalid.');
 
   const glassRef = { kind: 'stable_glass', authority: 'host_ground', message: { role: 'system', content: STABLE_GLASS_TEXT } };
@@ -256,9 +258,9 @@ export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = 
   const prefixRefs = [glassRef, ...(carriedHolsterRef ? [carriedHolsterRef] : []), ...providerContinuityRefs, ...(continuityMode === 'direct' ? [{ ...priorRef, message: priorRef.message }] : [])];
   const shiftedOmissions = livingEdgeOmissions.map(omission => {
     if (!omission || !Number.isInteger(omission.sourceIndex) || omission.sourceIndex < 0) throw glassError('Glass living-edge omission index is invalid.');
-    return { ...omission, sourceIndex: omission.sourceIndex + prefixRefs.length };
+    return { ...omission, sourceIndex: omission.sourceIndex + prefixRefs.length + rollingFoldRefs.length };
   });
-  const refs = [...prefixRefs, ...livingEdgeRefs].map(ref => ({ ...ref, message: structuredClone(ref.message) }));
+  const refs = [...prefixRefs, ...rollingFoldRefs, ...livingEdgeRefs].map(ref => ({ ...ref, message: structuredClone(ref.message) }));
 
   const continuityRefsForBand = [...(carriedHolsterRef ? [carriedHolsterRef] : []), ...(continuityMode === 'direct' ? continuityRefs(inheritance) : [])];
   const continuityItems = continuityRefsForBand.map((ref, index) => messageItem(ref, { sourceMessageOrdinal: index + 2 }));
@@ -274,7 +276,7 @@ export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = 
     band('continuity_anchors', continuityItems.length ? 'present' : 'empty', continuityItems, {
       mode: continuityMode,
       representedIn: continuityMode === 'causal_hearth' ? 'living_edge_causal_hearth' : continuityMode === 'direct' ? 'continuity_anchors' : null,
-      ...(causalHearthMessage ? { livingEdgeMessageIndex: causalHearthIndex, providerMessageOrdinal: prefixRefs.length + causalHearthIndex + 1, livingEdgeMessageSha256: causalHearthMessage.messageSha256 } : {}),
+      ...(causalHearthMessage ? { livingEdgeMessageIndex: causalHearthIndex, providerMessageOrdinal: prefixRefs.length + rollingFoldRefs.length + causalHearthIndex + 1, livingEdgeMessageSha256: causalHearthMessage.messageSha256 } : {}),
       sourceCustody: continuityCustody,
     }),
     (() => {
@@ -283,8 +285,12 @@ export function composeGlassCast({ phase, livingEdgeRefs, livingEdgeOmissions = 
       horizon.items[0].sourceMessageOrdinal = prefixRefs.length;
       return horizon;
     })(),
-    band('capped_rolling_fold', 'deferred', [], { generator: 'deferred', budgetUtf8Bytes: null }),
-    band('living_edge', 'present', livingEdgeRefs.map((ref, index) => messageItem(ref, { sourceMessageOrdinal: prefixRefs.length + index + 1 })), { causalHearthException: continuityMode === 'causal_hearth' }),
+    band('capped_rolling_fold', rollingFoldRefs.length ? 'present' : 'deferred', rollingFoldRefs.map((ref, index) => messageItem(ref, { sourceMessageOrdinal: prefixRefs.length + index + 1 })), {
+      generator: rollingFoldRefs.length ? 'ordinary_dialogue_rolling_fold_v1' : 'deferred',
+      budgetUtf8Bytes: rollingFoldReceipt?.lowWaterBytes ?? null,
+      receipt: rollingFoldReceipt ? structuredClone(rollingFoldReceipt) : null,
+    }),
+    band('living_edge', 'present', livingEdgeRefs.map((ref, index) => messageItem(ref, { sourceMessageOrdinal: prefixRefs.length + rollingFoldRefs.length + index + 1 })), { causalHearthException: continuityMode === 'causal_hearth' }),
   ];
   const cast = {
     [CAST_BRAND]: true,
@@ -322,7 +328,7 @@ export function assertGlassCast(cast) {
       if (itemBytes.utf8Bytes !== item.messageUtf8Bytes || itemBytes.sha256 !== item.messageSha256) throw glassError('Glass item rendered bytes do not match the receipt.');
     }
   }
-  if (cast.bands[3].state !== 'deferred' || cast.bands[3].items.length !== 0) throw glassError('Glass rolling fold must remain deferred and empty in v1.');
+  if (!['present', 'deferred'].includes(cast.bands[3].state) || (cast.bands[3].state === 'deferred' && cast.bands[3].items.length !== 0)) throw glassError('Glass rolling fold state is invalid.');
   return cast;
 }
 
@@ -351,6 +357,7 @@ export function finalizeGlassCast({ cast, sourceMessages, presentation, requestB
     messageRole: item.message.role,
     messageUtf8Bytes: item.messageUtf8Bytes,
     messageSha256: item.messageSha256,
+    ...(item.fold ? { fold: structuredClone(item.fold) } : {}),
   });
   const castManifest = {
     schemaVersion: cast.schemaVersion,

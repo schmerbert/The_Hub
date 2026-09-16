@@ -28,10 +28,15 @@ export function readConfig(env = process.env) {
   const resultProjectionMaxLines = integer(env, 'HUB_RESULT_PROJECTION_MAX_LINES', 120, { min: 1 });
   const attentionWarnBytes = integer(env, 'HUB_ATTENTION_WARN_BYTES', 80000);
   const attentionRefuseBytes = integer(env, 'HUB_ATTENTION_REFUSE_BYTES', 120000, { min: 1 });
+  const rollingFoldHighWaterBytes = integer(env, 'HUB_ROLLING_FOLD_HIGH_WATER_BYTES', attentionWarnBytes, { min: 1 });
+  const rollingFoldLowWaterBytes = integer(env, 'HUB_ROLLING_FOLD_LOW_WATER_BYTES', Math.floor(attentionWarnBytes * 0.8), { min: 0 });
+  const rollingFoldTailUnits = integer(env, 'HUB_ROLLING_FOLD_TAIL_UNITS', 4);
+  const rollingFoldExcerptLimit = integer(env, 'HUB_ROLLING_FOLD_EXCERPT_LIMIT', 96, { min: 8 });
   const retainedToolPairs = integer(env, 'HUB_RETAINED_TOOL_PAIRS', 2);
   const providerMaxReturnBytes = integer(env, 'HUB_PROVIDER_MAX_RETURN_BYTES', 8 * 1024 * 1024, { min: 1 });
   const hearthWakeIntervalSeconds = integer(env, 'HUB_HEARTH_WAKE_INTERVAL_SECONDS', 0, { min: 0, max: 604800 });
   if (attentionRefuseBytes <= attentionWarnBytes) throw new Error('Attention thresholds require 0 <= HUB_ATTENTION_WARN_BYTES < HUB_ATTENTION_REFUSE_BYTES');
+  if (rollingFoldLowWaterBytes >= rollingFoldHighWaterBytes || rollingFoldHighWaterBytes > attentionRefuseBytes) throw new Error('Rolling fold watermarks require low < high <= attention refusal.');
   if (hearthWakeIntervalSeconds !== 0 && hearthWakeIntervalSeconds < 60) throw new Error('HUB_HEARTH_WAKE_INTERVAL_SECONDS must be 0 or an integer from 60 to 604800');
   return immutable({
     mode,
@@ -79,6 +84,10 @@ export function readConfig(env = process.env) {
     documentProjectionMaxLines: integer(env, 'HUB_DOCUMENT_PROJECTION_MAX_LINES', 2000, { min: resultProjectionMaxLines }),
     attentionWarnBytes,
     attentionRefuseBytes,
+    rollingFoldHighWaterBytes,
+    rollingFoldLowWaterBytes,
+    rollingFoldTailUnits,
+    rollingFoldExcerptLimit,
     retainedToolPairs,
     providerMaxReturnBytes,
     sqliteBusyTimeoutMs: integer(env, 'HUB_SQLITE_BUSY_TIMEOUT_MS', 5000, { min: 1, max: 60000 }),

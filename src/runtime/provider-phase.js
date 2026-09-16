@@ -12,6 +12,7 @@ import { renderAmbientFeatherPacket, renderDepartedFeatherFootprint } from '../c
 import { providerReasoningControls, selectReasoningPosture } from './reasoning-posture.js';
 import { renderSpotlightReadGround } from '../places/hub/spotlight/presentation.js';
 import { renderAutonomousWakeGround } from '../context/autonomous-wake-ground.js';
+import { planRollingConversationFold } from '../context/rolling-fold.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -233,8 +234,7 @@ export class ProviderPhase {
       sourceEventId: null,
       message: structuredClone(sign.message),
     });
-    const assemble = () => {
-      const historyRefs = historyRows.map(row => {
+    const historyRefs = historyRows.map(row => {
         const message = db.projectSessionHistoryMessage(row, {
           materializeProviderReasoning: requiresReasoningReplay,
           materializeMissingAsEmpty: requiresReasoningReplay,
@@ -254,8 +254,24 @@ export class ProviderPhase {
           message,
         };
       });
-      const livingEdgeRefs = [...currentGround, ...historyRefs];
-      const livingEdgeOmissions = omissionPlan.omissions.map(omission => ({ ...omission, sourceIndex: omission.sourceIndex + currentGround.length }));
+    const historyIndexMapFor = retainedRefs => {
+      const map = new Map();
+      let retainedIndex = 0;
+      for (let originalIndex = 0; originalIndex < historyRefs.length; originalIndex += 1) {
+        if (retainedRefs[retainedIndex] === historyRefs[originalIndex]) {
+          map.set(originalIndex, retainedIndex);
+          retainedIndex += 1;
+        }
+      }
+      return map;
+    };
+    const assemble = ({ retainedRefs = historyRefs, foldRefs = [], foldReceipt = null } = {}) => {
+      const retainedIndexByOriginalIndex = historyIndexMapFor(retainedRefs);
+      const livingEdgeRefs = [...currentGround, ...retainedRefs];
+      const livingEdgeOmissions = omissionPlan.omissions.flatMap(omission => {
+        const retainedIndex = retainedIndexByOriginalIndex.get(omission.sourceIndex);
+        return retainedIndex === undefined ? [] : [{ ...omission, sourceIndex: retainedIndex + currentGround.length }];
+      });
       const composed = composeGlassCast({
         phase,
         livingEdgeRefs,
@@ -264,6 +280,8 @@ export class ProviderPhase {
         continuityMode,
         priorHorizon: (options.inheritance || wakeInheritance)?.priorHorizon || null,
         silverBulletHolster,
+        rollingFoldRefs: foldRefs,
+        rollingFoldReceipt: foldReceipt,
       });
       const refs = composed.refs;
       const sourceMessages = refs.map(ref => ref.message);
@@ -273,10 +291,28 @@ export class ProviderPhase {
       return { refs, sourceMessages, presentation, presentedRefs, attention, glassCast: composed.cast };
     };
     // Byte thresholds are host evidence, not Resident ground. The exact
-    // measure remains available in the attention receipt and Corner.
-    const assembled = assemble();
+    // measure remains available in the attention receipt and Corner. Ordinary
+    // dialogue may waterfall into Glass's bounded fold band when the warning
+    // watermark is reached; exact Source/Forest history remains untouched.
+    const baseline = assemble();
+    const foldPlan = !options.orientation && historyRefs.length
+      ? planRollingConversationFold({
+        refs: historyRefs,
+        highWaterBytes: config.rollingFoldHighWaterBytes,
+        lowWaterBytes: config.rollingFoldLowWaterBytes,
+        retainTailUnits: config.rollingFoldTailUnits,
+        excerptLimitUtf16: config.rollingFoldExcerptLimit,
+        measure: ({ retainedRefs, foldRefs }) => assemble({ retainedRefs, foldRefs }).attention,
+      })
+      : null;
+    const assembled = foldPlan?.folded?.length
+      ? assemble({ retainedRefs: foldPlan.retainedRefs, foldRefs: foldPlan.foldRefs, foldReceipt: foldPlan.receipt })
+      : baseline;
     const { refs, sourceMessages, presentation, presentedRefs } = assembled;
-    const sourceAttention = attentionMeter.measure({ messages: sourceMessages, tools: tools || [] });
+    // Preserve the original source-side accounting: this includes messages
+    // lawfully omitted by the existing tool/Hearth fitter, while the rolling
+    // planner's baseline begins after those prior omissions.
+    const sourceAttention = attentionMeter.measure({ messages: baseline.sourceMessages, tools: tools || [] });
     const attention = {
       ...assembled.attention,
       phase,
@@ -284,6 +320,7 @@ export class ProviderPhase {
       sourceTotalBytes: sourceAttention.totalBytes,
       fittedSavingsBytes: sourceAttention.totalBytes - assembled.attention.totalBytes,
       contextOmissions: omissionPlan,
+      rollingFold: foldPlan?.receipt || null,
       toolProfile: options.toolProfile || null,
       reasoningPosture: posture.posture,
       reasoningEffort: reasoning.reasoningEffort,
@@ -316,7 +353,7 @@ export class ProviderPhase {
       crossing_ground: { ...commonWitness, provider: providerName, requestedModel: config.model, thinking, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, lifespanSessionId: created.sessionId, sourceMessageHashes: messageHashesFor(['crossing_ground', 'autonomous_wake_ground']) },
       world_current_ground: { ...commonWitness, journalHead: worldVerification.journalHead, projectorVersion: worldVerification.projectorVersion, projectionHash: sha256(JSON.stringify(worldProjection)), presenceMessageHash: sha256(worldGround.presenceMessage), sourceMessageHashes: messageHashesFor(['world_current_ground']) },
       tool_mount: { ...commonWitness, roomId: worldProjection.roomId, mountProfile: worldProjection.mountProfile, fittedProfile: options.toolsDisabled ? { ...(options.toolProfile || {}), names: [], completeCount: 0, finalResponseOnly: true } : options.toolProfile || null, schemaCount: toolSchemas.length, schemaHashes: toolSchemas.map(schema => sha256(JSON.stringify(schema))), ...(spotlightReadStanding ? { spotlightReadStanding } : {}), sourceMessageHashes: messageHashesFor(['tool_current_ground']) },
-      attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure']) },
+      attention: { ...commonWitness, attentionReceiptId: attentionReceipt.receiptId, attentionReceiptHash: attentionReceipt.receiptHash, status: attention.status, reasoningPosture: posture.posture, reasoningEffort: reasoning.reasoningEffort, reasoningFittingReason: posture.reason, omissionManifest: omissionPlan, semanticExhaleDepartures: departedFeathers, forestWalk: forestTraversalService?.projection(created.sessionId) || null, sourceMessageHashes: messageHashesFor(['attention_current_ground', 'orientation_ground', 'forest_threshold_ground', 'forest_current_ground', 'result_trail_sign', 'hearth_trail_sign', 'semantic_forest_exhale', 'semantic_forest_departure', 'rolling_fold']) },
       continuity_ground: { ...commonWitness, mode: continuityMode, inheritanceReceiptHash: (options.inheritance || wakeInheritance) ? sha256(JSON.stringify(options.inheritance || wakeInheritance)) : null, silverBulletHolsterHash: silverBulletHolster ? sha256(JSON.stringify(silverBulletHolster)) : null, sourceMessageHashes: messageHashesFor(['clinical_wake_anchor', 'source_exact_inheritance', 'prior_horizon', 'silver_bullet_holster']) },
     };
     const glassReceipt = finalizeGlassCast({ cast: assembled.glassCast, sourceMessages, presentation, requestBodyString, requestFrame, crossing: { sessionId: created.sessionId, wakeId: created.wakeId, provider: providerName, requestedModel: config.model } });
