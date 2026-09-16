@@ -14,6 +14,7 @@ import { isSimpleEmbodiedAction } from './reasoning-posture.js';
 import { ProviderPhase, providerCancellation } from './provider-phase.js';
 import { REST_FOR_TOOL_NAME, autonomousToolAllowed } from './autonomous-wakes.js';
 import { fitToolContinuationRound, publishToolCallsReady, publishToolStarted, settleToolAction } from './tool-continuation.js';
+import { isQuietEmbodimentAction, quietEmbodimentLimitError } from './quiet-embodiment.js';
 
 export class WakeService {
   constructor({ config, db, provider, forest, spine, world, gateway, eventBus = null, ambientFeatherService = null, forestTraversalService = null, forestReadiness = null }) {
@@ -389,9 +390,17 @@ export class WakeService {
     const runResidentRounds = async (phase = 'response', options = {}) => {
       let afterSimpleAction = options.afterSimpleAction === true;
       const roundLimit = autonomous ? config.autonomousMaxToolRounds : config.maxToolRounds;
+      // Ordinary human wakes get their own small, optional embodied horizon.
+      // Autonomous wakes retain their existing independent action limit.
+      let quietEmbodimentUsed = autonomous ? null : 0;
       for (let round = 0; round <= roundLimit; round += 1) {
-        const fitted = fitToolContinuationRound({ world, sessionId: created.sessionId, config, forestTraversalService: this.forestTraversalService, autonomous, round, roundLimit });
-        const { finalOpportunity, location, roomId, toolProfile, tools, toolRoundBudget } = fitted;
+        const fitted = fitToolContinuationRound({
+          world, sessionId: created.sessionId, config, forestTraversalService: this.forestTraversalService,
+          autonomous, round, roundLimit,
+          quietEmbodimentUsed,
+          quietEmbodimentLimit: autonomous ? null : config.quietEmbodimentActions,
+        });
+        const { finalOpportunity, location, roomId, toolProfile, tools, toolRoundBudget, quietEmbodiment } = fitted;
         const response = await callPhase(phase, db.getSessionHistory(created.sessionId), {
           ...options,
           afterSimpleAction,
@@ -400,6 +409,7 @@ export class WakeService {
           toolProfile,
           wakeOrigin: autonomous ? origin : null,
           toolRoundBudget,
+          quietEmbodiment,
         });
         const calls = Array.isArray(response.result?.message?.tool_calls) ? response.result.message.tool_calls : [];
         if (!calls.length) {
@@ -434,14 +444,29 @@ export class WakeService {
           });
           try {
             const isForestTool = FOREST_WALK_TOOL_NAMES.has(call.function?.name);
-            if (autonomous && !autonomousToolAllowed(call.function?.name, { forestToolNames: [...FOREST_WALK_TOOL_NAMES] })) throw Object.assign(new Error('That consequential capability is not available during an autonomous wake.'), { code: 'autonomous_tool_denied' });
-            action = call.function?.name === REST_FOR_TOOL_NAME
-              ? this.autonomousWakeController?.executeRestTool({ sessionId: created.sessionId, wakeId: created.wakeId, call }) || (() => { throw Object.assign(new Error('Autonomous rest scheduling is unavailable.'), { code: 'autonomous_wake_unavailable' }); })()
-              : call.function?.name === RESULT_REOPEN_TOOL_NAME
-              ? reopenResult(call, { requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id })
-              : isForestTool && this.forestTraversalService
-                ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: autonomous ? priorEligible : created.eventId, queryFallback: autonomous ? origin.plan?.intention || 'wander and notice' : triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
-              : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
+            const quietEmbodimentCall = !autonomous && isQuietEmbodimentAction(call.function?.name);
+            const quietEmbodimentAttempt = quietEmbodimentCall ? quietEmbodimentUsed : null;
+            if (quietEmbodimentCall) quietEmbodimentUsed += 1;
+            const quietEmbodimentRefused = quietEmbodimentCall && quietEmbodimentAttempt >= config.quietEmbodimentActions;
+            if (quietEmbodimentRefused) {
+              // Refuse before entering Gateway/World. The attempt is still
+              // counted, so stale or parallel provider calls cannot bypass the
+              // horizon by repeating a spent schema in the same wake.
+              action = gateway.refuse({
+                sessionId: created.sessionId, wakeId: created.wakeId,
+                requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id,
+                intent: call, error: quietEmbodimentLimitError(),
+              });
+            } else {
+              if (autonomous && !autonomousToolAllowed(call.function?.name, { forestToolNames: [...FOREST_WALK_TOOL_NAMES] })) throw Object.assign(new Error('That consequential capability is not available during an autonomous wake.'), { code: 'autonomous_tool_denied' });
+              action = call.function?.name === REST_FOR_TOOL_NAME
+                ? this.autonomousWakeController?.executeRestTool({ sessionId: created.sessionId, wakeId: created.wakeId, call }) || (() => { throw Object.assign(new Error('Autonomous rest scheduling is unavailable.'), { code: 'autonomous_wake_unavailable' }); })()
+                : call.function?.name === RESULT_REOPEN_TOOL_NAME
+                ? reopenResult(call, { requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id })
+                : isForestTool && this.forestTraversalService
+                  ? await this.forestTraversalService.execute({ sessionId: created.sessionId, wakeId: created.wakeId, roomId, departureFocusId: location.engaged_fixture_id || null, tetherSourceEventId: autonomous ? priorEligible : created.eventId, queryFallback: autonomous ? origin.plan?.intention || 'wander and notice' : triggerEvent.content, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, sourceEvent: db.getEvent(toolCallEventId), intent: call })
+                  : await gateway.execute({ sessionId: created.sessionId, wakeId: created.wakeId, requestRecordId: response.requestId, spineRecordId: response.requestFrame?.record_id, intent: call });
+            }
             // Journal custody binds the exact identity return created at the
             // planting boundary. Result Rack may subsequently fit a second,
             // projected return for conversation, so preserve the exact

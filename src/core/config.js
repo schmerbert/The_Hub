@@ -33,6 +33,8 @@ export function readConfig(env = process.env) {
   const rollingFoldTailUnits = integer(env, 'HUB_ROLLING_FOLD_TAIL_UNITS', 4);
   const rollingFoldExcerptLimit = integer(env, 'HUB_ROLLING_FOLD_EXCERPT_LIMIT', 96, { min: 8 });
   const retainedToolPairs = integer(env, 'HUB_RETAINED_TOOL_PAIRS', 2);
+  const maxToolRounds = integer(env, 'HUB_MAX_TOOL_ROUNDS', 8, { min: 1 });
+  const quietEmbodimentActions = integer(env, 'HUB_QUIET_EMBODIMENT_ACTIONS', Math.min(4, maxToolRounds), { min: 0, max: maxToolRounds });
   const providerMaxReturnBytes = integer(env, 'HUB_PROVIDER_MAX_RETURN_BYTES', 8 * 1024 * 1024, { min: 1 });
   const hearthWakeIntervalSeconds = integer(env, 'HUB_HEARTH_WAKE_INTERVAL_SECONDS', 0, { min: 0, max: 604800 });
   if (attentionRefuseBytes <= attentionWarnBytes) throw new Error('Attention thresholds require 0 <= HUB_ATTENTION_WARN_BYTES < HUB_ATTENTION_REFUSE_BYTES');
@@ -69,7 +71,8 @@ export function readConfig(env = process.env) {
     hearthExcerptLimit: integer(env, 'HUB_HEARTH_EXCERPT_LIMIT', 600, { min: 1 }),
     maxMessageLength: integer(env, 'HUB_MAX_MESSAGE_LENGTH', 4000, { min: 1 }),
     maxBodyBytes: integer(env, 'HUB_MAX_BODY_BYTES', 10000, { min: 1 }),
-    maxToolRounds: integer(env, 'HUB_MAX_TOOL_ROUNDS', 8, { min: 1 }),
+    maxToolRounds,
+    quietEmbodimentActions,
     autonomousMaxToolRounds: integer(env, 'HUB_AUTONOMOUS_MAX_TOOL_ROUNDS', 24, { min: 1, max: 64 }),
     hearthWakeIntervalSeconds,
     workshopMaxFiles: integer(env, 'HUB_WORKSHOP_MAX_FILES', 100, { min: 1 }),

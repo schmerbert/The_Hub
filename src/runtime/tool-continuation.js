@@ -1,6 +1,7 @@
 import { residentToolProfile, schemasForResidentSession } from '../world/tools.js';
 import { REOPEN_RESULT_TOOL, RESULT_REOPEN_TOOL_NAME } from '../context/result-exhale.js';
 import { REST_FOR_TOOL, REST_FOR_TOOL_NAME, autonomousToolAllowed } from './autonomous-wakes.js';
+import { isQuietEmbodimentAction, quietEmbodimentRemaining } from './quiet-embodiment.js';
 
 export function fitToolContinuationRound({
   world,
@@ -10,6 +11,8 @@ export function fitToolContinuationRound({
   autonomous = false,
   round,
   roundLimit,
+  quietEmbodimentUsed = 0,
+  quietEmbodimentLimit = null,
 }) {
   const finalOpportunity = round === roundLimit;
   const location = world.current(sessionId);
@@ -27,6 +30,10 @@ export function fitToolContinuationRound({
       : []
     : fittedWorldTools;
   if (autonomous) worldTools = worldTools.filter(tool => autonomousToolAllowed(tool.function.name, { forestToolNames: forestTools.map(tool => tool.function.name) }));
+  const quietEmbodimentActive = !autonomous && Number.isInteger(quietEmbodimentLimit);
+  const quietEmbodimentSpent = quietEmbodimentActive && quietEmbodimentRemaining({ limit: quietEmbodimentLimit, attempted: quietEmbodimentUsed }) === 0;
+  const quietEmbodimentOmitted = quietEmbodimentSpent ? worldTools.filter(tool => isQuietEmbodimentAction(tool.function.name)).length : 0;
+  if (quietEmbodimentSpent) worldTools = worldTools.filter(tool => !isQuietEmbodimentAction(tool.function.name));
   const fittedForestTools = autonomous
     ? forestTools.filter(tool => autonomousToolAllowed(tool.function.name, { forestToolNames: forestTools.map(tool => tool.function.name) }))
     : forestTools;
@@ -36,7 +43,7 @@ export function fitToolContinuationRound({
         activeGroup: 'forest_walk',
         names: [...worldTools.map(tool => tool.function.name), ...fittedForestTools.map(tool => tool.function.name)],
         completeCount: worldTools.length + fittedForestTools.length,
-        omittedCount: 0,
+        omittedCount: quietEmbodimentOmitted,
       }
     : (() => {
         const profile = residentToolProfile(world, sessionId);
@@ -45,7 +52,7 @@ export function fitToolContinuationRound({
           ...profile,
           names,
           completeCount: autonomous ? names.length : profile.completeCount + fittedForestTools.length,
-          omittedCount: autonomous ? Math.max(profile.completeCount - worldTools.length, 0) : profile.omittedCount,
+          omittedCount: autonomous ? Math.max(profile.completeCount - worldTools.length, 0) : profile.omittedCount + quietEmbodimentOmitted,
         };
       })();
   const toolProfile = {
@@ -67,6 +74,12 @@ export function fitToolContinuationRound({
       limit: roundLimit,
       finalOpportunity,
     },
+    quietEmbodiment: quietEmbodimentActive ? {
+      used: quietEmbodimentUsed,
+      remaining: quietEmbodimentRemaining({ limit: quietEmbodimentLimit, attempted: quietEmbodimentUsed }),
+      limit: quietEmbodimentLimit,
+      spent: quietEmbodimentSpent,
+    } : null,
   };
 }
 

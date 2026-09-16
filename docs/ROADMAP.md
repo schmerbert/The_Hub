@@ -39,6 +39,14 @@ Concern: concluded conversations can cross-pollinate a new lifespan through the 
 Current limitation: there is no user-facing manual reset or no-inheritance start mode
 Existing law: [`SESSION_HEARTH_V1.md`](specs/SESSION_HEARTH_V1.md)
 
+### Quiet embodiment — implemented first slice
+
+An ordinary human wake now offers up to four optional simple embodied actions inside the existing bounded tool loop before its reserved final response. Stable Glass permits quiet movement and gathering without compulsory narration; current World ground supplies verified local bearings rather than keyword routing. Spending the quiet horizon withdraws simple movement and inspection schemas while leaving unrelated fitted work available, and same-batch excess refuses before World mutation. Staying put and speaking immediately remains an ordinary complete choice. Autonomous wakes keep their separate horizon.
+
+Owners: wake orchestration, Glass presentation, World/Forest action owners, Corner Step Slips
+Invariant: embodied initiative cannot become compulsory theatre, fabricated relevance, unwitnessed movement, or expanded authority
+Law: [`QUIET_EMBODIMENT_V1.md`](specs/QUIET_EMBODIMENT_V1.md)
+
 ### Self-directed waking — implemented first slice
 
 The Resident can now sit at its current verified World/Forest footing, choose a 60-second-to-24-hour rest through `rest_for`, and resume in the same lifespan without an invented human turn. One append-only pending plan is retained per session; stale footing refuses rather than teleporting. Autonomous wakes receive a generous 24-round reversible/read-only envelope with dual schema and dispatch enforcement, and may rest again. A manual local wake-now endpoint proves the crossing.

@@ -13,6 +13,7 @@ import { providerReasoningControls, selectReasoningPosture } from './reasoning-p
 import { renderSpotlightReadGround } from '../places/hub/spotlight/presentation.js';
 import { renderAutonomousWakeGround } from '../context/autonomous-wake-ground.js';
 import { planRollingConversationFold } from '../context/rolling-fold.js';
+import { renderQuietEmbodimentHorizon } from './quiet-embodiment.js';
 
 const PROVIDER_ABORT_GRACE_MS = 250;
 
@@ -207,6 +208,14 @@ export class ProviderPhase {
       kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null,
       message: { role: 'system', content: renderToolRoundBudget(options.toolRoundBudget) },
     });
+    if (!options.orientation && options.quietEmbodiment && !options.wakeOrigin) currentGround.push({
+      kind: 'tool_current_ground', authority: 'host_receipt', sourceEventId: null,
+      message: { role: 'system', content: renderQuietEmbodimentHorizon({
+        remaining: options.quietEmbodiment.remaining,
+        projection: worldGround.projection,
+        finalOpportunity: options.toolRoundBudget?.finalOpportunity === true,
+      }) },
+    });
     if (omissionPlan.disclosure) currentGround.push({ kind: 'attention_current_ground', authority: 'host_receipt', sourceEventId: null, message: { role: 'system', content: omissionPlan.disclosure } });
     const departedFeatherMarkdown = !options.orientation ? renderDepartedFeatherFootprint(departedFeathers) : null;
     if (departedFeatherMarkdown) currentGround.push({
@@ -321,6 +330,7 @@ export class ProviderPhase {
       fittedSavingsBytes: sourceAttention.totalBytes - assembled.attention.totalBytes,
       contextOmissions: omissionPlan,
       rollingFold: foldPlan?.receipt || null,
+      quietEmbodiment: options.quietEmbodiment || null,
       toolProfile: options.toolProfile || null,
       reasoningPosture: posture.posture,
       reasoningEffort: reasoning.reasoningEffort,

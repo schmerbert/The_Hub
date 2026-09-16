@@ -112,3 +112,33 @@ test('movement settlement preserves physical Forest return notification', () => 
   assert.deepEqual(returns, [{ sessionId: 'session_1', wakeId: 'wake_1', toolCallId: 'move_1', toPlaceId: 'place.garden' }]);
   assert.equal(events[0][0], 'tool.completed');
 });
+
+test('quiet embodiment withdraws spent movement schemas while retaining Hearth and unrelated tools', () => {
+  const world = {
+    current: () => ({ room_node_id: 'place.house', engaged_fixture_id: null }),
+    availableTools: () => ['move_through_passage', 'inspect_fixture', 'tend_hearth', 'workshop_list'],
+  };
+  const fitted = fitToolContinuationRound({
+    world, sessionId: 'session_1', config: { ...config, quietEmbodimentActions: 1 },
+    round: 1, roundLimit: 3, quietEmbodimentUsed: 1, quietEmbodimentLimit: 1,
+  });
+  const names = fitted.tools.map(tool => tool.function.name);
+  assert.deepEqual(names, ['tend_hearth', 'workshop_list', 'reopen_result', 'rest_for']);
+  assert.deepEqual(fitted.quietEmbodiment, { used: 1, remaining: 0, limit: 1, spent: true });
+  assert.equal(fitted.toolProfile.names.includes('move_through_passage'), false);
+  assert.equal(fitted.toolProfile.names.includes('tend_hearth'), true);
+  assert.equal(fitted.toolProfile.names.includes('workshop_list'), true);
+});
+
+test('autonomous fitting keeps its independent embodied reach', () => {
+  const world = {
+    current: () => ({ room_node_id: 'place.house', engaged_fixture_id: null }),
+    availableTools: () => ['move_through_passage', 'inspect_fixture', 'tend_hearth'],
+  };
+  const fitted = fitToolContinuationRound({
+    world, sessionId: 'session_1', config: { ...config, quietEmbodimentActions: 1 },
+    autonomous: true, round: 4, roundLimit: 24, quietEmbodimentUsed: 99, quietEmbodimentLimit: 1,
+  });
+  assert.equal(fitted.quietEmbodiment, null);
+  assert.equal(fitted.tools.some(tool => tool.function.name === 'move_through_passage'), true);
+});

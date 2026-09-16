@@ -10,6 +10,10 @@ The Marble now has a witnessed forward-only provenance boundary. [`TRACE_EPOCH_V
 
 Glass has its own forward boundary under the same law. [`GLASS_TRACE_EPOCH_V1.md`](specs/GLASS_TRACE_EPOCH_V1.md) closes every new cast item from authority witness through its presented/omitted Scrub disposition to the exact Spine request. Historical casts remain exact and honestly partial.
 
+Glass now also owns an ordinary-dialogue waterfall before provider dispatch. When the complete fitted crossing reaches its configured high-water mark, the oldest eligible complete Human/Resident pairs become bounded source-linked fold items until the low-water target is reached. Source, Session Scroll, and Forest remain exact; the fold is derived orientation carried through the ordinary Glass trace and provider-presentation Scrub, never a new memory or authority source.
+
+Ordinary wakes also carry a bounded quiet-embodiment horizon. Glass grants permission to move or gather before speech; Wake Service counts simple embodied attempts, refits schemas after every action, and refuses excess before World mutation. World and Forest remain the only owners of material movement and perception, while Corner projects their existing receipts as ambient Step Slips rather than fabricated conversation. Place bearings are derived possibilities, not a router or relevance authority.
+
 Roots has a forward non-respiratory boundary. [`ROOTS_BOUNDARY_V1.md`](specs/ROOTS_BOUNDARY_V1.md) retains every new Hearth wake packet as causal evidence and links successful presentation to the exact response Glass cast. Historical packets remain exact without invented rooted custody.
 
 Room installation has a forward material boundary. A durable installation receipt binds the exact manifest and verified host witness to the exact World event that made the topology real. Workshop is marked inherited pre-boundary with its original admission decision honestly unrecorded; new rooms must carry a forward admission statement. This is the slow anatomy-changing plane, not a respiratory path.
