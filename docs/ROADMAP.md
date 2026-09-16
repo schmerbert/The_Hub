@@ -28,6 +28,17 @@ Owners: Corner hosts/readiness projection, Forest and World verification, semant
 Invariant: faster availability cannot weaken drift refusal, fabricate readiness, or let deferred subsystems act before their own gates pass
 Law: [`PROGRESSIVE_READINESS_V1.md`](specs/PROGRESSIVE_READINESS_V1.md)
 
+### Explicit clean-session boundary — design pending
+
+A server restart already closes the prior process-lived session and opens a fresh lifespan with empty active-session history. The first Hearth ritual may nevertheless carry a bounded exact closing tail from the prior session. That inheritance is useful for continuity, but it can also reintroduce the posture or subject of a conversation that was already concluded.
+
+Design an explicit, inspectable way to begin with no conversational tail in provider attention while preserving the prior Session Scroll, Forest, Source, Roots, and Spine records in custody. The boundary must distinguish “fresh active session” from “inherit prior-session conversation,” disclose which mode was chosen, and prevent omitted inheritance from being mistaken for deletion or loss. Decide whether restart should default to the clean mode, whether continuity should be opt-in per restart, and how autonomous Hearth-origin wakes behave. No behavior change is adopted by this roadmap note.
+
+Owners: session lifecycle, Hearth selection, Corner controls, Glass presentation
+Concern: concluded conversations can cross-pollinate a new lifespan through the automatic Hearth tail even though active-session history itself is fresh
+Current limitation: there is no user-facing manual reset or no-inheritance start mode
+Existing law: [`SESSION_HEARTH_V1.md`](specs/SESSION_HEARTH_V1.md)
+
 ### Self-directed waking — implemented first slice
 
 The Resident can now sit at its current verified World/Forest footing, choose a 60-second-to-24-hour rest through `rest_for`, and resume in the same lifespan without an invented human turn. One append-only pending plan is retained per session; stale footing refuses rather than teleporting. Autonomous wakes receive a generous 24-round reversible/read-only envelope with dual schema and dispatch enforcement, and may rest again. A manual local wake-now endpoint proves the crossing.
