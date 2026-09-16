@@ -36,6 +36,7 @@ test('Hearth presentation is situated while enforcement stays out of Resident gr
   assert.match(STABLE_GLASS_TEXT, /^Glass v4 — trusted ground/);
   assert.match(STABLE_GLASS_TEXT, /ordinary succession, not contradiction/);
   assert.match(STABLE_GLASS_TEXT, /they do not fence your understanding/);
+  assert.match(STABLE_GLASS_TEXT, /You may quietly move, look, or gather what is relevant before speaking; mention the path only when it matters\./);
   assert.doesNotMatch(STABLE_GLASS_TEXT, /suspected contamination|arrival order, recurrence|how you perceive and act/);
 });
 

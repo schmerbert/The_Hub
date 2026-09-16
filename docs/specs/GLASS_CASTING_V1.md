@@ -8,6 +8,8 @@ Glass is the resident-facing provider presentation assembled for a request. It i
 
 [`RESIDENT_PRESENTATION_CLARITY_V1.md`](RESIDENT_PRESENTATION_CLARITY_V1.md) revises the provider-visible register of current-wake ground and exact prior-session inheritance. Stable Glass v4 remains byte-exact; session-specific current-wake standing belongs to dynamic crossing ground, while inherited excerpts declare prior-session author, exact excerpt standing, and their lack of current-recollection or verified-truth standing.
 
+Stable Glass v4 also gives one bounded permission for quiet embodiment: the Resident may move, look, or gather relevant material before speaking and need mention the path only when it matters. This permission adds no action, perception, or authority; the current World ground and mounted schemas remain the complete boundary of material reach. It does not require movement or turn routine movement into conversational speech.
+
 The first implementation cut installs the five-band anatomy, ordering, budgets, receipts, validation, and exact-crossing proof described here. It also ports the already implemented deterministic, source-exact Hearth recency inheritance without adding a selector or generated text. It does not generate summaries or rolling folds, add history walk-back beyond that existing bounded input, install Forest Exhale or Hearth Notes, or add House or Garden structures.
 
 ## 1. Custody law
