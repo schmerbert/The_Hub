@@ -4,7 +4,7 @@ Status: first-pass sealed-source map. Non-authoritative for the Hub.
 
 ## Source
 
-- Local compiled book: `[private local source path omitted]`
+- Local compiled book: private source path omitted from the public repository
 - Title: *HomeGlobe — A framework for building AI minds that live somewhere*
 - Document date: June 2026
 - Approximate size: 191 KB and more than 3,000 lines

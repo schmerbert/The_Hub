@@ -2,6 +2,15 @@
 
 The Hub is a local harness for a continuing Resident: a model-mediated collaborator who can remain oriented across conversation, tools, durable records, and a material World without being falsely presented as omniscient, continuously awake, or identical to one provider invocation. It separates what happened, what entered attention, what was retained, what was said, and what can cause action.
 
+> [!WARNING]
+> The Hub is experimental, pre-alpha software under active development. Its automated contract suite is substantial, but live-provider operation, autonomous wakes, Docker-backed recipes, optional Spotlight reads, and native desktop/tray behavior have not all received complete manual end-to-end validation. It is not ready for unattended, multi-user, security-critical, or production use.
+
+The current host is designed for one trusted local operator and listens on loopback. It does not provide Hub user authentication or application-level encryption at rest. Local custody may contain conversations, provider responses, repository material, and—when explicitly connected—normalized financial observations. Read [SECURITY.md](SECURITY.md) before using live credentials or sensitive data.
+
+## Where this came from
+
+[The Marble](https://github.com/schmerbert/TheMarble) is the earlier manual and working-specimen collection for provenance-labeled agent memory, guarded continuity, and session handoff. The Hub is a separate, evolving runtime project: it carries some of that ancestry forward while adopting its own specifications, custody boundaries, World, Forest, and Resident architecture. The Marble is useful context, not an authority that silently overrides this repository.
+
 **Start with [`docs/ORIENTATION.md`](docs/ORIENTATION.md)** for the proposition, the reasons behind the harness, its spatial and clinical shape, and where the design is going. [`docs/GLOSSARY.md`](docs/GLOSSARY.md) maps the lived language to conventional machinery. [`docs/STATUS.md`](docs/STATUS.md) is the canonical implemented surface, and [`docs/README.md`](docs/README.md) provides the complete documentation index and authority order.
 
 The runtime currently opens one process-lived Resident session per server start. Its first human message takes a native two-breath Hearth handshake; later messages remain ordinary turns in the same complete active history. The implementation uses Node.js, SQLite, a replaceable provider boundary, a browser Corner surface, and an Electron desktop shell.

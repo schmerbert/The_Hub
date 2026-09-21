@@ -1,7 +1,7 @@
 # Corner Surface Adaptation
 
 **Status:** Implemented ancestry; current browser/renderer contract, extended by [`CORNER_DESKTOP_V1.md`](CORNER_DESKTOP_V1.md) and [`WAKE_STREAM_V1.md`](WAKE_STREAM_V1.md)
-**Source reference:** `[private local prototype path omitted]` (read-only user-owned prototype)
+**Source reference:** private local prototype (source path omitted from the public repository)
 **Supersedes:** The generic visual treatment in `FIRST_BREATH.md` section 10; all causal and accessibility requirements remain
 
 ## 1. What Corner contributes
@@ -114,7 +114,7 @@ The same mission must correct and test:
 - Narrow layout is immediately usable without relying on the compact chip.
 - Wake inspection uses committed API records and exposes omissions.
 - UI contains no Chronicle, Vault, gendered resident, old endpoint, tool, Forest-count, or reach-ritual residue.
-- No files under `[private local prototype path omitted]` are modified.
+- No files in the private source prototype are modified.
 - Luna reports all changed files and verification performed.
 
 ## 10. Present limitations
