@@ -22,11 +22,13 @@ export function installShutdownHandlers(hub, { processTarget = process, logger =
   return shutdown;
 }
 
+const LOOPBACK_HOST = '127.0.0.1';
+
 export function startHubProcess({ progressiveStartup = true } = {}) {
   loadEnvFile();
   const hub = createHub({ progressiveStartup });
-  hub.server.listen(hub.config.port, () => {
-    console.log(`The Hub listening on http://localhost:${hub.config.port} (${hub.config.mode}, ${hub.config.model}, thinking=${hub.config.thinking})`);
+  hub.server.listen(hub.config.port, LOOPBACK_HOST, () => {
+    console.log(`The Hub listening on http://${LOOPBACK_HOST}:${hub.config.port} (${hub.config.mode}, ${hub.config.model}, thinking=${hub.config.thinking})`);
   });
   installShutdownHandlers(hub);
   return hub;

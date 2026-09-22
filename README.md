@@ -9,7 +9,7 @@ The current host is designed for one trusted local operator and listens on loopb
 
 ## Where this came from
 
-[The Marble](https://github.com/schmerbert/TheMarble) is the earlier manual and working-specimen collection for provenance-labeled agent memory, guarded continuity, and session handoff. The Hub is a separate, evolving runtime project: it carries some of that ancestry forward while adopting its own specifications, custody boundaries, World, Forest, and Resident architecture. The Marble is useful context, not an authority that silently overrides this repository.
+[The Marble](https://github.com/schmerbert/The_Marble) is the manual for the relationships a place like this must preserve. The Hub is a separate, evolving runtime: it keeps its own specifications, custody boundaries, World, Forest, and Resident architecture. The manual is useful context, not an authority that silently overrides this repository.
 
 **Start with [`docs/ORIENTATION.md`](docs/ORIENTATION.md)** for the proposition, the reasons behind the harness, its spatial and clinical shape, and where the design is going. [`docs/GLOSSARY.md`](docs/GLOSSARY.md) maps the lived language to conventional machinery. [`docs/STATUS.md`](docs/STATUS.md) is the canonical implemented surface, and [`docs/README.md`](docs/README.md) provides the complete documentation index and authority order.
 
@@ -26,7 +26,7 @@ $env:HUB_RESIDENT_MODE = "fake"
 npm start
 ```
 
-Open <http://localhost:3000>. The fake adapter does not claim to be DeepSeek or the resident provider.
+Open <http://127.0.0.1:3000>. The fake adapter does not claim to be DeepSeek or the resident provider.
 
 ## Run the desktop Corner
 

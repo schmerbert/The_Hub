@@ -52,7 +52,7 @@ Keep user updates high-level unless technical detail is requested.
 
 ## Git environment
 
-In this Windows workspace, if Git reports dubious ownership, use the per-command repository-scoped override `git -c safe.directory=D:/AI/The_Hub ...`; do not modify global Git configuration merely to bypass it.
+In this Windows workspace, if Git reports dubious ownership, use a per-command repository-scoped override `git -c safe.directory=<this-checkout> ...` with the checkout path in forward-slash form; do not modify global Git configuration merely to bypass it.
 
 ## Lineage boundary
 
